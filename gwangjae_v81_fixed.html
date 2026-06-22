@@ -2507,13 +2507,13 @@ function renderHrAtt(){
         ${skTd(`<span style="font-size:10px">${conTimes.st||'-'}</span>`,HR_SK_WIDTHS[12],getLeft(12))}
         ${skTd(`<span style="font-size:10px">${conTimes.et||'-'}</span>`,HR_SK_WIDTHS[13],getLeft(13))}
         ${skTd(`<select style="font-size:10px;border:1px solid var(--bd2);border-radius:3px;padding:2px 4px;background:#fff;font-family:var(--fn)" onchange="setDayBigo('${emp.사번}','${day.date}',this.value)"><option value="">-</option><option value="연차"${day.bigo==='연차'?' selected':''}>연차</option><option value="월차"${day.bigo==='월차'?' selected':''}>월차</option><option value="반차"${day.bigo==='반차'?' selected':''}>반차</option><option value="결근"${day.bigo==='결근'?' selected':''}>결근</option></select>`,HR_SK_WIDTHS[14],getLeft(14))}
-        ${skTd(`${day.gbn==='주휴일'||day.소정==='주휴'?'<span class="bdg" style="font-size:9px;background:#FCE7F3;color:#BE185D">주휴</span>':typeof day.소정==='number'&&day.소정>=1?`<strong style="color:var(--tx)">${day.소정}</strong>`:typeof day.소정==='number'?day.소정:'-'}<div class="att-actions"><button class="std" onclick="setSojeongManual('${emp.사번}','${day.date}')">소정 수정</button>${day.소정수기!==undefined&&day.소정수기!==''?`<button class="rev" onclick="revertSojeong('${emp.사번}','${day.date}')">↩ 되돌리기</button>`:''}</div>`,HR_SK_WIDTHS[15],getLeft(15),'att-cell')}
+        ${skTd(confirmed?`${day.gbn==='주휴일'||day.소정수기==='주휴'?'<span class="bdg" style="font-size:9px;background:#FCE7F3;color:#BE185D">주휴</span>':typeof day.소정==='number'&&day.소정>=1?`<strong style="color:var(--tx)">${day.소정}</strong>`:typeof day.소정==='number'?day.소정:'-'}${day.소정수기!==undefined&&day.소정수기!==''?'<span style="font-size:8px;color:var(--orange);margin-left:2px">✎</span>':`<div style="display:inline"></div>`}`:`<input type="text" value="${day.소정수기!==undefined&&day.소정수기!==''?day.소정수기:day.gbn==='주휴일'||day.소정수기==='주휴'?'주휴':typeof day.소정==='number'?day.소정:''}" placeholder="${day.gbn==='주휴일'?'주휴':typeof day.소정==='number'?day.소정:'-'}" title="숫자 또는 '주휴' 입력 후 Enter" style="width:44px;font-size:11px;text-align:center;border:1px solid var(--bd2);border-radius:3px;padding:2px 3px;background:${day.소정수기!==undefined&&day.소정수기!==''?'#FFF4EC':'#fff'};font-family:var(--fn);color:${day.소정수기!==undefined&&day.소정수기!==''?'var(--orange)':'var(--tx)'};outline:none" onchange="setSojeongInline('${emp.사번}','${day.date}',this.value)" onkeydown="if(event.key==='Enter')this.blur()" onclick="event.stopPropagation()">`,HR_SK_WIDTHS[15],getLeft(15))}
         <td class="att-cell att-drag-cell" data-eid="${emp.사번}" data-ds="${day.date}" data-field="in" onmousedown="attDragStart(event,this)" onmouseover="attDragOver(event,this)" style="font-size:12px;font-weight:700;color:#1C2035;text-align:center;border:1.5px solid #CDD1D9;background:${isM?'#FFF4EC':'#F5F0FF'}">${att.in||(day.gbn==='평일'||day.gbn==='공휴일'?'<span style="color:#aaa">-</span>':'-')}<div class="att-actions" onmousedown="event.stopPropagation()"><button class="std" onclick="setAttFromSched('${emp.사번}','${day.date}','in')">기준시간 반영</button><button onclick="setAttManual('${emp.사번}','${day.date}','in')">수기입력</button><button class="rev" onclick="revertAtt('${emp.사번}','${day.date}')">↩ 되돌리기</button></div></td>
         <td class="att-cell att-drag-cell" data-eid="${emp.사번}" data-ds="${day.date}" data-field="out" onmousedown="attDragStart(event,this)" onmouseover="attDragOver(event,this)" style="font-size:12px;font-weight:700;color:#1C2035;text-align:center;border:1.5px solid #CDD1D9;background:${isM?'#FFF4EC':'#F5F0FF'}">${att.out||(day.gbn==='평일'||day.gbn==='공휴일'?'<span style="color:#aaa">-</span>':'-')}<div class="att-actions" onmousedown="event.stopPropagation()"><button class="std" onclick="setAttFromSched('${emp.사번}','${day.date}','out')">기준시간 반영</button><button onclick="setAttManual('${emp.사번}','${day.date}','out')">수기입력</button><button class="rev" onclick="revertAtt('${emp.사번}','${day.date}')">↩ 되돌리기</button></div></td>
         <td class="c">${(V>0||day.gbn==='주휴일')?fw(U):'-'}</td>
         <td class="c">${(V>0||day.gbn==='주휴일')?fw(V):'-'}</td>
         <td class="c">${W>0?fw(W):'-'}</td>
-        <td class="c att-cell" style="color:#BE185D;font-weight:${juhyuH>0?700:400}">${juhyuH>0?fw(juhyuH):'-'}${day.gbn==='주휴일'&&emp.임금==='시급직'?`<div class="att-actions"><button class="std" onclick="setJuhyuManual('${emp.사번}','${day.date}')">수기반영</button>${day.주휴수기!==undefined&&day.주휴수기!==''?`<button class="rev" onclick="revertJuhyu('${emp.사번}','${day.date}')">↩ 되돌리기</button>`:''}</div>`:''}</td>
+        <td class="c" style="color:#BE185D;font-weight:${juhyuH>0?700:400}">${day.gbn==='주휴일'&&emp.임금==='시급직'&&!confirmed?`<input type="number" value="${day.주휴수기!==undefined&&day.주휴수기!==''?day.주휴수기:juhyuH>0?fw(juhyuH):''}" placeholder="${juhyuH>0?fw(juhyuH):'-'}" step="0.5" min="0" title="주휴시간(h) 직접 입력 후 Enter" style="width:48px;font-size:11px;text-align:center;border:1px solid var(--bd2);border-radius:3px;padding:2px 3px;background:${day.주휴수기!==undefined&&day.주휴수기!==''?'#FFF4EC':'#fff'};color:${day.주휴수기!==undefined&&day.주휴수기!==''?'var(--orange)':'#BE185D'};font-family:var(--fn);outline:none" onchange="setJuhyuInline('${emp.사번}','${day.date}',this.value)" onkeydown="if(event.key==='Enter')this.blur()" onclick="event.stopPropagation()">`:juhyuH>0?fw(juhyuH):'-'}</td>
         <td class="c">${X>0?fw(X):'-'}</td>
         <td class="c${Y>0?' ot':''}">${Y>0?fw(Y)+'h':'-'}</td>
         <td class="c">${AA>0?fw(AA):'-'}</td>
@@ -2789,6 +2789,41 @@ function exportSalExcel(){
 function setDayBigo(eid,ds,v){if(isMonthConfirmed())return;const row=hrAttRows.find(r=>r.emp.사번===eid);if(row){const d=row.days.find(x=>x.date===ds);if(d){d.bigo=v;scheduleSave();}}}
 // 소정(R) 수기 수정: day.소정 + day.gbn 동시 변경, 원래값은 소정원본/gbn원본에 백업
 // "주휴" 텍스트 입력 시 → gbn='주휴일', 소정=0 처리 (스케줄 변동 대응)
+// 소정(R) 인라인 직접 입력 처리
+function setSojeongInline(eid,ds,v){
+  if(isMonthConfirmed()){renderHrAtt();return;}
+  const row=hrAttRows.find(r=>r.emp.사번===eid);if(!row)return;
+  const d=row.days.find(x=>x.date===ds);if(!d)return;
+  if(d.gbn==='계약기간 없음')return;
+  const t=String(v).trim();
+  if(t===''){
+    // 빈 값 입력 시 되돌리기
+    if(d.소정원본!==undefined&&d.소정원본!=='')d.소정=d.소정원본;
+    if(d.gbn원본!==undefined&&d.gbn원본!=='')d.gbn=d.gbn원본;
+    d.소정수기='';d.gbn수기='';
+    renderHrAtt();saveAll();return;
+  }
+  if(d.소정원본===undefined||d.소정원본==='')d.소정원본=d.소정;
+  if(d.gbn원본===undefined||d.gbn원본==='')d.gbn원본=d.gbn;
+  if(t==='주휴'){
+    d.소정=0;d.소정수기='주휴';d.gbn='주휴일';d.gbn수기='주휴일';
+  }else if(!isNaN(Number(t))){
+    const n=Number(t);d.소정=n;d.소정수기=n;
+    d.gbn=n>0?(isHoliday(ds)&&!isWeekend(ds)?'공휴일':'평일'):'무급휴일';
+    d.gbn수기=d.gbn;
+  }else{return;}
+  renderHrAtt();saveAll();
+}
+// 주휴시간 인라인 직접 입력 처리
+function setJuhyuInline(eid,ds,v){
+  if(isMonthConfirmed()){renderHrAtt();return;}
+  const row=hrAttRows.find(r=>r.emp.사번===eid);if(!row)return;
+  const d=row.days.find(x=>x.date===ds);if(!d)return;
+  const t=String(v).trim();
+  if(t===''||isNaN(Number(t))){d.주휴수기='';renderHrAtt();saveAll();return;}
+  d.주휴수기=Number(t);
+  renderHrAtt();saveAll();
+}
 function setSojeongManual(eid,ds){if(isMonthConfirmed()){alert("확정된 월은 수정할 수 없습니다.");return;}
   const row=hrAttRows.find(r=>r.emp.사번===eid);if(!row)return;
   const d=row.days.find(x=>x.date===ds);if(!d)return;
@@ -3939,12 +3974,11 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelec
     }
   }
 
-  // ③ 세션 없음 — GAS에서 계정 목록 받은 후 로그인 화면 표시
+  // ③ 세션 없음 — GAS 연결 상태만 백그라운드 확인 후 로그인 화면 표시
   _setLoadingMsg('연결 확인 중...');
-  try {
-    const data = await _gasRead();
+  _gasRead().then(data => {
     if (data && data.ver) {
-      // 계정 목록 로컬에 반영 — 로그인 화면 뜨기 전에 완료
+      // 계정 목록 미리 로컬에 반영 (로그인 전 계정 동기화)
       if (data.meta && data.meta.accounts) {
         try {
           const raw = data.meta.accounts.value || data.meta.accounts;
@@ -3959,10 +3993,11 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelec
     } else {
       _setDbStatus('offline', '오프라인 모드');
     }
-  } catch(e) {
+  }).catch(() => {
     _setDbStatus('offline', '오프라인 모드');
-  }
-  _hideLoading(); // 계정 목록 반영 완료 후 로그인 화면 표시
+  }).finally(() => {
+    _hideLoading(); // GAS 응답 후 로그인 화면 표시
+  });
 })();
 </script>
 <script>
