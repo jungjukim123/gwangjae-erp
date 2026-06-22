@@ -846,8 +846,22 @@ let _dbOk = false;
 // GAS 통신 레이어
 // ============================================================
 
-/* JSONP GET — 전체 데이터 읽기 */
-function _gasRead() {
+/* fetch GET — 전체 데이터 읽기 (fetch 우선, 실패 시 JSONP 폴백) */
+async function _gasRead() {
+  // ① fetch 방식 시도 (?action=read → 순수 JSON)
+  try {
+    const res = await fetch(GAS_URL + '?action=read&t=' + Date.now(), {
+      method: 'GET',
+      redirect: 'follow',
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ver) return data;
+    }
+  } catch(e) {
+    console.warn('GAS fetch 실패, JSONP 폴백 시도:', e);
+  }
+  // ② JSONP 폴백 (fetch 차단 환경 대비)
   return new Promise((resolve, reject) => {
     const cb = '_cb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
     const s  = document.createElement('script');
@@ -865,8 +879,21 @@ function _gasRead() {
   });
 }
 
-/* POST — 전체 저장 */
+/* POST — 전체 저장 (응답 확인 가능한 방식으로 변경) */
 async function _gasWrite(payload) {
+  // ① cors 모드로 시도 (응답 확인 가능)
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'saveAll', data: payload }),
+      redirect: 'follow',
+    });
+    if (res.ok) return true;
+  } catch(e) {
+    console.warn('GAS POST cors 실패, no-cors 폴백:', e);
+  }
+  // ② no-cors 폴백 (CORS 차단 환경 대비)
   try {
     await fetch(GAS_URL, {
       method: 'POST',
