@@ -4678,27 +4678,27 @@ function renderSal(){
     const cFmt=v=>v>0?(Math.ceil(v/10)*10).toLocaleString():'-';
     const taxFmt=v=>v>0?v.toLocaleString():'-';
     return`<tr>
-      <td style="text-align:center;font-size:11px;color:var(--tx3)">${ri+1}</td>
-      <td style="text-align:center;font-size:11px;color:var(--tx3)">${_yr}</td>
-      <td style="text-align:center;font-size:11px;color:var(--tx3)">${String(_mo).padStart(2,'0')}</td>
-      <td style="text-align:center;font-family:monospace;font-size:11px;color:var(--tx3)">${emp.사번||'-'}</td>
-      <td style="text-align:center;font-size:11px;color:var(--tx3)">${emp.소속}</td>
+      <td style="text-align:center;font-size:11px;color:#000000">${ri+1}</td>
+      <td style="text-align:center;font-size:11px;color:#000000">${_yr}</td>
+      <td style="text-align:center;font-size:11px;color:#000000">${String(_mo).padStart(2,'0')}</td>
+      <td style="text-align:center;font-family:monospace;font-size:11px;color:#000000">${emp.사번||'-'}</td>
+      <td style="text-align:center;font-size:11px;color:#000000">${emp.소속}</td>
       <td style="text-align:center">${emp.임금==='월급직'?'<span class="bdg bb" style="font-size:10px">월급</span>':'<span class="bdg bt" style="font-size:10px">시급</span>'}</td>
       <td style="text-align:center"><strong>${emp.이름}</strong></td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${fh(mW)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${fh(mJH)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${fh(mY)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${fh(mX)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${fh(mAA)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${fh(mAB)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${cFmt(기본급)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${cFmt(식대)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${cFmt(직책수당)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${cFmt(야간수당)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${cFmt(주휴수당)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${cFmt(연장수당)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${cFmt(휴일수당)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${cFmt(휴일연장)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${fh(mW)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${fh(mJH)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${fh(mY)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${fh(mX)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${fh(mAA)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${fh(mAB)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${cFmt(기본급)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${cFmt(식대)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${cFmt(직책수당)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${cFmt(야간수당)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${cFmt(주휴수당)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${cFmt(연장수당)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${cFmt(휴일수당)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${cFmt(휴일연장)}</td>
       <td class="r">
         <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
           <span style="color:var(--tx3);font-size:11px">${연차>0?nFmt(연차):'-'}</span>
@@ -4718,21 +4718,21 @@ function renderSal(){
         </div>
       </td>
       <td class="r" style="font-weight:800;color:var(--tx);font-size:11px">${지급액계.toLocaleString()}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${taxFmt(소득세)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${taxFmt(지방소득세)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${taxFmt(건강보험)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${taxFmt(장기요양)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${taxFmt(국민연금)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">${taxFmt(고용보험)}</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">-</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">-</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">-</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">-</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">-</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">-</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">-</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">-</td>
-      <td class="r" style="font-size:11px;color:var(--tx3)">-</td>
+      <td class="r" style="font-size:11px;color:#000000">${taxFmt(소득세)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${taxFmt(지방소득세)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${taxFmt(건강보험)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${taxFmt(장기요양)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${taxFmt(국민연금)}</td>
+      <td class="r" style="font-size:11px;color:#000000">${taxFmt(고용보험)}</td>
+      <td class="r" style="font-size:11px;color:#000000">-</td>
+      <td class="r" style="font-size:11px;color:#000000">-</td>
+      <td class="r" style="font-size:11px;color:#000000">-</td>
+      <td class="r" style="font-size:11px;color:#000000">-</td>
+      <td class="r" style="font-size:11px;color:#000000">-</td>
+      <td class="r" style="font-size:11px;color:#000000">-</td>
+      <td class="r" style="font-size:11px;color:#000000">-</td>
+      <td class="r" style="font-size:11px;color:#000000">-</td>
+      <td class="r" style="font-size:11px;color:#000000">-</td>
       <td class="r" style="font-weight:800;color:var(--purple);font-size:11px">${공제액계>0?공제액계.toLocaleString():'-'}</td>
       <td class="r" style="font-weight:800;color:var(--tx);font-size:11px">${실지급액>0?실지급액.toLocaleString():'-'}</td>
     </tr>`;
