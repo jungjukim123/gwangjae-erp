@@ -1000,6 +1000,12 @@ let otRequests=[],attRequests=[],attData={},hrAttRows=[],currentRole='emp',curre
 // hrAttRows는 현재 선택 월의 뷰(view)일 뿐 — 월 전환 시 이 캐시에서 복원
 let _hrRowsCache = {};  // { "2026_06": [...rows], "2026_07": [...rows], ... }
 
+// ★ 월별 근태 현황 탭 재진입 시 불필요한 전체 재렌더링 방지용
+// _applyData(외부 동기화)가 실행될 때마다 증가 — renderHrAtt가 그린 시점의 버전과 비교해
+// 버전이 같으면(=탭을 벗어난 사이 배경 동기화가 없었으면) 재렌더링을 건너뜀
+let _hrAttDataVersion = 0;
+let _hrAttRenderedSig = null;
+
 // ★ 근태소명 데이터: { "YYYY_MM": [ {eid, name, date, type, status, memo}, ... ] }
 let _somyungData = {};
 
@@ -1176,6 +1182,8 @@ function _kstUpdated(v) {
 
 function _applyData(data) {
   if (!data) return false;
+  // ★ 외부(Supabase) 동기화 발생 — 월별 근태 현황의 재렌더링 스킵 캐시를 무효화
+  _hrAttDataVersion++;
 
   // employees — 사번 기준 중복 제거 후 로드 (Supabase에 중복 저장된 경우 방어)
   if (data.employees && data.employees.length) {
@@ -2662,11 +2670,12 @@ async function syncOvertime(){
     const json=await new Promise((resolve,reject)=>{
       const cb='_ot_'+Date.now();
       const s=document.createElement('script');
-      window[cb]=(data)=>{delete window[cb];document.body.removeChild(s);resolve(data);};
-      s.onerror=()=>reject(new Error('연결 실패 (Apps Script가 내부운영 시트를 지원하는지 확인)'));
+      const cleanup=()=>{delete window[cb];if(s.parentNode)document.body.removeChild(s);};
+      window[cb]=(data)=>{cleanup();resolve(data);};
+      s.onerror=()=>{cleanup();reject(new Error('연결 실패 (Apps Script가 내부운영 시트를 지원하는지 확인)'));};
       s.src=APPS_SCRIPT_URL+'?sheet=내부운영&callback='+cb;
       document.body.appendChild(s);
-      setTimeout(()=>reject(new Error('타임아웃')),12000);
+      setTimeout(()=>{cleanup();reject(new Error('타임아웃 (25초 초과, Apps Script 응답 지연)'));},25000);
     });
     const rows=json.data||json.rows||[];
     if(!rows.length){
@@ -2744,11 +2753,12 @@ async function syncVacation(){
     const json=await new Promise((resolve,reject)=>{
       const cb='_vac_'+Date.now();
       const s=document.createElement('script');
-      window[cb]=(data)=>{delete window[cb];document.body.removeChild(s);resolve(data);};
-      s.onerror=()=>reject(new Error('연결 실패'));
+      const cleanup=()=>{delete window[cb];if(s.parentNode)document.body.removeChild(s);};
+      window[cb]=(data)=>{cleanup();resolve(data);};
+      s.onerror=()=>{cleanup();reject(new Error('연결 실패'));};
       s.src=APPS_SCRIPT_URL+'?sheet=내부운영&callback='+cb;
       document.body.appendChild(s);
-      setTimeout(()=>reject(new Error('타임아웃 (12초)')),12000);
+      setTimeout(()=>{cleanup();reject(new Error('타임아웃 (25초 초과, Apps Script 응답 지연)'));},25000);
     });
     const rows=json.data||json.rows||[];
     if(!rows.length){
@@ -3103,6 +3113,8 @@ function exportExcel(){
 // ============================================================
 // RENDER ③ HR ATT
 // ============================================================
+// 현재 연/월/검색어 + 데이터 버전을 묶은 서명 — nav()에서 불필요한 재렌더링 스킵 판단에 사용
+function _hrAttSig(yr,mo,q){return yr+'_'+mo+'_'+q+'_v'+_hrAttDataVersion;}
 function renderHrAtt(){
   _activeOtInsaCell=null;
   const yr=parseInt(document.getElementById('hrYear').value),mo=parseInt(document.getElementById('hrMonth').value);
@@ -3121,6 +3133,7 @@ function renderHrAtt(){
       updateConfirmBtn();
       const banner=document.getElementById('confirmBanner');if(banner)banner.innerHTML='';
       ['btnSlkSync','btnOtSync','btnVacSync','btnSomyungSync','btnSlkDown'].forEach(id=>{const b=document.getElementById(id);if(b)b.disabled=false;});
+      _hrAttRenderedSig=_hrAttSig(yr,mo,q);
       return;
     }
   }
@@ -3139,7 +3152,9 @@ function renderHrAtt(){
   ['btnSlkSync','btnOtSync','btnVacSync','btnSomyungSync','btnSlkDown'].forEach(id=>{const b=document.getElementById(id);if(b)b.disabled=confirmed;});
   if(!hrAttRows.length){
     document.getElementById('hrAttBody').innerHTML=`<tr><td colspan="37" style="text-align:center;padding:60px;color:var(--tx3);font-size:14px">👥 "인원 불러오기" 버튼을 눌러 근태 계산을 시작하세요</td></tr>`;
-    document.getElementById('hrStats').innerHTML='';return;
+    document.getElementById('hrStats').innerHTML='';
+    _hrAttRenderedSig=_hrAttSig(yr,mo,q);
+    return;
   }
   if(!document.getElementById('hrHead').children.length)buildHrHead();
   const filtered=hrAttRows.filter(r=>!q||r.emp.이름.includes(q)||r.emp.사번.includes(q));
@@ -3341,6 +3356,7 @@ function renderHrAtt(){
     <div class="sc cb"><div class="sl">총 급여 예상</div><div class="sv" style="font-size:18px">${nFmt(totalPay)}<span> 원</span></div></div>
     <div class="sc co"><div class="sl">수기 고정</div><div class="sv">${Object.keys(attData).filter(k=>attData[k].locked).length}<span> 건</span></div></div>
     <div class="sc cr"><div class="sl">수정요청</div><div class="sv">${attRequests.length}<span> 건</span></div></div>`;
+  _hrAttRenderedSig=_hrAttSig(yr,mo,q);
 }
 // ============================================================
 // _patchHrAttRow — 특정 (eid, ds) TR 1개만 재빌드 (전체 재렌더 방지)
@@ -6833,7 +6849,13 @@ function nav(pid,el){
   if(pid==='hr2'){buildConHead();renderCon();}
   if(pid==='hr3'){
     // ★ 캐시에서 현재 UI 선택 월 자동 복원 (renderHrAtt 내부에서 처리)
-    renderHrAtt();
+    // ★ 탭 재진입 시 렉 방지: 마지막 렌더링 이후 연/월/검색어/데이터 버전이 그대로면(=배경 동기화 없었으면) 재렌더링 스킵
+    const _hrYrEl=document.getElementById('hrYear'), _hrMoEl=document.getElementById('hrMonth');
+    const _curSig=(_hrYrEl&&_hrMoEl)?_hrAttSig(parseInt(_hrYrEl.value),parseInt(_hrMoEl.value),(document.getElementById('hrQ')||{}).value||''):null;
+    const _hrBody=document.getElementById('hrAttBody');
+    if(_curSig===null||_hrAttRenderedSig!==_curSig||!_hrBody||!_hrBody.children.length){
+      renderHrAtt();
+    }
     const saved=localStorage.getItem('slk_token');
     if(saved){const el=document.getElementById('slkTokenInput');if(el)el.value=saved;}
   }
