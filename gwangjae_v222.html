@@ -6036,6 +6036,8 @@ function getJoinDate(empId){
 // 규칙: 입사일 <= 선택월 말일  AND  (퇴사일 없음 OR 퇴사일 >= 선택월 1일)
 //  → 그 달에 퇴사한 사람까지 표시 (예: 6월 선택 → 6월 퇴사자 포함)
 function isVisibleInMonth(empId, monthSel){
+  // 계약기간관리에 남은 계약이 하나도 없으면(전체 삭제됨) 인원현황에서도 제외
+  if(!contracts.some(c=>c.사번===empId))return false;
   if(monthSel==='all')return true;
   const [y,m]=monthSel.split('-').map(Number);
   const monthFirst=dStr(y,m,1);
