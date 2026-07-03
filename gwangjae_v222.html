@@ -5781,11 +5781,11 @@ function revertAtt(eid,ds){if(isMonthConfirmed()){alert("확정된 월은 수정
         }
       });
     }
-    closeDragMenu();
-    if(typeof window._clearKbSelection==='function')window._clearKbSelection();
     // 변경된 (eid,ds) 조합만 패치 (중복 제거)
     const _patchedKeys=new Set();
     _cells.forEach(({eid,ds})=>{const k=eid+'_'+ds;if(!_patchedKeys.has(k)){_patchedKeys.add(k);_patchHrAttRow(eid,ds);}});
+    closeDragMenu();
+    if(typeof window._clearKbSelection==='function')window._clearKbSelection();
     saveAll();
   };
 
