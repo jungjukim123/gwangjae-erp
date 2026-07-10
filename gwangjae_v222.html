@@ -1227,7 +1227,8 @@ function _applyData(data) {
       fri: isNaN(Number(r.fri)) ? r.fri : Number(r.fri),
       sat: isNaN(Number(r.sat)) ? r.sat : Number(r.sat),
       sun: isNaN(Number(r.sun)) ? r.sun : Number(r.sun),
-      email: r.email||'', phone: r.phone||'', slackId: r.slackId||''
+      email: r.email||'', phone: r.phone||'', slackId: r.slackId||'',
+      _dbKey: r._dbKey||''
     }));
   }
 
@@ -1478,10 +1479,15 @@ async function saveAll() {
 
     // ② contracts upsert — key = "사번_cs" (사번 없으면 "no숫자_cs"로 대체)
     // ★ key 중복 제거 — 동일 key가 배열에 2개 이상이면 Supabase 500 오류 발생
+    // ★ 사번을 나중에 입력해 key가 바뀌면 이전 key(no{no}_cs) row가 DB에 남아 중복 행이 생기므로 삭제 대상으로 수집
+    const _conOldKeysToDelete = [];
     const conRowsRaw = contracts.map(c => {
       const keyPrefix = (c.사번 && c.사번 !== '') ? c.사번 : ('no' + (c.no||0));
+      const _newConKey = keyPrefix + '_' + (c.cs||'');
+      if (c._dbKey && c._dbKey !== _newConKey) _conOldKeysToDelete.push(c._dbKey);
+      c._dbKey = _newConKey;
       return {
-        key: keyPrefix + '_' + (c.cs||''),
+        key: _newConKey,
         no: c.no, 사번: c.사번||'', 이름: c.이름||'',
         구분: c.구분||'', 발송: c.발송||'', type: c.type||'',
         소속: c.소속||'', 입사: c.입사||'', 퇴사: c.퇴사||'',
@@ -1581,16 +1587,19 @@ async function saveAll() {
     _setDbStatus('syncing', '저장 중...');
 
     // Supabase 병렬 저장
-    const [r1,r2,r3,r4,r5,r6] = await Promise.all([
+    const [r1,r2,r3,r4,r5,r6,r7] = await Promise.all([
       _sbUpsert('employees',  empRows),
       _sbUpsert('contracts',  conRows),
       attRows.length  ? _sbUpsert('att_data',   attRows)  : Promise.resolve(true),
       slackRows.length? _sbUpsert('slack_data',  slackRows): Promise.resolve(true),
       hrRows.length   ? _sbUpsert('hr_saved',    hrRows)   : Promise.resolve(true),
       _sbUpsert('meta', metaRows),
+      _conOldKeysToDelete.length
+        ? fetch(`${SB_URL}/rest/v1/contracts?key=in.(${_conOldKeysToDelete.map(encodeURIComponent).join(',')})`, { method:'DELETE', headers: SB_HDR }).then(r=>r.ok).catch(()=>false)
+        : Promise.resolve(true),
     ]);
 
-    const ok = r1 && r2 && r3 && r4 && r5 && r6;
+    const ok = r1 && r2 && r3 && r4 && r5 && r6 && r7;
     _dbOk = ok;
     if (ok) _lastSaveTs = Date.now(); // 자기 저장 이벤트 무시용 타임스탬프 갱신
     const t = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
@@ -1627,7 +1636,7 @@ async function loadSaved() {
 
     const data = {
       employees: empRows,
-      contracts: conRows.map(c => { const {key, ...rest} = c; return rest; }), // slackId 포함됨
+      contracts: conRows.map(c => { const {key, ...rest} = c; return {...rest, _dbKey: key}; }), // slackId 포함됨 (★ _dbKey: 사번 입력으로 key 변경 시 이전 row 삭제용)
       att_data, slack_data,
       hr_saved: hrRows,
       meta, ver: 5
