@@ -3217,7 +3217,7 @@ function renderHrAtt(){
         ${skTd(`<strong>${emp.이름}</strong>`,HR_SK_WIDTHS[6],getLeft(6))}
         ${skTd(`<span style="font-size:9px">${day.date}</span>`,HR_SK_WIDTHS[7],getLeft(7))}
         ${skTd(day.dow,HR_SK_WIDTHS[8],getLeft(8))}
-        ${skTd(gB,HR_SK_WIDTHS[9],getLeft(9))}
+        ${skTd(`<div style="cursor:${!confirmed&&day.gbn!=='계약기간 없음'?'pointer':'default'}"${!confirmed&&day.gbn!=='계약기간 없음'?` onclick="toggleGbnMenu(this,'${emp.사번}','${day.date}')"`:''}>${gB}</div>`,HR_SK_WIDTHS[9],getLeft(9))}
         ${skTd(`<div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer" onclick="toggleOtInsaMenu(this,'${emp.사번}','${day.date}')">${day.연장승인==='승인'?'<span class="bdg" style="font-size:9px;background:#FFF4EC;color:#E07B2A;font-weight:700">승인</span>':''}${day.연장인사==='승인'?'<span class="bdg" style="font-size:9px;background:#FEF9C3;color:#92400E;font-weight:700">승인(인사)</span>':''}${(!day.연장승인&&!day.연장인사)?'<span style="color:#ccc;font-size:10px">-</span>':''}</div>`,HR_SK_WIDTHS[10],getLeft(10))}
         ${skTd(nFmt(r),HR_SK_WIDTHS[11],getLeft(11))}
         ${skTd(`<span style="font-size:11px">${conTimes.st||'-'}</span>`,HR_SK_WIDTHS[12],getLeft(12))}
@@ -3477,7 +3477,7 @@ function _patchHrAttRow(eid,ds){
     ${skTd(`<strong>${emp.이름}</strong>`,HR_SK_WIDTHS[6],getLeft(6))}
     ${skTd(`<span style="font-size:9px">${day.date}</span>`,HR_SK_WIDTHS[7],getLeft(7))}
     ${skTd(day.dow,HR_SK_WIDTHS[8],getLeft(8))}
-    ${skTd(gB,HR_SK_WIDTHS[9],getLeft(9))}
+    ${skTd(`<div style="cursor:${!confirmed&&day.gbn!=='계약기간 없음'?'pointer':'default'}"${!confirmed&&day.gbn!=='계약기간 없음'?` onclick="toggleGbnMenu(this,'${emp.사번}','${day.date}')"`:''}>${gB}</div>`,HR_SK_WIDTHS[9],getLeft(9))}
     ${skTd(`<div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer" onclick="toggleOtInsaMenu(this,'${emp.사번}','${day.date}')">${day.연장승인==='승인'?'<span class="bdg" style="font-size:9px;background:#FFF4EC;color:#E07B2A;font-weight:700">승인</span>':''}${day.연장인사==='승인'?'<span class="bdg" style="font-size:9px;background:#FEF9C3;color:#92400E;font-weight:700">승인(인사)</span>':''}${(!day.연장승인&&!day.연장인사)?'<span style="color:#ccc;font-size:10px">-</span>':''}</div>`,HR_SK_WIDTHS[10],getLeft(10))}
     ${skTd(nFmt(r),HR_SK_WIDTHS[11],getLeft(11))}
     ${skTd(`<span style="font-size:11px">${conTimes.st||'-'}</span>`,HR_SK_WIDTHS[12],getLeft(12))}
@@ -5014,6 +5014,100 @@ function setBigoVal(eid,ds,v){
     }
   },true);
 })();
+
+// ★ 구분(N) 팝업: 연장승인 팝업과 동일한 구조(전역 div를 body에 상주시켜 sticky stacking context 탈출)
+// 클릭 시 평일/휴일/무급 3가지로 빠르게 전환
+(function(){
+  let _popup=null,_popEid=null,_popDs=null;
+  function _ensurePopup(){
+    if(_popup&&document.body.contains(_popup))return;
+    _popup=document.createElement('div');
+    _popup.id='gbnPopup';
+    _popup.style.cssText='display:none;position:fixed;z-index:99999;background:#fff;border:1px solid var(--bd2);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.18);padding:4px;flex-direction:column;gap:2px;min-width:90px;';
+    const mk=(label,val,bg,fg,bd)=>{
+      const b=document.createElement('button');
+      b.textContent=label;
+      b.style.cssText=`font-size:10px;padding:3px 8px;border:1px solid ${bd};border-radius:4px;background:${bg};cursor:pointer;font-family:var(--fn);color:${fg};font-weight:700;width:100%;text-align:left`;
+      b.onclick=function(e){e.stopPropagation();if(_popEid&&_popDs)setGbnAndClose(_popEid,_popDs,val);};
+      return b;
+    };
+    _popup.appendChild(mk('평일','평일','#EFF6FF','#2563EB','#BFDBFE'));
+    _popup.appendChild(mk('휴일','휴일','#FEF2F2','#B91C1C','#FECACA'));
+    _popup.appendChild(mk('무급','무급','#F3F4F6','#374151','#E5E7EB'));
+    document.body.appendChild(_popup);
+  }
+  function _openFixedMenu(el,eid,ds){
+    _ensurePopup();
+    _popEid=eid;_popDs=ds;
+    const rect=el.getBoundingClientRect();
+    const mw=_popup.offsetWidth||95;
+    let left=rect.left;
+    if(left+mw>window.innerWidth)left=window.innerWidth-mw-6;
+    if(left<0)left=4;
+    let top=rect.bottom+3;
+    if(top+104>window.innerHeight)top=rect.top-108;
+    _popup.style.left=left+'px';_popup.style.top=top+'px';
+    _popup.style.display='flex';
+  }
+  function _closeFixedMenu(){
+    if(_popup)_popup.style.display='none';
+    _popEid=null;_popDs=null;
+  }
+  window._openGbnMenu=_openFixedMenu;
+  window._closeGbnMenu=_closeFixedMenu;
+  window._gbnPopupVisible=function(){return _popup&&_popup.style.display==='flex';};
+  document.addEventListener('mousedown',function(e){
+    if(_popup&&_popup.style.display==='flex'&&!_popup.contains(e.target)){
+      _closeFixedMenu();_activeGbnCell=null;
+    }
+  },true);
+})();
+let _activeGbnCell=null;
+function toggleGbnMenu(el,eid,ds){
+  if(isMonthConfirmed())return;
+  if(_activeGbnCell===el&&window._gbnPopupVisible()){
+    window._closeGbnMenu();_activeGbnCell=null;return;
+  }
+  _activeGbnCell=el;
+  window._openGbnMenu(el,eid,ds);
+}
+// 구분(N) 메뉴에서 평일/휴일 선택 시 적용할 소정근로시간 결정
+// 현재값(또는 백업된 원본값)이 있으면 그대로, 없으면(0시간이던 무급/주휴에서 전환 시) 계약 스케줄에서 조회
+function _resolveDaySojeong(eid,ds,d){
+  if(typeof d.소정==='number'&&d.소정>0)return d.소정;
+  if(typeof d.소정원본==='number'&&d.소정원본>0)return d.소정원본;
+  const sj=getSchedSojeong(eid,ds);
+  if(typeof sj==='number'&&sj>0)return sj;
+  const sc=getSched(eid,ds);
+  if(typeof sc==='number'&&sc>0)return sc;
+  return null;
+}
+function setGbnAndClose(eid,ds,v){
+  if(isMonthConfirmed())return;
+  const row=hrAttRows.find(r=>r.emp.사번===eid);if(!row)return;
+  const d=row.days.find(x=>x.date===ds);if(!d)return;
+  if(d.gbn==='계약기간 없음')return;
+  if(v==='무급'){
+    if(d.소정원본===undefined||d.소정원본==='')d.소정원본=d.소정;
+    if(d.gbn원본===undefined||d.gbn원본==='')d.gbn원본=d.gbn;
+    d.소정=0;d.소정수기=0;
+    d.gbn='무급휴일';d.gbn수기='무급휴일';
+  }else{
+    const h=_resolveDaySojeong(eid,ds,d);
+    if(h===null){
+      window._closeGbnMenu();_activeGbnCell=null;
+      alert('이 날짜의 소정근로시간을 자동으로 찾을 수 없습니다.\n"소정(R)" 칸의 "수기입력" 버튼으로 시간을 직접 입력해주세요.');
+      return;
+    }
+    if(d.소정원본===undefined||d.소정원본==='')d.소정원본=d.소정;
+    if(d.gbn원본===undefined||d.gbn원본==='')d.gbn원본=d.gbn;
+    d.소정=h;d.소정수기=h;
+    d.gbn=(v==='휴일')?'공휴일':'평일';
+    d.gbn수기=d.gbn;
+  }
+  window._closeGbnMenu();_activeGbnCell=null;
+  _patchHrAttRow(eid,ds);saveAll();
+}
 
 let _activeOtInsaCell=null;
 function setDayOtInsa(eid,ds,v){if(isMonthConfirmed())return;const row=hrAttRows.find(r=>r.emp.사번===eid);if(row){const d=row.days.find(x=>x.date===ds);if(d){d.연장인사=v;scheduleSave();}}}
