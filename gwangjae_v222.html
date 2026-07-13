@@ -260,6 +260,12 @@ td.sk.bigo-td .att-actions{left:50%;transform:translateX(-50%);min-width:70px;}
 .att-locked select,.att-locked input[type=text]{pointer-events:none!important;background:#f5f5f5!important;color:#aaa!important}
 .locked-banner{background:#FEF2F2;border:1px solid #FECACA;border-radius:var(--rs);padding:10px 16px;margin-bottom:12px;font-size:12px;color:var(--red);font-weight:700;display:flex;align-items:center;gap:8px}
 
+/* ══ 급여계산 시트: 기본급~장기요양연말정산 열 hover 시 "수정" 버튼 노출 ══ */
+.sal-cell{position:relative}
+.sal-cell .sal-edit-btn{display:none;position:absolute;left:50%;top:100%;transform:translateX(-50%);margin-top:2px;z-index:9999;font-size:10px;padding:2px 7px;border:1px solid var(--bd2);border-radius:4px;background:#fff;color:var(--tx2);cursor:pointer;font-family:var(--fn);white-space:nowrap;box-shadow:0 4px 10px rgba(0,0,0,.12)}
+.sal-cell:hover .sal-edit-btn{display:inline-block}
+.sal-cell .sal-edit-btn:hover{background:var(--gl);border-color:#93C5FD;color:#1D4ED8}
+
 /* ══ INLINE CONTRACT INPUT ROW ══ */
 tr.con-new-row td{background:#EFF6FF!important;border-top:2px solid #3B6FE0!important;border-bottom:2px solid #3B6FE0!important}
 tr.con-new-row td:first-child{border-left:2px solid #3B6FE0!important}
@@ -4657,11 +4663,16 @@ function renderSal(){
   });
   let totBase=0,totMeal=0,totPos=0,totNightFixed=0,totJuhyu=0,totOT=0,totHol=0,totHolOT=0,totYeoncha=0,totEtc=0,totSogup=0,totAN=0;
   let totSoDeuk=0,totJibang=0,totHealth=0,totCare=0,totPension=0,totEmp=0;
+  let totEtcDed=0,totJDJS=0,totJDJB=0,totYMJS=0,totYMJB=0,totHIJS=0,totCareJS=0,totHIYM=0,totCareYM=0;
 
   const rows=filtered.map((row,ri)=>{
     const{emp:_emp,days}=row;
     const emp=getMergedEmp(_emp);
     const r=rate(emp);
+    const _yr=yr||row.yr||'';
+    const _mo=mo||row.mo||'';
+    // 급여계산 셀 수기 오버라이드 — "수정된 값이 항상 우선 적용"
+    const _ovr=(field,calc)=>{const m=getSalManual(emp.사번,_yr,_mo,field);return m!==undefined?m:calc;};
     // 근태 집계
     let mW=0,mY=0,mX=0,mAA=0,mAB=0,mJH=0;
     days.forEach(day=>{
@@ -4710,23 +4721,23 @@ function renderSal(){
       return c10(원액*numer/_tD);
     }
     // ── 기본급 (시급직: 기본근무시간*통상시급 / 월급직: 일할계산)
-    const 기본급=emp.임금==='시급직'?mW*r:_ilhalCeil(emp.기본||0);
+    const 기본급=_ovr('기본급',emp.임금==='시급직'?mW*r:_ilhalCeil(emp.기본||0));
     // ── 식대 (시급직 없음, 월급직: 일할계산)
-    const 식대=emp.임금==='시급직'?0:_ilhalCeil(emp.식대||0);
+    const 식대=_ovr('식대',emp.임금==='시급직'?0:_ilhalCeil(emp.식대||0));
     // ── 직책수당 (계약기간관리 직책 필드 / 월급직은 일할계산 적용)
-    const 직책수당=_ilhalCeil(emp.직책||0);
+    const 직책수당=_ovr('직책수당',_ilhalCeil(emp.직책||0));
     // ── 야간근로수당: 계약기간관리 야간(고정, 월급직은 일할계산) vs 근태 산출값(mX*시급*0.5) 중 큰 값
     const 야간정액=_ilhalCeil(emp.야간||0);
     const 야간산출=mX*r*0.5;
-    const 야간수당=야간정액>=야간산출?야간정액:야간산출;
+    const 야간수당=_ovr('야간수당',야간정액>=야간산출?야간정액:야간산출);
     // ── 주휴수당 (시급직만, 주휴시간합계 * 통상시급)
-    const 주휴수당=emp.임금==='시급직'?mJH*r:0;
+    const 주휴수당=_ovr('주휴수당',emp.임금==='시급직'?mJH*r:0);
     // ── 연장근로수당 (연장시간합계 * 통상시급 * 1.5)
-    const 연장수당=mY*r*1.5;
+    const 연장수당=_ovr('연장수당',mY*r*1.5);
     // ── 휴일근로수당 (휴일시간합계 * 통상시급 * 1.5)
-    const 휴일수당=mAA*r*1.5;
+    const 휴일수당=_ovr('휴일수당',mAA*r*1.5);
     // ── 휴일연장근로수당 (휴일연장시간합계 * 통상시급 * 2)
-    const 휴일연장=mAB*r*2;
+    const 휴일연장=_ovr('휴일연장',mAB*r*2);
     // ── 기타수당·소급
     const extra=getSalExtra(emp.사번,yr,mo);
     const 기타=extra.기타||0;
@@ -4734,7 +4745,7 @@ function renderSal(){
     const 연차=extra.연차||0;
     // ── 지급액계 (각 항목을 10원단위 올림 후 합산)
     const _c10=v=>Math.ceil(v/10)*10;
-    const 지급액계=_c10(기본급)+_c10(식대)+_c10(직책수당)+_c10(야간수당)+_c10(주휴수당)+_c10(연장수당)+_c10(휴일수당)+_c10(휴일연장)+연차+기타+소급;
+    const 지급액계=_ovr('지급액계',_c10(기본급)+_c10(식대)+_c10(직책수당)+_c10(야간수당)+_c10(주휴수당)+_c10(연장수당)+_c10(휴일수당)+_c10(휴일연장)+연차+기타+소급);
 
     // ── 소득세 (간이세액표) / 지방소득세 (소득세 × 10%)
     const cfg=getSalCfg(emp.사번,yr,mo);
@@ -4745,38 +4756,54 @@ function renderSal(){
     // 과세표준: 식대는 비과세(월 20만 한도) 제외
     const 비과세식대=Math.min(_c10(식대), 200000);
     const 과세지급액=지급액계 - 비과세식대;
-    const 소득세=calcGanyiTax(과세지급액, 공제대상수, 소득세조정, 소득세감면구분, 감면비율);
-    const 지방소득세=Math.floor(소득세 * 0.1 / 10) * 10;
+    const 소득세=_ovr('소득세',calcGanyiTax(과세지급액, 공제대상수, 소득세조정, 소득세감면구분, 감면비율));
+    const 지방소득세=_ovr('지방소득세',Math.floor(소득세 * 0.1 / 10) * 10);
 
     // ── 건강보험/국민연금 보수월액 반영 여부: 당월 신규입사자는 "당월 1일 입사"인 경우에만 반영
     const _신규입사당월=_joinDate&&_joinDate>=_monthFirst&&_joinDate<=_monthLast;
     const _보수월액반영=!_신규입사당월||_joinDate.split('-')[2]==='01';
     // ── 건강보험 (보수월액 연동, 요율 3.595%)
     const 건강보험보수월액=_보수월액반영?(parseFloat(cfg.건강보험보수월액)||0):0;
-    const 건강보험=건강보험보수월액>0?Math.floor(건강보험보수월액*0.03595/10)*10:0;
+    const 건강보험=_ovr('건강보험',건강보험보수월액>0?Math.floor(건강보험보수월액*0.03595/10)*10:0);
     // ── 장기요양 (건강보험료 × 13.14%)
-    const 장기요양=건강보험>0?Math.floor(건강보험*0.1314/10)*10:0;
+    const 장기요양=_ovr('장기요양',건강보험>0?Math.floor(건강보험*0.1314/10)*10:0);
     // ── 국민연금 (보수월액 연동, 요율 4.75%)
     const 국민연금보수월액=_보수월액반영?(parseFloat(cfg.국민연금보수월액)||0):0;
-    const 국민연금=국민연금보수월액>0?Math.floor(국민연금보수월액*0.0475/10)*10:0;
+    const 국민연금=_ovr('국민연금',국민연금보수월액>0?Math.floor(국민연금보수월액*0.0475/10)*10:0);
     // ── 고용보험 ((지급액계-식대) × 0.9%, 고용보험 적용 시에만)
     const 고용보험적용=cfg.고용보험||'적용';
-    const 고용보험=(고용보험적용==='적용')?Math.floor((지급액계-_c10(식대))*0.009/10)*10:0;
+    const 고용보험=_ovr('고용보험',(고용보험적용==='적용')?Math.floor((지급액계-_c10(식대))*0.009/10)*10:0);
 
     totBase+=_c10(기본급);totMeal+=_c10(식대);totPos+=_c10(직책수당);totNightFixed+=_c10(야간수당);
     totJuhyu+=_c10(주휴수당);totOT+=_c10(연장수당);totHol+=_c10(휴일수당);
     totHolOT+=_c10(휴일연장);totYeoncha+=연차;totEtc+=기타;totSogup+=소급;totAN+=지급액계;
     totSoDeuk+=소득세;totJibang+=지방소득세;totHealth+=건강보험;totCare+=장기요양;totPension+=국민연금;totEmp+=고용보험;
-    // ── 공제액계 = 소득세~장기요양연말정산 합계 (정산 열은 현재 0)
-    const 공제액계=소득세+지방소득세+건강보험+장기요양+국민연금+고용보험;
+    // ── 기타공제/중도정산/연말정산 항목: 자동계산 없음(수기입력 전용, 기본값 0) — 공제액계에 반영
+    const 기타공제=_ovr('기타공제',0);
+    const 중도정산소득세=_ovr('중도정산소득세',0);
+    const 중도정산지방소득세=_ovr('중도정산지방소득세',0);
+    const 연말정산소득세=_ovr('연말정산소득세',0);
+    const 연말정산지방소득세=_ovr('연말정산지방소득세',0);
+    const 건강보험정산=_ovr('건강보험정산',0);
+    const 장기요양정산=_ovr('장기요양정산',0);
+    const 건강보험연말정산=_ovr('건강보험연말정산',0);
+    const 장기요양연말정산=_ovr('장기요양연말정산',0);
+    // ── 공제액계 = 소득세~장기요양연말정산 합계
+    const 공제액계=소득세+지방소득세+건강보험+장기요양+국민연금+고용보험+기타공제+중도정산소득세+중도정산지방소득세+연말정산소득세+연말정산지방소득세+건강보험정산+장기요양정산+건강보험연말정산+장기요양연말정산;
     const 실지급액=지급액계-공제액계;
+    totEtcDed+=기타공제;totJDJS+=중도정산소득세;totJDJB+=중도정산지방소득세;totYMJS+=연말정산소득세;totYMJB+=연말정산지방소득세;
+    totHIJS+=건강보험정산;totCareJS+=장기요양정산;totHIYM+=건강보험연말정산;totCareYM+=장기요양연말정산;
 
     const empKey=emp.사번+'_'+yr+'_'+String(mo).padStart(2,'0');
-    const _yr=yr||row.yr||'';
-    const _mo=mo||row.mo||'';
     const fh=v=>v>0?v.toFixed(2).replace(/\.?0+$/,''):'-';
     const cFmt=v=>v>0?(Math.ceil(v/10)*10).toLocaleString():'-';
     const taxFmt=v=>v>0?v.toLocaleString():'-';
+    // ── 기본급~장기요양연말정산 열 공용: 마우스오버 시 "수정" 버튼 노출, 수기입력된 값은 주황색으로 표시
+    const salTd=(field,label,val,fmtFn,bold)=>{
+      const manual=getSalManual(emp.사번,_yr,_mo,field)!==undefined;
+      const style=bold?`font-weight:800;font-size:11px;color:${manual?'var(--orange)':'var(--tx)'}`:`font-size:11px;color:${manual?'var(--orange)':'#000000'}`;
+      return`<td class="r sal-cell" style="${style}">${fmtFn(val)}<button class="sal-edit-btn" onclick="event.stopPropagation();editSalManual('${emp.사번}',${_yr},${_mo},'${field}','${label}',${val})">수정</button></td>`;
+    };
     return`<tr>
       <td style="text-align:center;font-size:11px;color:#000000">${ri+1}</td>
       <td style="text-align:center;font-size:11px;color:#000000">${_yr}</td>
@@ -4791,14 +4818,14 @@ function renderSal(){
       <td class="r" style="font-size:11px;color:#000000">${fh(mX)}</td>
       <td class="r" style="font-size:11px;color:#000000">${fh(mAA)}</td>
       <td class="r" style="font-size:11px;color:#000000">${fh(mAB)}</td>
-      <td class="r" style="font-size:11px;color:#000000">${cFmt(기본급)}</td>
-      <td class="r" style="font-size:11px;color:#000000">${cFmt(식대)}</td>
-      <td class="r" style="font-size:11px;color:#000000">${cFmt(직책수당)}</td>
-      <td class="r" style="font-size:11px;color:#000000">${cFmt(야간수당)}</td>
-      <td class="r" style="font-size:11px;color:#000000">${cFmt(주휴수당)}</td>
-      <td class="r" style="font-size:11px;color:#000000">${cFmt(연장수당)}</td>
-      <td class="r" style="font-size:11px;color:#000000">${cFmt(휴일수당)}</td>
-      <td class="r" style="font-size:11px;color:#000000">${cFmt(휴일연장)}</td>
+      ${salTd('기본급','기본급',기본급,cFmt)}
+      ${salTd('식대','식대',식대,cFmt)}
+      ${salTd('직책수당','직책수당',직책수당,cFmt)}
+      ${salTd('야간수당','야간근로수당',야간수당,cFmt)}
+      ${salTd('주휴수당','주휴수당',주휴수당,cFmt)}
+      ${salTd('연장수당','연장근로수당',연장수당,cFmt)}
+      ${salTd('휴일수당','휴일근로수당',휴일수당,cFmt)}
+      ${salTd('휴일연장','휴일연장근로수당',휴일연장,cFmt)}
       <td class="r">
         <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
           <span style="color:var(--tx3);font-size:11px">${연차>0?nFmt(연차):'-'}</span>
@@ -4817,22 +4844,22 @@ function renderSal(){
           <button onclick="editSalExtra('${emp.사번}',${_yr},${_mo},'소급',${소급})" style="width:24px;height:24px;border-radius:6px;border:1px solid var(--bd2);background:linear-gradient(135deg,#EEF2FF,#E0E7FF);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;color:#6366F1;transition:all .15s" onmouseover="this.style.background='#C7D2FE';this.style.borderColor='#A5B4FC'" onmouseout="this.style.background='linear-gradient(135deg,#EEF2FF,#E0E7FF)';this.style.borderColor='var(--bd2)'">✎</button>
         </div>
       </td>
-      <td class="r" style="font-weight:800;color:var(--tx);font-size:11px">${지급액계.toLocaleString()}</td>
-      <td class="r" style="font-size:11px;color:#000000">${taxFmt(소득세)}</td>
-      <td class="r" style="font-size:11px;color:#000000">${taxFmt(지방소득세)}</td>
-      <td class="r" style="font-size:11px;color:#000000">${taxFmt(건강보험)}</td>
-      <td class="r" style="font-size:11px;color:#000000">${taxFmt(장기요양)}</td>
-      <td class="r" style="font-size:11px;color:#000000">${taxFmt(국민연금)}</td>
-      <td class="r" style="font-size:11px;color:#000000">${taxFmt(고용보험)}</td>
-      <td class="r" style="font-size:11px;color:#000000">-</td>
-      <td class="r" style="font-size:11px;color:#000000">-</td>
-      <td class="r" style="font-size:11px;color:#000000">-</td>
-      <td class="r" style="font-size:11px;color:#000000">-</td>
-      <td class="r" style="font-size:11px;color:#000000">-</td>
-      <td class="r" style="font-size:11px;color:#000000">-</td>
-      <td class="r" style="font-size:11px;color:#000000">-</td>
-      <td class="r" style="font-size:11px;color:#000000">-</td>
-      <td class="r" style="font-size:11px;color:#000000">-</td>
+      ${salTd('지급액계','지급액계',지급액계,v=>v.toLocaleString(),true)}
+      ${salTd('소득세','소득세',소득세,taxFmt)}
+      ${salTd('지방소득세','지방소득세',지방소득세,taxFmt)}
+      ${salTd('건강보험','건강보험',건강보험,taxFmt)}
+      ${salTd('장기요양','장기요양',장기요양,taxFmt)}
+      ${salTd('국민연금','국민연금',국민연금,taxFmt)}
+      ${salTd('고용보험','고용보험',고용보험,taxFmt)}
+      ${salTd('기타공제','기타공제',기타공제,taxFmt)}
+      ${salTd('중도정산소득세','중도정산소득세',중도정산소득세,taxFmt)}
+      ${salTd('중도정산지방소득세','중도정산지방소득세',중도정산지방소득세,taxFmt)}
+      ${salTd('연말정산소득세','연말정산소득세',연말정산소득세,taxFmt)}
+      ${salTd('연말정산지방소득세','연말정산지방소득세',연말정산지방소득세,taxFmt)}
+      ${salTd('건강보험정산','건강보험정산',건강보험정산,taxFmt)}
+      ${salTd('장기요양정산','장기요양정산',장기요양정산,taxFmt)}
+      ${salTd('건강보험연말정산','건강보험연말정산',건강보험연말정산,taxFmt)}
+      ${salTd('장기요양연말정산','장기요양연말정산',장기요양연말정산,taxFmt)}
       <td class="r" style="font-weight:800;color:var(--purple);font-size:11px">${공제액계>0?공제액계.toLocaleString():'-'}</td>
       <td class="r" style="font-weight:800;color:var(--tx);font-size:11px">${실지급액>0?실지급액.toLocaleString():'-'}</td>
     </tr>`;
@@ -4856,12 +4883,12 @@ function renderSal(){
     <td class="r">${totSogup>0?nFmt(totSogup):'-'}</td>
     <td class="r">${nFmt(totAN)}</td>
     <td class="r">${totSoDeuk>0?nFmt(totSoDeuk):'-'}</td><td class="r">${totJibang>0?nFmt(totJibang):'-'}</td>
-    <td class="r">${totHealth>0?nFmt(totHealth):'-'}</td><td class="r">${totCare>0?nFmt(totCare):'-'}</td><td class="r">${totPension>0?nFmt(totPension):'-'}</td><td class="r">${totEmp>0?nFmt(totEmp):'-'}</td><td class="r">-</td>
-    <td class="r">-</td><td class="r">-</td>
-    <td class="r">-</td><td class="r">-</td>
-    <td class="r">-</td><td class="r">-</td>
-    <td class="r">-</td><td class="r">-</td>
-    <td class="r">${(totSoDeuk+totJibang+totHealth+totCare+totPension+totEmp)>0?nFmt(totSoDeuk+totJibang+totHealth+totCare+totPension+totEmp):'-'}</td><td class="r">${totAN-(totSoDeuk+totJibang+totHealth+totCare+totPension+totEmp)>0?nFmt(totAN-(totSoDeuk+totJibang+totHealth+totCare+totPension+totEmp)):'-'}</td>
+    <td class="r">${totHealth>0?nFmt(totHealth):'-'}</td><td class="r">${totCare>0?nFmt(totCare):'-'}</td><td class="r">${totPension>0?nFmt(totPension):'-'}</td><td class="r">${totEmp>0?nFmt(totEmp):'-'}</td><td class="r">${totEtcDed>0?nFmt(totEtcDed):'-'}</td>
+    <td class="r">${totJDJS>0?nFmt(totJDJS):'-'}</td><td class="r">${totJDJB>0?nFmt(totJDJB):'-'}</td>
+    <td class="r">${totYMJS>0?nFmt(totYMJS):'-'}</td><td class="r">${totYMJB>0?nFmt(totYMJB):'-'}</td>
+    <td class="r">${totHIJS>0?nFmt(totHIJS):'-'}</td><td class="r">${totCareJS>0?nFmt(totCareJS):'-'}</td>
+    <td class="r">${totHIYM>0?nFmt(totHIYM):'-'}</td><td class="r">${totCareYM>0?nFmt(totCareYM):'-'}</td>
+    <td class="r">${(()=>{const t=totSoDeuk+totJibang+totHealth+totCare+totPension+totEmp+totEtcDed+totJDJS+totJDJB+totYMJS+totYMJB+totHIJS+totCareJS+totHIYM+totCareYM;return t>0?nFmt(t):'-';})()}</td><td class="r">${(()=>{const ded=totSoDeuk+totJibang+totHealth+totCare+totPension+totEmp+totEtcDed+totJDJS+totJDJB+totYMJS+totYMJB+totHIJS+totCareJS+totHIYM+totCareYM;return(totAN-ded)>0?nFmt(totAN-ded):'-';})()}</td>
   </tr>`;
 
   document.getElementById('salBody').innerHTML=(rows.join('')||`<tr><td colspan="${N}" style="text-align:center;padding:40px;color:var(--tx3)">데이터 없음</td></tr>`)+sumRow;
@@ -4883,6 +4910,33 @@ function editSalExtra(empId,yr,mo,type,cur){
   if(!salExtra[key])salExtra[key]={기타:0,소급:0,연차:0};
   salExtra[key][type]=num;
   saveAll();renderSal();
+}
+// ============================================================
+// 급여계산 시트 셀 수기 오버라이드 (기본급~장기요양연말정산 공용)
+// "수정된 값이 항상 우선 적용" — salExtra[key].수기[field]에 저장, 있으면 자동계산값 대신 사용
+// ============================================================
+function getSalManual(empId,yr,mo,field){
+  const ex=salExtra[salExtraKey(empId,yr,mo)];
+  return (ex&&ex.수기&&ex.수기[field]!==undefined)?ex.수기[field]:undefined;
+}
+function setSalManual(empId,yr,mo,field,v){
+  const key=salExtraKey(empId,yr,mo);
+  if(!salExtra[key])salExtra[key]={기타:0,소급:0,연차:0};
+  if(!salExtra[key].수기)salExtra[key].수기={};
+  const t=String(v).replace(/,/g,'').trim();
+  if(t===''){
+    delete salExtra[key].수기[field];
+  }else{
+    const num=Number(t);
+    if(isNaN(num)){alert('숫자를 입력하세요');return;}
+    salExtra[key].수기[field]=num;
+  }
+  saveAll();renderSal();
+}
+function editSalManual(empId,yr,mo,field,label,cur){
+  const v=prompt(`${label} 값 수정 (원)\n\n현재 값: ${cur?nFmt(cur):0}\n\n※ 직접 입력한 값이 자동계산값보다 항상 우선 적용됩니다.\n비우고 확인하면 자동계산값으로 복원됩니다.`,cur||'');
+  if(v===null)return;
+  setSalManual(empId,yr,mo,field,v);
 }
 function exportSalExcel(){
   if(!hrAttRows.length){alert('먼저 "급여계산" 버튼을 클릭하세요');return;}
@@ -4929,37 +4983,48 @@ function exportSalExcel(){
       if(_jdx&&_jdx>=_mFx&&_jdx<=_mLx){return c10(원액*Math.max(0,(_tDx-parseInt(_jdx.split('-')[2])+1)-_gyeolgeunCntX)/_tDx);}
       return c10(원액*Math.max(0,_tDx-_gyeolgeunCntX)/_tDx);
     }
-    const 기본급=emp.임금==='시급직'?mW*r:_ilhalCeilX(emp.기본||0);
-    const 식대=emp.임금==='시급직'?0:_ilhalCeilX(emp.식대||0);
-    const 직책=_ilhalCeilX(emp.직책||0);
+    // 급여계산 시트에서 수기 오버라이드한 값이 있으면 항상 우선 적용 (화면과 엑셀 export 값 일치)
+    const _ovrX=(field,calc)=>{const m=getSalManual(emp.사번,yr,mo,field);return m!==undefined?m:calc;};
+    const 기본급=_ovrX('기본급',emp.임금==='시급직'?mW*r:_ilhalCeilX(emp.기본||0));
+    const 식대=_ovrX('식대',emp.임금==='시급직'?0:_ilhalCeilX(emp.식대||0));
+    const 직책=_ovrX('직책수당',_ilhalCeilX(emp.직책||0));
     const 야간정액x=_ilhalCeilX(emp.야간||0);
     const 야간산출x=mX*r*0.5;
-    const 야간수당=야간정액x>=야간산출x?야간정액x:야간산출x;
-    const 주휴=emp.임금==='시급직'?mJH*r:0;
-    const 연장=mY*r*1.5;
-    const 휴일=mAA*r*1.5,휴일연장=mAB*r*2;
+    const 야간수당=_ovrX('야간수당',야간정액x>=야간산출x?야간정액x:야간산출x);
+    const 주휴=_ovrX('주휴수당',emp.임금==='시급직'?mJH*r:0);
+    const 연장=_ovrX('연장수당',mY*r*1.5);
+    const 휴일=_ovrX('휴일수당',mAA*r*1.5),휴일연장=_ovrX('휴일연장',mAB*r*2);
     const extra=getSalExtra(emp.사번,yr,mo);
     const _c10x=v=>Math.ceil(v/10)*10;
     const _b=_c10x(기본급),_s=_c10x(식대),_j=_c10x(직책),_n=_c10x(야간수당),_jh=_c10x(주휴),_ot=_c10x(연장),_h=_c10x(휴일),_he=_c10x(휴일연장);
-    const 지급액계=_b+_s+_j+_n+_jh+_ot+_h+_he+(extra.연차||0)+(extra.기타||0)+(extra.소급||0);
+    const 지급액계=_ovrX('지급액계',_b+_s+_j+_n+_jh+_ot+_h+_he+(extra.연차||0)+(extra.기타||0)+(extra.소급||0));
     const fhx=v=>v>0?Math.round(v*100)/100:0;
     // 소득세/지방소득세 계산 (간이세액표)
     const cfgX=getSalCfg(emp.사번,yr,mo);
     const 비과세식대X=Math.min(_s, 200000);
-    const 소득세X=calcGanyiTax(지급액계-비과세식대X, parseInt(cfgX.전체공제대상)||1, cfgX.소득세조정||'100%', cfgX.소득세감면||'선택없음', parseFloat(cfgX.감면비율)||0);
-    const 지방소득세X=Math.floor(소득세X*0.1/10)*10;
+    const 소득세X=_ovrX('소득세',calcGanyiTax(지급액계-비과세식대X, parseInt(cfgX.전체공제대상)||1, cfgX.소득세조정||'100%', cfgX.소득세감면||'선택없음', parseFloat(cfgX.감면비율)||0));
+    const 지방소득세X=_ovrX('지방소득세',Math.floor(소득세X*0.1/10)*10);
     const _신규입사당월X=_jdx&&_jdx>=_mFx&&_jdx<=_mLx;
     const _보수월액반영X=!_신규입사당월X||_jdx.split('-')[2]==='01';
     const 건강보험보수월액X=_보수월액반영X?(parseFloat(cfgX.건강보험보수월액)||0):0;
-    const 건강보험X=건강보험보수월액X>0?Math.floor(건강보험보수월액X*0.03595/10)*10:0;
-    const 장기요양X=건강보험X>0?Math.floor(건강보험X*0.1314/10)*10:0;
+    const 건강보험X=_ovrX('건강보험',건강보험보수월액X>0?Math.floor(건강보험보수월액X*0.03595/10)*10:0);
+    const 장기요양X=_ovrX('장기요양',건강보험X>0?Math.floor(건강보험X*0.1314/10)*10:0);
     const 국민연금보수월액X=_보수월액반영X?(parseFloat(cfgX.국민연금보수월액)||0):0;
-    const 국민연금X=국민연금보수월액X>0?Math.floor(국민연금보수월액X*0.0475/10)*10:0;
+    const 국민연금X=_ovrX('국민연금',국민연금보수월액X>0?Math.floor(국민연금보수월액X*0.0475/10)*10:0);
     const 고용보험적용X=cfgX.고용보험||'적용';
-    const 고용보험X=(고용보험적용X==='적용')?Math.floor((지급액계-_s)*0.009/10)*10:0;
-    const 공제액계X=소득세X+지방소득세X+건강보험X+장기요양X+국민연금X+고용보험X;
+    const 고용보험X=_ovrX('고용보험',(고용보험적용X==='적용')?Math.floor((지급액계-_s)*0.009/10)*10:0);
+    const 기타공제X=_ovrX('기타공제',0);
+    const 중도정산소득세X=_ovrX('중도정산소득세',0);
+    const 중도정산지방소득세X=_ovrX('중도정산지방소득세',0);
+    const 연말정산소득세X=_ovrX('연말정산소득세',0);
+    const 연말정산지방소득세X=_ovrX('연말정산지방소득세',0);
+    const 건강보험정산X=_ovrX('건강보험정산',0);
+    const 장기요양정산X=_ovrX('장기요양정산',0);
+    const 건강보험연말정산X=_ovrX('건강보험연말정산',0);
+    const 장기요양연말정산X=_ovrX('장기요양연말정산',0);
+    const 공제액계X=소득세X+지방소득세X+건강보험X+장기요양X+국민연금X+고용보험X+기타공제X+중도정산소득세X+중도정산지방소득세X+연말정산소득세X+연말정산지방소득세X+건강보험정산X+장기요양정산X+건강보험연말정산X+장기요양연말정산X;
     const 실지급액X=지급액계-공제액계X;
-    data.push([ri+1,yr,mo,emp.사번||'',emp.소속,emp.임금,emp.이름,fhx(mW),fhx(mJH),fhx(mY),fhx(mX),fhx(mAA),fhx(mAB),_b,_s,_j,_n,_jh,_ot,_h,_he,extra.연차||0,extra.기타||0,extra.소급||0,지급액계,소득세X,지방소득세X,건강보험X,장기요양X,국민연금X,고용보험X,'','','','','','','','',공제액계X,실지급액X]);
+    data.push([ri+1,yr,mo,emp.사번||'',emp.소속,emp.임금,emp.이름,fhx(mW),fhx(mJH),fhx(mY),fhx(mX),fhx(mAA),fhx(mAB),_b,_s,_j,_n,_jh,_ot,_h,_he,extra.연차||0,extra.기타||0,extra.소급||0,지급액계,소득세X,지방소득세X,건강보험X,장기요양X,국민연금X,고용보험X,기타공제X,중도정산소득세X,중도정산지방소득세X,연말정산소득세X,연말정산지방소득세X,건강보험정산X,장기요양정산X,건강보험연말정산X,장기요양연말정산X,공제액계X,실지급액X]);
   });
   const ws=XLSX.utils.aoa_to_sheet(data);
   XLSX.utils.book_append_sheet(wb,ws,'급여계산');
