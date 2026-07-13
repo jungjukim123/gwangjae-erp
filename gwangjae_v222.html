@@ -1336,7 +1336,12 @@ function _applyData(data) {
         const sd = (days || []).find(x => x.date === ds) || {};
         const _sojeong = (sd.소정수기 !== undefined && sd.소정수기 !== '') ? (sd.소정수기 === '0' ? 0 : sd.소정수기) : 소정;
         let _gbn = gbn;
-        if (sd.소정수기 !== undefined && sd.소정수기 !== '') {
+        // ★ 수기로 지정한 구분(gbn수기)이 있으면 그 값을 그대로 신뢰 — isHoliday로 재계산하면
+        //   "평일"로 수기 지정해도 공휴일인 날짜는 재저장/재로드 시 다시 "휴일"로 되돌아가는 문제 발생
+        if (sd.gbn수기 !== undefined && sd.gbn수기 !== '' && gbn !== '계약기간 없음') {
+          _gbn = sd.gbn수기;
+        } else if (sd.소정수기 !== undefined && sd.소정수기 !== '') {
+          // (구버전 데이터 호환: gbn수기 없이 소정수기만 저장된 경우의 기존 로직)
           if (sd.소정수기 === '주휴') {
             _gbn = '주휴일';
           } else if (gbn === '계약기간 없음') {
