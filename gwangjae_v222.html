@@ -2012,20 +2012,18 @@ function getWeekSojeong(empId,ds){
   const e=employees.find(x=>x.사번===empId);
   return Number(e?.소정)||40;
 }
-// 주휴 개근 판정: 주휴일(ds)이 속한 주(일~토)의 소정근로일에 모두 출근했는지
+// 주휴 개근 판정: 주휴일(ds) 직전 7일(=주휴일이 보상하는, 막 끝난 근무주)의 소정근로일에 모두 출근했는지
 // 소정근로일 = 그 주에서 평일/공휴일이면서 스케줄상 근무하기로 한 날(소정>0)
 // 모두 출근(in 기록 있음)이면 true → 주휴 발생
+// ★ 주휴일 요일이 일요일이 아닌 경우(예: 화요일)에도 정확히 "주휴일 직전 7일"을 보도록,
+//   월~일 달력 주 대신 ds-7~ds-1 범위로 계산 (요일 무관하게 항상 올바른 직전 근무주를 참조)
 function isFullAttendanceWeek(empId,ds){
   const row=hrAttRows.find(r=>r.emp.사번===empId);
   if(!row)return false;
-  // ds가 속한 주(월~일)의 범위 계산. 주 시작=월요일
   const base=new Date(ds+'T00:00:00');
-  const dow=base.getDay(); // 0(일)~6(토)
-  const offsetToMon=(dow===0)?6:(dow-1); // 월요일까지의 거리
-  const monday=new Date(base);monday.setDate(base.getDate()-offsetToMon);
   const weekDates=[];
-  for(let k=0;k<7;k++){
-    const d=new Date(monday);d.setDate(monday.getDate()+k);
+  for(let k=7;k>=1;k--){
+    const d=new Date(base);d.setDate(base.getDate()-k);
     const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');
     weekDates.push(`${y}-${m}-${dd}`);
   }
