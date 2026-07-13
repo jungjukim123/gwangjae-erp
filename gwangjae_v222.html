@@ -3290,7 +3290,7 @@ function renderHrAtt(){
     // 합계행 — 말일 아래, sticky 15개 + 비sticky 합산값
     function gskTd(c,w,left,extra=''){return`<td class="sk ghd${extra?(' '+extra):''}" style="left:${left}px;min-width:${w}px;max-width:${w}px">${c}</td>`}
     html+=dHtml;
-    html+=`<tr class="ghd" style="text-align:center">
+    html+=`<tr class="ghd" data-ghd-eid="${emp.사번}" style="text-align:center">
       ${gskTd(ri+1,                                    HR_SK_WIDTHS[0], getLeft(0),' c')}
       ${gskTd(yr,                                      HR_SK_WIDTHS[1], getLeft(1),' c')}
       ${gskTd(String(mo).padStart(2,'0'),              HR_SK_WIDTHS[2], getLeft(2),' c')}
@@ -3366,6 +3366,37 @@ function renderHrAtt(){
     <div class="sc co"><div class="sl">수기 고정</div><div class="sv">${Object.keys(attData).filter(k=>attData[k].locked).length}<span> 건</span></div></div>
     <div class="sc cr"><div class="sl">수정요청</div><div class="sv">${attRequests.length}<span> 건</span></div></div>`;
   _hrAttRenderedSig=_hrAttSig(yr,mo,q);
+}
+// ============================================================
+// _calcEmpMonthTotals — 직원 1명의 월 합계(U~AB, 급여) 계산 (renderHrAtt의 합산 로직과 동일)
+// _patchHrAttRow가 부분 패치 후 "합계" 행/상단 통계를 다시 맞추는 데 사용
+// ============================================================
+function _calcEmpMonthTotals(rowData){
+  const emp=getMergedEmp(rowData.emp);
+  const yr=rowData.yr, mo=rowData.mo;
+  let mAN=0, mU=0,mV=0,mW=0,mX=0,mY=0,mAA=0,mAB=0,mJH=0,mApprove=0;
+  rowData.days.forEach(day=>{
+    const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
+    const otApproved=day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무';
+    const _U0=cU(i,o),_V0=cV(emp,day.date,day.gbn,day.소정,i,o,_U0,day.bigo,day.주휴수기,otApproved);
+    const _isHolW=day.gbn==='공휴일'&&typeof day.소정==='number'&&day.소정>0;
+    const _W0=day.gbn==='주휴일'?0:_isHolW?day.소정:cW(_V0,day.소정),_X0=cX(i,o),_Y0=cY(day.gbn,_V0,day.소정,otApproved?'연장근무':day.확인);
+    const _AA0=cAA(i,o,_U0,_X0,day.gbn),_AB0=cAB(_AA0);
+    const U=day.수기U!==undefined?day.수기U:_U0;
+    const V=day.수기V!==undefined?day.수기V:_V0;
+    const W=day.수기W!==undefined?day.수기W:_W0;
+    const X=day.수기X!==undefined?day.수기X:_X0;
+    const Y=day.수기Y!==undefined?day.수기Y:_Y0;
+    const AA=day.수기AA!==undefined?day.수기AA:_AA0;
+    const AB=day.수기AB!==undefined?day.수기AB:_AB0;
+    const sal=cSal(emp,day.date,day.gbn,day.소정,W,X,Y,X,AA,AB,day.bigo,yr,mo,day.주휴수기);
+    mAN+=sal.AN;
+    if(V>0&&day.gbn!=='주휴일'){mU+=U;mV+=V;mW+=W;}else if(_isHolW){mU+=U;mV+=V;mW+=W;}
+    mX+=X;mY+=Y;mAA+=AA;mAB+=AB;
+    if(day.연장승인==='승인'||day.연장인사==='승인')mApprove++;
+    mJH+=day.gbn==='주휴일'?calcJuhyu(emp,day.date,day.주휴수기):0;
+  });
+  return {mU,mV,mW,mX,mY,mAA,mAB,mJH,mAN,mApprove};
 }
 // ============================================================
 // _patchHrAttRow — 특정 (eid, ds) TR 1개만 재빌드 (전체 재렌더 방지)
@@ -3459,6 +3490,33 @@ function _patchHrAttRow(eid,ds){
     <td style="white-space:nowrap;padding:4px 6px">${inp}${pin}</td>
   </tr>`;
   tr.outerHTML=newHtml;
+  // ★ 부분 패치만으로는 "합계" 행/상단 통계(총 급여 예상 등)가 갱신되지 않는 문제 방지 — 여기서 함께 재계산
+  const _totals=_calcEmpMonthTotals(rowData);
+  const ghdTr=document.querySelector(`#hrT tbody tr.ghd[data-ghd-eid="${eid}"]`);
+  if(ghdTr){
+    const c=ghdTr.cells;
+    if(c[10])c[10].innerHTML=_totals.mApprove>0?'<strong style="color:#E07B2A">'+_totals.mApprove+'건</strong>':'';
+    if(c[18])c[18].textContent=fw(_totals.mU);
+    if(c[19])c[19].textContent=fw(_totals.mV);
+    if(c[20])c[20].textContent=fw(_totals.mW);
+    if(c[21])c[21].textContent=_totals.mJH>0?fw(_totals.mJH):'-';
+    if(c[22])c[22].textContent=_totals.mX>0?fw(_totals.mX):'-';
+    if(c[23])c[23].textContent=_totals.mY>0?fw(_totals.mY):'-';
+    if(c[24])c[24].textContent=_totals.mAA>0?fw(_totals.mAA):'-';
+    if(c[25])c[25].textContent=_totals.mAB>0?fw(_totals.mAB):'-';
+  }
+  const hrStatsEl=document.getElementById('hrStats');
+  if(hrStatsEl){
+    const _q=(document.getElementById('hrQ')||{}).value||'';
+    const _filtered=hrAttRows.filter(r=>!_q||r.emp.이름.includes(_q)||r.emp.사번.includes(_q));
+    let _totalPay=0;
+    _filtered.forEach(r=>{_totalPay+=(r===rowData?_totals:_calcEmpMonthTotals(r)).mAN;});
+    hrStatsEl.innerHTML=`
+    <div class="sc cg"><div class="sl">대상 인원</div><div class="sv">${_filtered.length}<span> 명</span></div></div>
+    <div class="sc cb"><div class="sl">총 급여 예상</div><div class="sv" style="font-size:18px">${nFmt(_totalPay)}<span> 원</span></div></div>
+    <div class="sc co"><div class="sl">수기 고정</div><div class="sv">${Object.keys(attData).filter(k=>attData[k].locked).length}<span> 건</span></div></div>
+    <div class="sc cr"><div class="sl">수정요청</div><div class="sv">${attRequests.length}<span> 건</span></div></div>`;
+  }
 }
 // ============================================================
 // ⑥ 급여설정관리
