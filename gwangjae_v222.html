@@ -261,10 +261,12 @@ td.sk.bigo-td .att-actions{left:50%;transform:translateX(-50%);min-width:70px;}
 .locked-banner{background:#FEF2F2;border:1px solid #FECACA;border-radius:var(--rs);padding:10px 16px;margin-bottom:12px;font-size:12px;color:var(--red);font-weight:700;display:flex;align-items:center;gap:8px}
 
 /* ══ 급여계산 시트: 기본급~장기요양연말정산 열 hover 시 "수정" 버튼 노출 ══ */
-.sal-cell{position:relative}
-.sal-cell .sal-edit-btn{display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9999;font-size:10px;padding:2px 7px;border:1px solid var(--bd2);border-radius:4px;background:#fff;color:var(--tx2);cursor:pointer;font-family:'Pretendard',var(--fn);white-space:nowrap;box-shadow:0 4px 10px rgba(0,0,0,.12)}
-.sal-cell:hover .sal-edit-btn{display:inline-block}
-.sal-cell .sal-edit-btn:hover{background:var(--gl);border-color:#93C5FD;color:#1D4ED8}
+/* 버튼 자체는 body 상주 fixed 요소(#salEditBtn, JS로 셀 중앙 좌표 계산)로 띄움 — 테이블 셀 안에 넣으면
+   sticky/셀 stacking context 때문에 위치가 어긋나는 문제가 있어 연장승인 팝업과 동일한 방식 사용 */
+.sal-cell{cursor:default}
+.sal-cell:hover{background:#F8FAFC!important}
+#salEditBtn{display:none;position:fixed;z-index:99999;font-size:10px;padding:2px 7px;border:1px solid var(--bd2);border-radius:4px;background:#fff;color:var(--tx2);cursor:pointer;font-family:'Pretendard',var(--fn);white-space:nowrap;box-shadow:0 4px 10px rgba(0,0,0,.12);transform:translate(-50%,-50%)}
+#salEditBtn:hover{background:var(--gl);border-color:#93C5FD;color:#1D4ED8}
 
 /* ══ INLINE CONTRACT INPUT ROW ══ */
 tr.con-new-row td{background:#EFF6FF!important;border-top:2px solid #3B6FE0!important;border-bottom:2px solid #3B6FE0!important}
@@ -4798,11 +4800,12 @@ function renderSal(){
     const fh=v=>v>0?v.toFixed(2).replace(/\.?0+$/,''):'-';
     const cFmt=v=>v>0?(Math.ceil(v/10)*10).toLocaleString():'-';
     const taxFmt=v=>v>0?v.toLocaleString():'-';
-    // ── 기본급~장기요양연말정산 열 공용: 마우스오버 시 "수정" 버튼 노출, 수기입력된 값은 주황색으로 표시
+    // ── 기본급~장기요양연말정산 열 공용: 마우스오버 시 셀 중앙에 "수정" 버튼(#salEditBtn) 노출, 수기입력된 값은 주황색으로 표시
+    // 버튼 자체는 body 상주 fixed 요소라서 여기선 클릭 대상 정보를 data-* 속성으로만 심어둠
     const salTd=(field,label,val,fmtFn,bold)=>{
       const manual=getSalManual(emp.사번,_yr,_mo,field)!==undefined;
       const style=bold?`font-weight:800;font-size:11px;color:${manual?'var(--orange)':'var(--tx)'}`:`font-size:11px;color:${manual?'var(--orange)':'#000000'}`;
-      return`<td class="r sal-cell" style="${style}">${fmtFn(val)}<button class="sal-edit-btn" onclick="event.stopPropagation();editSalManual('${emp.사번}',${_yr},${_mo},'${field}','${label}',${val})">수정</button></td>`;
+      return`<td class="r sal-cell" style="${style}" data-emp="${emp.사번}" data-yr="${_yr}" data-mo="${_mo}" data-field="${field}" data-label="${label}" data-val="${val}">${fmtFn(val)}</td>`;
     };
     return`<tr>
       <td style="text-align:center;font-size:11px;color:#000000">${ri+1}</td>
@@ -4938,6 +4941,48 @@ function editSalManual(empId,yr,mo,field,label,cur){
   if(v===null)return;
   setSalManual(empId,yr,mo,field,v);
 }
+// ★ 급여계산 "수정" 버튼: 테이블 셀 안에 넣으면 sticky/stacking context 때문에 위치가 어긋나서
+//   연장승인 팝업과 동일하게 body 상주 fixed 버튼 하나를 재사용, 마우스오버한 셀의 중앙 좌표로 이동시킴
+(function(){
+  let _btn=null,_curTd=null;
+  function _ensureBtn(){
+    if(_btn&&document.body.contains(_btn))return;
+    _btn=document.createElement('button');
+    _btn.id='salEditBtn';
+    _btn.textContent='수정';
+    _btn.onclick=function(e){
+      e.stopPropagation();
+      if(!_curTd)return;
+      const d=_curTd.dataset;
+      editSalManual(d.emp,parseInt(d.yr),parseInt(d.mo),d.field,d.label,Number(d.val));
+    };
+    _btn.onmouseleave=_hide;
+    document.body.appendChild(_btn);
+  }
+  function _show(td){
+    _ensureBtn();
+    _curTd=td;
+    const r=td.getBoundingClientRect();
+    _btn.style.left=(r.left+r.width/2)+'px';
+    _btn.style.top=(r.top+r.height/2)+'px';
+    _btn.style.display='inline-block';
+  }
+  function _hide(){
+    if(_btn)_btn.style.display='none';
+    _curTd=null;
+  }
+  document.addEventListener('mouseover',function(e){
+    const td=e.target.closest('.sal-cell');
+    if(td)_show(td);
+  });
+  document.addEventListener('mouseout',function(e){
+    const td=e.target.closest('.sal-cell');
+    if(!td)return;
+    const to=e.relatedTarget;
+    if(to&&_btn&&(to===_btn||_btn.contains(to)))return; // 버튼 위로 이동 시 유지
+    _hide();
+  });
+})();
 function exportSalExcel(){
   if(!hrAttRows.length){alert('먼저 "급여계산" 버튼을 클릭하세요');return;}
   const yr=parseInt(document.getElementById('salYear').value);
