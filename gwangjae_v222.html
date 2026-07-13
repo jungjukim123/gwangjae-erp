@@ -3099,12 +3099,13 @@ function exportExcel(){
     days.forEach(day=>{
       const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
       const otApp=(day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무');
-      const _U0=cU(i,o),_V0=cV(emp,day.date,day.gbn,day.소정,i,o,_U0,day.bigo,day.주휴수기,otApp);
-      const _isHolW=day.gbn==='공휴일'&&typeof day.소정==='number'&&day.소정>0;
-      const _W0=day.gbn==='주휴일'?0:_isHolW?day.소정:cW(_V0,day.소정),_X0=cX(i,o),_Y0=cY(day.gbn,_V0,day.소정,otApp?'연장근무':day.확인);
-      const _AA0=cAA(i,o,_U0,_X0,day.gbn),_AB0=cAB(_AA0);
+      const _U0=cU(i,o);
       const U=day.수기U!==undefined?day.수기U:_U0;
+      const _V0=cV(emp,day.date,day.gbn,day.소정,i,o,U,day.bigo,day.주휴수기,otApp);
+      const _isHolW=day.gbn==='공휴일'&&typeof day.소정==='number'&&day.소정>0;
       const V=day.수기V!==undefined?day.수기V:_V0;
+      const _W0=day.gbn==='주휴일'?0:_isHolW?day.소정:cW(V,day.소정),_X0=cX(i,o),_Y0=cY(day.gbn,V,day.소정,otApp?'연장근무':day.확인);
+      const _AA0=cAA(i,o,U,_X0,day.gbn),_AB0=cAB(_AA0);
       const W=day.수기W!==undefined?day.수기W:_W0;
       const X=day.수기X!==undefined?day.수기X:_X0;
       const Y=day.수기Y!==undefined?day.수기Y:_Y0;
@@ -3179,12 +3180,13 @@ function renderHrAtt(){
     days.forEach(day=>{
       const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
       const otApproved=day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무';
-      const _U0=cU(i,o),_V0=cV(emp,day.date,day.gbn,day.소정,i,o,_U0,day.bigo,day.주휴수기,otApproved);
-      const _isHolW=day.gbn==='공휴일'&&typeof day.소정==='number'&&day.소정>0;
-      const _W0=day.gbn==='주휴일'?0:_isHolW?day.소정:cW(_V0,day.소정),_X0=cX(i,o),_Y0=cY(day.gbn,_V0,day.소정,otApproved?'연장근무':day.확인);
-      const _AA0=cAA(i,o,_U0,_X0,day.gbn),_AB0=cAB(_AA0);
+      const _U0=cU(i,o);
       const U=day.수기U!==undefined?day.수기U:_U0;
+      const _V0=cV(emp,day.date,day.gbn,day.소정,i,o,U,day.bigo,day.주휴수기,otApproved);
+      const _isHolW=day.gbn==='공휴일'&&typeof day.소정==='number'&&day.소정>0;
       const V=day.수기V!==undefined?day.수기V:_V0;
+      const _W0=day.gbn==='주휴일'?0:_isHolW?day.소정:cW(V,day.소정),_X0=cX(i,o),_Y0=cY(day.gbn,V,day.소정,otApproved?'연장근무':day.확인);
+      const _AA0=cAA(i,o,U,_X0,day.gbn),_AB0=cAB(_AA0);
       const W=day.수기W!==undefined?day.수기W:_W0;
       const X=day.수기X!==undefined?day.수기X:_X0;
       const Y=day.수기Y!==undefined?day.수기Y:_Y0;
@@ -3378,12 +3380,13 @@ function _calcEmpMonthTotals(rowData){
   rowData.days.forEach(day=>{
     const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
     const otApproved=day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무';
-    const _U0=cU(i,o),_V0=cV(emp,day.date,day.gbn,day.소정,i,o,_U0,day.bigo,day.주휴수기,otApproved);
-    const _isHolW=day.gbn==='공휴일'&&typeof day.소정==='number'&&day.소정>0;
-    const _W0=day.gbn==='주휴일'?0:_isHolW?day.소정:cW(_V0,day.소정),_X0=cX(i,o),_Y0=cY(day.gbn,_V0,day.소정,otApproved?'연장근무':day.확인);
-    const _AA0=cAA(i,o,_U0,_X0,day.gbn),_AB0=cAB(_AA0);
+    const _U0=cU(i,o);
     const U=day.수기U!==undefined?day.수기U:_U0;
+    const _V0=cV(emp,day.date,day.gbn,day.소정,i,o,U,day.bigo,day.주휴수기,otApproved);
+    const _isHolW=day.gbn==='공휴일'&&typeof day.소정==='number'&&day.소정>0;
     const V=day.수기V!==undefined?day.수기V:_V0;
+    const _W0=day.gbn==='주휴일'?0:_isHolW?day.소정:cW(V,day.소정),_X0=cX(i,o),_Y0=cY(day.gbn,V,day.소정,otApproved?'연장근무':day.확인);
+    const _AA0=cAA(i,o,U,_X0,day.gbn),_AB0=cAB(_AA0);
     const W=day.수기W!==undefined?day.수기W:_W0;
     const X=day.수기X!==undefined?day.수기X:_X0;
     const Y=day.수기Y!==undefined?day.수기Y:_Y0;
@@ -3416,12 +3419,13 @@ function _patchHrAttRow(eid,ds){
   const r=rate(_emp);
   const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
   const otApproved=day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무';
-  const _U0=cU(i,o),_V0=cV(emp,day.date,day.gbn,day.소정,i,o,_U0,day.bigo,day.주휴수기,otApproved);
-  const _isHolW=day.gbn==='공휴일'&&typeof day.소정==='number'&&day.소정>0;
-  const _W0=day.gbn==='주휴일'?0:_isHolW?day.소정:cW(_V0,day.소정),_X0=cX(i,o),_Y0=cY(day.gbn,_V0,day.소정,otApproved?'연장근무':day.확인);
-  const _AA0=cAA(i,o,_U0,_X0,day.gbn),_AB0=cAB(_AA0);
+  const _U0=cU(i,o);
   const U=day.수기U!==undefined?day.수기U:_U0;
+  const _V0=cV(emp,day.date,day.gbn,day.소정,i,o,U,day.bigo,day.주휴수기,otApproved);
+  const _isHolW=day.gbn==='공휴일'&&typeof day.소정==='number'&&day.소정>0;
   const V=day.수기V!==undefined?day.수기V:_V0;
+  const _W0=day.gbn==='주휴일'?0:_isHolW?day.소정:cW(V,day.소정),_X0=cX(i,o),_Y0=cY(day.gbn,V,day.소정,otApproved?'연장근무':day.확인);
+  const _AA0=cAA(i,o,U,_X0,day.gbn),_AB0=cAB(_AA0);
   const W=day.수기W!==undefined?day.수기W:_W0;
   const X=day.수기X!==undefined?day.수기X:_X0;
   const Y=day.수기Y!==undefined?day.수기Y:_Y0;
@@ -4661,12 +4665,14 @@ function renderSal(){
       const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
       const otApproved=day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무';
       const _U0=cU(i,o);
-      const _V0=cV(emp,day.date,day.gbn,day.소정,i,o,_U0,day.bigo,day.주휴수기,otApproved);
+      const U=day.수기U!==undefined?day.수기U:_U0;
+      const _V0=cV(emp,day.date,day.gbn,day.소정,i,o,U,day.bigo,day.주휴수기,otApproved);
       const _isHolW=day.gbn==='공휴일'&&typeof day.소정==='number'&&day.소정>0;
-      const _W0=day.gbn==='주휴일'?0:_isHolW?day.소정:cW(_V0,day.소정);
+      const V=day.수기V!==undefined?day.수기V:_V0;
+      const _W0=day.gbn==='주휴일'?0:_isHolW?day.소정:cW(V,day.소정);
       const _X0=cX(i,o);
-      const _Y0=cY(day.gbn,_V0,day.소정,otApproved?'연장근무':day.확인);
-      const _AA0=cAA(i,o,_U0,_X0,day.gbn),_AB0=cAB(_AA0);
+      const _Y0=cY(day.gbn,V,day.소정,otApproved?'연장근무':day.확인);
+      const _AA0=cAA(i,o,U,_X0,day.gbn),_AB0=cAB(_AA0);
       const W=day.수기W!==undefined?day.수기W:_W0;
       const X=day.수기X!==undefined?day.수기X:_X0;
       const Y=day.수기Y!==undefined?day.수기Y:_Y0;
@@ -4885,10 +4891,13 @@ function exportSalExcel(){
     days.forEach(day=>{
       const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
       const otApproved=day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무';
-      const _U0=cU(i,o),_V0=cV(emp,day.date,day.gbn,day.소정,i,o,_U0,day.bigo,day.주휴수기,otApproved);
+      const _U0=cU(i,o);
+      const U=day.수기U!==undefined?day.수기U:_U0;
+      const _V0=cV(emp,day.date,day.gbn,day.소정,i,o,U,day.bigo,day.주휴수기,otApproved);
       const _isHolW=day.gbn==='공휴일'&&typeof day.소정==='number'&&day.소정>0;
-      const _W0=day.gbn==='주휴일'?0:_isHolW?day.소정:cW(_V0,day.소정),_X0=cX(i,o),_Y0=cY(day.gbn,_V0,day.소정,otApproved?'연장근무':day.확인);
-      const _AA0=cAA(i,o,_U0,_X0,day.gbn),_AB0=cAB(_AA0);
+      const V=day.수기V!==undefined?day.수기V:_V0;
+      const _W0=day.gbn==='주휴일'?0:_isHolW?day.소정:cW(V,day.소정),_X0=cX(i,o),_Y0=cY(day.gbn,V,day.소정,otApproved?'연장근무':day.확인);
+      const _AA0=cAA(i,o,U,_X0,day.gbn),_AB0=cAB(_AA0);
       const W=day.수기W!==undefined?day.수기W:_W0;
       const X=day.수기X!==undefined?day.수기X:_X0;
       const Y=day.수기Y!==undefined?day.수기Y:_Y0;
