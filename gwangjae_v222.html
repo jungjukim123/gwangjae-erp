@@ -5091,7 +5091,7 @@ function setSojeongManual(eid,ds){if(isMonthConfirmed()){alert("확정된 월은
   if(d.gbn==='계약기간 없음'){alert('계약기간 외 날짜는 수정할 수 없습니다.');return;}
   // 현재값 표시 (주휴일이면 "주휴" 텍스트로 표시)
   const cur=d.gbn==='주휴일'?'주휴':(typeof d.소정==='number'?d.소정:'');
-  const v=prompt(`${ds} 소정근로시간(R) 수정\n\n현재: ${cur} (구분: ${d.gbn})\n\n수정할 값을 입력하세요\n• 숫자(h): 0보다 크면 평일, 0이면 무급휴일로 전환\n• "주휴" 입력: 해당일을 주휴일로 전환`,String(cur));
+  const v=prompt(`${ds} 소정근로시간(R) 수정\n\n현재: ${cur} (구분: ${d.gbn})\n\n수정할 값을 입력하세요\n• 숫자(h): 0보다 크면 평일, 0이면 무급휴일로 전환\n• "주휴" 입력: 해당일을 주휴일로 전환\n• "휴일" 입력: 해당일을 휴일로 전환`,String(cur));
   if(v===null)return;
   const t=String(v).trim();
   if(t==='')return;
@@ -5104,6 +5104,11 @@ function setSojeongManual(eid,ds){if(isMonthConfirmed()){alert("확정된 월은
     d.소정수기='주휴';
     d.gbn='주휴일';
     d.gbn수기='주휴일';
+  // ── "휴일" 텍스트 입력 → 휴일 전환 (구분(N) "휴일" 뱃지, 소정근로시간은 유지)
+  }else if(t==='휴일'){
+    d.소정수기=d.소정;
+    d.gbn='공휴일';
+    d.gbn수기='공휴일';
   // ── 숫자 입력 → 기존 로직
   }else if(!isNaN(Number(t))){
     const newSojeong=Number(t);
@@ -5116,7 +5121,7 @@ function setSojeongManual(eid,ds){if(isMonthConfirmed()){alert("확정된 월은
     }
     d.gbn수기=d.gbn;
   }else{
-    alert('올바른 값을 입력하세요\n• 숫자 (예: 8, 4.5, 0)\n• "주휴" (주휴일로 전환)');return;
+    alert('올바른 값을 입력하세요\n• 숫자 (예: 8, 4.5, 0)\n• "주휴" (주휴일로 전환)\n• "휴일" (휴일로 전환)');return;
   }
   _patchHrAttRow(eid,ds);saveAll();
 }
