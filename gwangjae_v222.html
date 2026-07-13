@@ -2100,7 +2100,7 @@ function cV(emp,ds,gbn,소정,i,o,U,bigo,juhyuOv,otApproved){
   return Math.max(0,18-i-U-X);
 }
 function cW(V,소정){return Math.min(V,typeof 소정==='number'?소정:0)}
-function cX(i,o){if(o===null)return 0;const o2=o<6?o+24:o;const i2=i!==null&&i<6?i+24:i;const effectiveStart=i2!==null&&i2>22?i2:22;const raw=o2>effectiveStart?Math.max(0,o2-effectiveStart):0;return Math.floor(raw*2)/2;}
+function cX(i,o){if(o===null||i===null)return 0;const o2=o<6?o+24:o;const i2=i<6?i+24:i;const effectiveStart=i2>22?i2:22;const raw=o2>effectiveStart?Math.max(0,o2-effectiveStart):0;return Math.floor(raw*2)/2;}
 function cY(gbn,V,소정,확인){
   // 휴일(주휴일·공휴일)에 근무한 시간은 AA(휴일근무)로 처리 → Y(연장)에는 미반영
   if(gbn==='휴일'||gbn==='주휴일'||gbn==='공휴일')return 0;
