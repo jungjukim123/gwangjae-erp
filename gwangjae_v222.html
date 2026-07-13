@@ -5061,6 +5061,12 @@ function setBigoVal(eid,ds,v){
       _closeFixedMenu();_activeGbnCell=null;
     }
   },true);
+  // ESC 키로 팝업 닫기
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape'&&_popup&&_popup.style.display==='flex'){
+      _closeFixedMenu();_activeGbnCell=null;
+    }
+  });
 })();
 let _activeGbnCell=null;
 function toggleGbnMenu(el,eid,ds){
