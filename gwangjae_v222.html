@@ -4693,16 +4693,21 @@ function renderSal(){
     const _monthLast=yr+'-'+String(mo).padStart(2,'0')+'-'+String(_tD).padStart(2,'0');
     const _quitDate=getQuitDate(emp.사번);
     const _joinDate=emp.입사||'';
+    // ★ 결근(비고='결근') 일수는 재직일수에서 차감 — 월급직 일할계산 시 무급 처리
+    const _gyeolgeunCnt=days.filter(d=>d.bigo==='결근').length;
     function _ilhalCeil(원액){
       const c10=v=>Math.ceil(v/10)*10;
       if(emp.임금==='시급직')return c10(원액);
       if(_quitDate&&_quitDate>=_monthFirst&&_quitDate<=_monthLast){
-        return c10(원액*parseInt(_quitDate.split('-')[2])/_tD);
+        const numer=Math.max(0,parseInt(_quitDate.split('-')[2])-_gyeolgeunCnt);
+        return c10(원액*numer/_tD);
       }
       if(_joinDate&&_joinDate>=_monthFirst&&_joinDate<=_monthLast){
-        return c10(원액*(_tD-parseInt(_joinDate.split('-')[2])+1)/_tD);
+        const numer=Math.max(0,(_tD-parseInt(_joinDate.split('-')[2])+1)-_gyeolgeunCnt);
+        return c10(원액*numer/_tD);
       }
-      return c10(원액);
+      const numer=Math.max(0,_tD-_gyeolgeunCnt);
+      return c10(원액*numer/_tD);
     }
     // ── 기본급 (시급직: 기본근무시간*통상시급 / 월급직: 일할계산)
     const 기본급=emp.임금==='시급직'?mW*r:_ilhalCeil(emp.기본||0);
@@ -4915,12 +4920,14 @@ function exportSalExcel(){
     const _mLx=yr+'-'+String(mo).padStart(2,'0')+'-'+String(_tDx).padStart(2,'0');
     const _qdx=getQuitDate(emp.사번);
     const _jdx=emp.입사||'';
+    // ★ 결근(비고='결근') 일수는 재직일수에서 차감 — 월급직 일할계산 시 무급 처리
+    const _gyeolgeunCntX=days.filter(d=>d.bigo==='결근').length;
     function _ilhalCeilX(원액){
       const c10=v=>Math.ceil(v/10)*10;
       if(emp.임금==='시급직')return c10(원액);
-      if(_qdx&&_qdx>=_mFx&&_qdx<=_mLx){return c10(원액*parseInt(_qdx.split('-')[2])/_tDx);}
-      if(_jdx&&_jdx>=_mFx&&_jdx<=_mLx){return c10(원액*(_tDx-parseInt(_jdx.split('-')[2])+1)/_tDx);}
-      return c10(원액);
+      if(_qdx&&_qdx>=_mFx&&_qdx<=_mLx){return c10(원액*Math.max(0,parseInt(_qdx.split('-')[2])-_gyeolgeunCntX)/_tDx);}
+      if(_jdx&&_jdx>=_mFx&&_jdx<=_mLx){return c10(원액*Math.max(0,(_tDx-parseInt(_jdx.split('-')[2])+1)-_gyeolgeunCntX)/_tDx);}
+      return c10(원액*Math.max(0,_tDx-_gyeolgeunCntX)/_tDx);
     }
     const 기본급=emp.임금==='시급직'?mW*r:_ilhalCeilX(emp.기본||0);
     const 식대=emp.임금==='시급직'?0:_ilhalCeilX(emp.식대||0);
