@@ -4632,14 +4632,16 @@ function syncSalFromAtt(){
   const hrMoEl=document.getElementById('hrMonth');
   if(hrYrEl)hrYrEl.value=yr;
   if(hrMoEl)hrMoEl.value=mo;
-  // 로드된 hrAttRows 월이 다르면 경고만 — hrAttRows를 여기서 비우면 안 됨
-  // (비우면 이후 saveAll()이 빈 hr_saved를 GAS에 덮어씀)
-  if(hrAttRows.length>0&&(hrAttRows[0].yr!==yr||hrAttRows[0].mo!==mo)){
-    alert('⚠️ 현재 로드된 근태 데이터(' + hrAttRows[0].yr + '년 ' + hrAttRows[0].mo + '월)와\n선택한 급여 월(' + yr + '년 ' + mo + '월)이 다릅니다.\n\n③ 근태관리 탭에서 해당 월로 "인원 불러오기"를 먼저 실행해주세요.');
-    return;
-  }
-  if(!hrAttRows.length){
-    alert('먼저 ③ 근태관리에서 해당 월로 "인원 불러오기"를 실행한 뒤 급여계산을 눌러주세요.');return;
+  // ★ 로드된 hrAttRows 월이 선택한 급여 월과 다르면, 먼저 캐시에서 해당 월 복원을 시도
+  //   (비우면 안 됨 — 비우면 이후 saveAll()이 빈 hr_saved를 GAS에 덮어씀)
+  if(hrAttRows.length===0||hrAttRows[0].yr!==yr||hrAttRows[0].mo!==mo){
+    const cacheKey=yr+'_'+String(mo).padStart(2,'0');
+    if(_hrRowsCache[cacheKey]){
+      hrAttRows=_hrRowsCache[cacheKey];
+    }else{
+      alert('⚠️ '+yr+'년 '+mo+'월 근태 데이터가 없습니다.\n\n③ 근태관리 탭에서 해당 월로 "인원 불러오기"를 먼저 실행해주세요.');
+      return;
+    }
   }
   // 연동 월 기억 → saveAll로 유지
   salSyncedYrMo={yr,mo};
@@ -4654,9 +4656,18 @@ function renderSal(){
   const q=(document.getElementById('salQ')||{}).value||'';
   const sokQ=(document.getElementById('salSokQ')||{}).value||'all';
   const typeQ=(document.getElementById('salTypeQ')||{}).value||'all';
-  if(!hrAttRows.length){
-    document.getElementById('salBody').innerHTML=`<tr><td colspan="42" style="text-align:center;padding:60px;color:var(--tx3);font-size:14px">📊 상단 <strong>"💰 급여계산"</strong> 버튼을 눌러 해당 월 급여를 계산하세요</td></tr>`;
-    document.getElementById('salStats').innerHTML='';return;
+  // ★ 선택된 급여 월과 hrAttRows(근태 데이터) 월이 다르면 캐시에서 자동 복원.
+  //   이걸 안 하면 다른 달(예: 6월)에 로드된 hrAttRows가 그대로 남아있는 상태에서
+  //   월 선택만 7월로 바꿔도 화면엔 "7월"이라 찍히지만 실제 인원·근태는 6월 것이 나오는 버그가 생김.
+  const selectedKey = yr + '_' + String(mo).padStart(2,'0');
+  if (hrAttRows.length === 0 || parseInt(hrAttRows[0].yr) !== yr || parseInt(hrAttRows[0].mo) !== mo) {
+    if (_hrRowsCache[selectedKey]) {
+      hrAttRows = _hrRowsCache[selectedKey];
+    } else {
+      document.getElementById('salBody').innerHTML=`<tr><td colspan="42" style="text-align:center;padding:60px;color:var(--tx3);font-size:14px">📊 ${yr}년 ${mo}월 근태 데이터가 없습니다.<br><span style="font-size:12px;margin-top:6px;display:block">③ 근태관리 탭에서 ${yr}년 ${mo}월로 "인원 불러오기"를 먼저 실행해주세요.</span></td></tr>`;
+      document.getElementById('salStats').innerHTML='';
+      return;
+    }
   }
   const filtered=hrAttRows.filter(r=>{
     if(!contracts.some(c=>c.사번===r.emp.사번))return false; // 계약이 하나도 남아있지 않으면 제외
@@ -4986,9 +4997,19 @@ function editSalManual(empId,yr,mo,field,label,cur){
   });
 })();
 function exportSalExcel(){
-  if(!hrAttRows.length){alert('먼저 "급여계산" 버튼을 클릭하세요');return;}
   const yr=parseInt(document.getElementById('salYear').value);
   const mo=parseInt(document.getElementById('salMonth').value);
+  // ★ renderSal()과 동일하게 선택된 월과 hrAttRows 월이 다르면 캐시에서 복원 —
+  //   다운로드 버튼을 눌렀을 때 화면과 다른(예: 이전) 월 데이터가 엑셀로 나가는 것 방지
+  const selectedKey = yr + '_' + String(mo).padStart(2,'0');
+  if (hrAttRows.length === 0 || parseInt(hrAttRows[0].yr) !== yr || parseInt(hrAttRows[0].mo) !== mo) {
+    if (_hrRowsCache[selectedKey]) {
+      hrAttRows = _hrRowsCache[selectedKey];
+    } else {
+      alert(`${yr}년 ${mo}월 근태 데이터가 없습니다.\n③ 근태관리 탭에서 ${yr}년 ${mo}월로 "인원 불러오기"를 먼저 실행해주세요.`);
+      return;
+    }
+  }
   const wb=XLSX.utils.book_new();
   const hdr=['NO','귀속년도','귀속월','사번','소속','급여종','이름','기본근무시간','주휴시간','연장근무시간','야간근무시간','휴일근무시간','휴일연장근무시간','기본급','식대','직책수당','야간근로수당','주휴수당','연장근로수당','휴일근로수당','휴일연장근로수당','연차수당','기타수당','소급급여','지급액계','소득세','지방소득세','건강보험','장기요양','국민연금','고용보험','기타공제','중도정산소득세','중도정산지방소득세','연말정산소득세','연말정산지방소득세','건강보험정산','장기요양정산','건강보험연말정산','장기요양연말정산','공제액계','실지급액'];
   const data=[hdr];
