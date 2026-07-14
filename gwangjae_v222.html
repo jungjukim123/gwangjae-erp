@@ -4796,8 +4796,8 @@ function renderSal(){
 
     const empKey=emp.사번+'_'+yr+'_'+String(mo).padStart(2,'0');
     const fh=v=>v>0?v.toFixed(2).replace(/\.?0+$/,''):'-';
-    const cFmt=v=>v>0?(Math.ceil(v/10)*10).toLocaleString():'-';
-    const taxFmt=v=>v>0?v.toLocaleString():'-';
+    const cFmt=v=>v!==0?(Math.ceil(v/10)*10).toLocaleString():'-';
+    const taxFmt=v=>v!==0?v.toLocaleString():'-';
     // ── 기본급~장기요양연말정산 열 공용: 마우스오버 시 셀 중앙에 "수정" 버튼(#salEditBtn) 노출, 수기입력된 값은 주황색으로 표시
     // 버튼 자체는 body 상주 fixed 요소라서 여기선 클릭 대상 정보를 data-* 속성으로만 심어둠
     const salTd=(field,label,val,fmtFn,bold)=>{
@@ -4829,19 +4829,19 @@ function renderSal(){
       ${salTd('휴일연장','휴일연장근로수당',휴일연장,cFmt)}
       <td class="r">
         <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
-          <span style="color:var(--tx3);font-size:11px">${연차>0?nFmt(연차):'-'}</span>
+          <span style="color:var(--tx3);font-size:11px">${연차!==0?nFmt(연차):'-'}</span>
           <button onclick="editSalExtra('${emp.사번}',${_yr},${_mo},'연차',${연차})" style="width:24px;height:24px;border-radius:6px;border:1px solid var(--bd2);background:linear-gradient(135deg,#CCFBF1,#99F6E4);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;color:#0F766E;transition:all .15s" onmouseover="this.style.background='#99F6E4';this.style.borderColor='#2DD4BF'" onmouseout="this.style.background='linear-gradient(135deg,#CCFBF1,#99F6E4)';this.style.borderColor='var(--bd2)'">✎</button>
         </div>
       </td>
       <td class="r">
         <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
-          <span style="color:var(--tx3);font-size:11px">${기타>0?nFmt(기타):'-'}</span>
+          <span style="color:var(--tx3);font-size:11px">${기타!==0?nFmt(기타):'-'}</span>
           <button onclick="editSalExtra('${emp.사번}',${_yr},${_mo},'기타',${기타})" style="width:24px;height:24px;border-radius:6px;border:1px solid var(--bd2);background:linear-gradient(135deg,#EFF6FF,#DBEAFE);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;color:#2563EB;transition:all .15s" onmouseover="this.style.background='#BFDBFE';this.style.borderColor='#93C5FD'" onmouseout="this.style.background='linear-gradient(135deg,#EFF6FF,#DBEAFE)';this.style.borderColor='var(--bd2)'">✎</button>
         </div>
       </td>
       <td class="r">
         <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
-          <span style="color:var(--tx3);font-size:11px">${소급>0?nFmt(소급):'-'}</span>
+          <span style="color:var(--tx3);font-size:11px">${소급!==0?nFmt(소급):'-'}</span>
           <button onclick="editSalExtra('${emp.사번}',${_yr},${_mo},'소급',${소급})" style="width:24px;height:24px;border-radius:6px;border:1px solid var(--bd2);background:linear-gradient(135deg,#EEF2FF,#E0E7FF);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;color:#6366F1;transition:all .15s" onmouseover="this.style.background='#C7D2FE';this.style.borderColor='#A5B4FC'" onmouseout="this.style.background='linear-gradient(135deg,#EEF2FF,#E0E7FF)';this.style.borderColor='var(--bd2)'">✎</button>
         </div>
       </td>
@@ -4861,8 +4861,8 @@ function renderSal(){
       ${salTd('장기요양정산','장기요양정산',장기요양정산,taxFmt)}
       ${salTd('건강보험연말정산','건강보험연말정산',건강보험연말정산,taxFmt)}
       ${salTd('장기요양연말정산','장기요양연말정산',장기요양연말정산,taxFmt)}
-      <td class="r" style="font-weight:800;color:var(--purple);font-size:11px">${공제액계>0?공제액계.toLocaleString():'-'}</td>
-      <td class="r" style="font-weight:800;color:var(--tx);font-size:11px">${실지급액>0?실지급액.toLocaleString():'-'}</td>
+      <td class="r" style="font-weight:800;color:var(--purple);font-size:11px">${공제액계!==0?공제액계.toLocaleString():'-'}</td>
+      <td class="r" style="font-weight:800;color:var(--tx);font-size:11px">${실지급액!==0?실지급액.toLocaleString():'-'}</td>
     </tr>`;
   });
 
@@ -4872,37 +4872,37 @@ function renderSal(){
     <td colspan="7" style="font-size:13px;font-weight:800;text-align:left">지급액계 (${filtered.length}명)</td>
     <td colspan="6"></td>
     <td class="r">${nFmt(totBase)}</td>
-    <td class="r">${totMeal>0?nFmt(totMeal):'-'}</td>
-    <td class="r">${totPos>0?nFmt(totPos):'-'}</td>
-    <td class="r">${totNightFixed>0?nFmt(totNightFixed):'-'}</td>
-    <td class="r">${totJuhyu>0?nFmt(totJuhyu):'-'}</td>
-    <td class="r">${totOT>0?nFmt(totOT):'-'}</td>
-    <td class="r">${totHol>0?nFmt(totHol):'-'}</td>
-    <td class="r">${totHolOT>0?nFmt(totHolOT):'-'}</td>
-    <td class="r">${totYeoncha>0?nFmt(totYeoncha):'-'}</td>
-    <td class="r">${totEtc>0?nFmt(totEtc):'-'}</td>
-    <td class="r">${totSogup>0?nFmt(totSogup):'-'}</td>
+    <td class="r">${totMeal!==0?nFmt(totMeal):'-'}</td>
+    <td class="r">${totPos!==0?nFmt(totPos):'-'}</td>
+    <td class="r">${totNightFixed!==0?nFmt(totNightFixed):'-'}</td>
+    <td class="r">${totJuhyu!==0?nFmt(totJuhyu):'-'}</td>
+    <td class="r">${totOT!==0?nFmt(totOT):'-'}</td>
+    <td class="r">${totHol!==0?nFmt(totHol):'-'}</td>
+    <td class="r">${totHolOT!==0?nFmt(totHolOT):'-'}</td>
+    <td class="r">${totYeoncha!==0?nFmt(totYeoncha):'-'}</td>
+    <td class="r">${totEtc!==0?nFmt(totEtc):'-'}</td>
+    <td class="r">${totSogup!==0?nFmt(totSogup):'-'}</td>
     <td class="r">${nFmt(totAN)}</td>
-    <td class="r">${totSoDeuk>0?nFmt(totSoDeuk):'-'}</td><td class="r">${totJibang>0?nFmt(totJibang):'-'}</td>
-    <td class="r">${totHealth>0?nFmt(totHealth):'-'}</td><td class="r">${totCare>0?nFmt(totCare):'-'}</td><td class="r">${totPension>0?nFmt(totPension):'-'}</td><td class="r">${totEmp>0?nFmt(totEmp):'-'}</td><td class="r">${totEtcDed>0?nFmt(totEtcDed):'-'}</td>
-    <td class="r">${totJDJS>0?nFmt(totJDJS):'-'}</td><td class="r">${totJDJB>0?nFmt(totJDJB):'-'}</td>
-    <td class="r">${totYMJS>0?nFmt(totYMJS):'-'}</td><td class="r">${totYMJB>0?nFmt(totYMJB):'-'}</td>
-    <td class="r">${totHIJS>0?nFmt(totHIJS):'-'}</td><td class="r">${totCareJS>0?nFmt(totCareJS):'-'}</td>
-    <td class="r">${totHIYM>0?nFmt(totHIYM):'-'}</td><td class="r">${totCareYM>0?nFmt(totCareYM):'-'}</td>
-    <td class="r">${(()=>{const t=totSoDeuk+totJibang+totHealth+totCare+totPension+totEmp+totEtcDed+totJDJS+totJDJB+totYMJS+totYMJB+totHIJS+totCareJS+totHIYM+totCareYM;return t>0?nFmt(t):'-';})()}</td><td class="r">${(()=>{const ded=totSoDeuk+totJibang+totHealth+totCare+totPension+totEmp+totEtcDed+totJDJS+totJDJB+totYMJS+totYMJB+totHIJS+totCareJS+totHIYM+totCareYM;return(totAN-ded)>0?nFmt(totAN-ded):'-';})()}</td>
+    <td class="r">${totSoDeuk!==0?nFmt(totSoDeuk):'-'}</td><td class="r">${totJibang!==0?nFmt(totJibang):'-'}</td>
+    <td class="r">${totHealth!==0?nFmt(totHealth):'-'}</td><td class="r">${totCare!==0?nFmt(totCare):'-'}</td><td class="r">${totPension!==0?nFmt(totPension):'-'}</td><td class="r">${totEmp!==0?nFmt(totEmp):'-'}</td><td class="r">${totEtcDed!==0?nFmt(totEtcDed):'-'}</td>
+    <td class="r">${totJDJS!==0?nFmt(totJDJS):'-'}</td><td class="r">${totJDJB!==0?nFmt(totJDJB):'-'}</td>
+    <td class="r">${totYMJS!==0?nFmt(totYMJS):'-'}</td><td class="r">${totYMJB!==0?nFmt(totYMJB):'-'}</td>
+    <td class="r">${totHIJS!==0?nFmt(totHIJS):'-'}</td><td class="r">${totCareJS!==0?nFmt(totCareJS):'-'}</td>
+    <td class="r">${totHIYM!==0?nFmt(totHIYM):'-'}</td><td class="r">${totCareYM!==0?nFmt(totCareYM):'-'}</td>
+    <td class="r">${(()=>{const t=totSoDeuk+totJibang+totHealth+totCare+totPension+totEmp+totEtcDed+totJDJS+totJDJB+totYMJS+totYMJB+totHIJS+totCareJS+totHIYM+totCareYM;return t!==0?nFmt(t):'-';})()}</td><td class="r">${(()=>{const ded=totSoDeuk+totJibang+totHealth+totCare+totPension+totEmp+totEtcDed+totJDJS+totJDJB+totYMJS+totYMJB+totHIJS+totCareJS+totHIYM+totCareYM;return(totAN-ded)!==0?nFmt(totAN-ded):'-';})()}</td>
   </tr>`;
 
   document.getElementById('salBody').innerHTML=(rows.join('')||`<tr><td colspan="${N}" style="text-align:center;padding:40px;color:var(--tx3)">데이터 없음</td></tr>`)+sumRow;
   document.getElementById('salStats').innerHTML=`
     <div class="sc cg"><div class="sl">대상 인원</div><div class="sv">${filtered.length}<span> 명</span></div></div>
     <div class="sc cb"><div class="sl">총 급여 합계</div><div class="sv" style="font-size:18px">${nFmt(totAN)}<span> 원</span></div></div>
-    <div class="sc co"><div class="sl">연장수당 합계</div><div class="sv">${totOT>0?nFmt(totOT):'-'}</div></div>
-    <div class="sc cp"><div class="sl">주휴수당 합계</div><div class="sv">${totJuhyu>0?nFmt(totJuhyu):'-'}</div></div>`;
+    <div class="sc co"><div class="sl">연장수당 합계</div><div class="sv">${totOT!==0?nFmt(totOT):'-'}</div></div>
+    <div class="sc cp"><div class="sl">주휴수당 합계</div><div class="sv">${totJuhyu!==0?nFmt(totJuhyu):'-'}</div></div>`;
 }
 
 function editSalExtra(empId,yr,mo,type,cur){
   const label=type==='기타'?'기타수당':type==='소급'?'소급급여':'연차수당';
-  const v=prompt(label+' 입력 (원) / 현재: '+(cur>0?nFmt(cur):'없음'),cur||'');
+  const v=prompt(label+' 입력 (원) / 현재: '+(cur!==0?nFmt(cur):'없음'),cur||'');
   if(v===null)return;
   const t=String(v).replace(/,/g,'').trim();
   const num=t===''?0:Number(t);
