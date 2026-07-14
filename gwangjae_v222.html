@@ -3295,6 +3295,7 @@ function renderHrAtt(){
                 <button onclick="event.stopPropagation();applyConfirmPin('${eid}','${ds}','',this)" style="font-size:11px;padding:5px 10px;border:1px solid var(--bd2);border-radius:4px;background:#fff;cursor:pointer;font-family:var(--fn);color:var(--tx2);text-align:left">-</button>
                 <button onclick="event.stopPropagation();applyConfirmPin('${eid}','${ds}','출근 기록 없음',this)" style="font-size:11px;padding:5px 10px;border:1px solid #FECACA;border-radius:4px;background:#FEF2F2;cursor:pointer;font-family:var(--fn);color:#991B1B;font-weight:700;text-align:left">출근 기록 없음</button>
                 <button onclick="event.stopPropagation();applyConfirmPin('${eid}','${ds}','퇴근 기록 없음',this)" style="font-size:11px;padding:5px 10px;border:1px solid #FECACA;border-radius:4px;background:#FEF2F2;cursor:pointer;font-family:var(--fn);color:#991B1B;font-weight:700;text-align:left">퇴근 기록 없음</button>
+                <button onclick="event.stopPropagation();applyConfirmPinBoth('${eid}','${ds}',this)" style="font-size:11px;padding:5px 10px;border:1px solid #FECACA;border-radius:4px;background:#FEF2F2;cursor:pointer;font-family:var(--fn);color:#991B1B;font-weight:700;text-align:left">출/퇴근 기록 없음</button>
                 <button onclick="event.stopPropagation();applyConfirmPin('${eid}','${ds}','연장근무 사실 확인(승인요청서 누락)',this)" style="font-size:11px;padding:5px 10px;border:1px solid #FED7AA;border-radius:4px;background:#FFF4EC;cursor:pointer;font-family:var(--fn);color:#C05621;font-weight:700;text-align:left">연장근무 사실 확인</button>
                 <button onclick="event.stopPropagation();applyConfirmPin('${eid}','${ds}','휴일근무 사실 확인(승인요청서 누락)',this)" style="font-size:11px;padding:5px 10px;border:1px solid #FED7AA;border-radius:4px;background:#FFF4EC;cursor:pointer;font-family:var(--fn);color:#C05621;font-weight:700;text-align:left">휴일근무 사실 확인</button>
               </div>`
@@ -5470,6 +5471,25 @@ function applyConfirmPin(eid,ds,v,btn){
   if(td){const inp=td.querySelector('input[type=text]');if(inp)inp.value=d.확인;}
   scheduleSave();
 }
+// ── "출/퇴근 기록 없음" 한 번에 적용 — 출근·퇴근을 각각 누를 필요 없이 단일 항목으로 소명관리에 적재
+function applyConfirmPinBoth(eid,ds,btn){
+  const menu=btn.closest('.confirm-pin-menu');
+  if(menu)menu.style.display='none';
+  const row=hrAttRows.find(r=>r.emp.사번===eid);
+  if(!row)return;
+  const d=row.days.find(x=>x.date===ds);
+  if(!d)return;
+  const yr=row.yr, mo=row.mo;
+  const ck=yr+'_'+String(mo).padStart(2,'0');
+  if(!_somyungData[ck])_somyungData[ck]=[];
+  // 같은 날짜의 기존 확인사항 항목(개별 출근/퇴근 항목 포함)을 결합 항목 하나로 대체
+  _somyungData[ck]=_somyungData[ck].filter(x=>!(x.eid===eid&&x.date===ds));
+  _somyungData[ck].push({eid, name:row.emp.이름||'', date:ds, type:'출근/퇴근 기록 없음', status:'대기중', memo:''});
+  d.확인='출근/퇴근 기록 없음';
+  const td=menu?menu.closest('td'):null;
+  if(td){const inp=td.querySelector('input[type=text]');if(inp)inp.value=d.확인;}
+  scheduleSave();
+}
 
 // ── 확인사항 타입 정규화: 과거 버전에서 소명사유 원문("출근누락" 등)이 그대로 type에 저장된 항목을
 //    표준 확인사항 명칭("출근 기록 없음" 등)으로 되돌림 (표시값·저장값 모두 교정)
@@ -5496,10 +5516,11 @@ function _resolveSomyungContent(item){
     return item.workerOut?{text:`퇴근 ${item.workerOut}`,filled:true}:{text:'',filled:false};
   }
   if(item.type==='출근/퇴근 기록 없음'){
+    // 출근/퇴근 시간을 각각 한 줄씩 표시 (badge는 white-space:pre-line으로 줄바꿈 렌더링)
     const parts=[];
-    if(item.workerIn)parts.push(`출근 ${item.workerIn}`);
-    if(item.workerOut)parts.push(`퇴근 ${item.workerOut}`);
-    return parts.length?{text:parts.join(' / '),filled:true}:{text:'',filled:false};
+    if(item.workerIn)parts.push(`출근 시간 : ${item.workerIn}`);
+    if(item.workerOut)parts.push(`퇴근 시간 : ${item.workerOut}`);
+    return parts.length?{text:parts.join('\n'),filled:true}:{text:'',filled:false};
   }
   if(item.workerType==='지각'){
     return {text:item.workerType,filled:true};
@@ -5604,7 +5625,7 @@ function renderSomyung(){
         <td style="padding:7px 14px;text-align:center"><span class="bdg" style="font-size:10px;${typeBg};font-weight:700">${item.type}</span></td>
         <td style="padding:7px 10px;text-align:center;max-width:160px">${wkHtml}</td>
         <td style="padding:7px 10px;text-align:center">
-          ${content.text?`<span class="bdg" style="font-size:10px;${memoBadgeStyle};font-weight:700">${content.text}</span>`:`<span style="font-size:10px;color:var(--tx3)">미작성</span>`}
+          ${content.text?`<span class="bdg" style="font-size:10px;${memoBadgeStyle};font-weight:700;white-space:pre-line;text-align:left;display:inline-block">${content.text}</span>`:`<span style="font-size:10px;color:var(--tx3)">미작성</span>`}
         </td>
         <td style="padding:7px 14px;text-align:center">
           <span class="bdg" style="font-size:11px;padding:3px 9px;background:${isDone?'#DCFCE7':'#FFFBEB'};color:${isDone?'#15803D':'#92400E'};font-weight:700">${isDone?'✅ 소명완료':'⏳ 대기중'}</span>
