@@ -376,6 +376,8 @@ tr.con-edit-row td:last-child{border-right:2px solid #E07B2A!important}
   <div class="nsec hr-menu" style="display:none">근태관리</div>
   <div class="ni hr-menu" style="display:none" onclick="nav('hr3',this)">월별 근태 현황</div>
   <div class="ni hr-menu" style="display:none" onclick="nav('hr5',this)">근태소명관리</div>
+  <div class="nsec hr-menu" style="display:none">스케줄관리</div>
+  <div class="ni hr-menu" style="display:none" onclick="nav('hr10',this)">월별 스케줄 등록</div>
   <div class="nsec hr-menu" style="display:none">급여관리</div>
   <div class="ni hr-menu" style="display:none" onclick="nav('hr6',this)">급여설정관리</div>
   <div class="ni hr-menu" style="display:none" onclick="nav('hr4',this)">급여계산</div>
@@ -501,6 +503,31 @@ tr.con-edit-row td:last-child{border-right:2px solid #E07B2A!important}
     <table id="hrT">
       <thead id="hrHead"></thead>
       <tbody id="hrAttBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- HR ⑩ 스케줄관리 -->
+<div class="page" id="page-hr10">
+  <div class="ph">
+    <div class="ph-l"><div class="pt">월별 스케줄 등록</div><div class="psub">계약기간관리 기준 자동 반영 · 셀 우측 상단 ✎ 버튼으로 수정</div></div>
+    <div class="bg-row">
+      <select id="schedYear" style="padding:6px 10px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="reloadSchedMonth()"></select>
+      <select id="schedMonth" style="padding:6px 10px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="reloadSchedMonth()">
+        <option value="1">01월</option><option value="2">02월</option>
+        <option value="3">03월</option><option value="4">04월</option>
+        <option value="5">05월</option><option value="6">06월</option>
+        <option value="7">07월</option><option value="8">08월</option>
+        <option value="9">09월</option><option value="10">10월</option>
+        <option value="11">11월</option><option value="12">12월</option>
+      </select>
+      <button class="btn p" onclick="reloadSchedMonth()">🔄 스케줄 불러오기</button>
+    </div>
+  </div>
+  <div class="tw" id="schedTW">
+    <table id="schedT">
+      <thead id="schedHead"></thead>
+      <tbody id="schedBody"></tbody>
     </table>
   </div>
 </div>
@@ -7306,6 +7333,172 @@ function nav(pid,el){
     buildSalCfgHead();renderSalCfg();
   }
   if(pid==='hr7'){renderAccPage();}
+  if(pid==='hr10'){buildSchedHead();renderSchedMgmt();}
+}
+
+// ============================================================
+// ⑩ 스케줄관리 — 월별 스케줄 등록
+// (계약기간관리 요일별 스케줄을 자동 반영, 셀 단위 수기 수정 가능 — 근태관리와는 완전히 별개의 저장소)
+// ============================================================
+let schedOverrides={};   // key: `${사번}_${YYYY-MM-DD}` → {state:'평일근무'|'무급휴일'|'주휴일', note:''|'연차'|'결근'}
+let _schedLoadedKey=null;
+
+function buildSchedHead(){
+  const yrEl=document.getElementById('schedYear');
+  if(yrEl&&!yrEl.dataset.built){
+    const now=new Date();
+    yrEl.innerHTML=['2025','2026','2027'].map(y=>`<option value="${y}">${y}년</option>`).join('');
+    yrEl.value=String(now.getFullYear());
+    const moEl=document.getElementById('schedMonth');
+    if(moEl)moEl.value=String(now.getMonth()+1);
+    yrEl.dataset.built='1';
+  }
+}
+
+// 선택월에 표시할 재직자 목록 (당월 퇴사자 포함, 전월 이전 퇴사자 제외) — isVisibleInMonth 재사용
+function getSchedEmpList(yr,mo){
+  const monthSel=yr+'-'+String(mo).padStart(2,'0');
+  return employees.filter(e=>isVisibleInMonth(e.사번,monthSel))
+    .sort((a,b)=>(a.이름||'').localeCompare(b.이름||'','ko'));
+}
+
+// 특정 직원·날짜의 스케줄 상태: 수기 수정값이 있으면 그것을, 없으면 계약기간관리 요일별 스케줄에서 자동 산출
+function getScheduleState(empId,ds){
+  const ov=schedOverrides[empId+'_'+ds];
+  if(ov)return ov;
+  const raw=getSched(empId,ds); // '주휴' | 숫자(h) | '계약기간 없음'
+  if(raw==='주휴')return{state:'주휴일',note:''};
+  if(raw==='계약기간 없음')return{state:'',note:''};
+  return{state:raw>0?'평일근무':'무급휴일',note:''};
+}
+
+async function loadSchedOverrides(yr,mo){
+  schedOverrides={};
+  try{
+    const res=await fetch(`${SB_URL}/rest/v1/sched_saved?yr=eq.${yr}&mo=eq.${mo}&limit=5000`,{headers:SB_HDR});
+    if(!res.ok)return;
+    const rows=await res.json();
+    rows.forEach(r=>{
+      let days=[];
+      try{days=JSON.parse(r.days_json||'[]');}catch(e){}
+      days.forEach(d=>{if(d&&d.date)schedOverrides[r.emp_id+'_'+d.date]={state:d.state,note:d.note||''};});
+    });
+  }catch(e){/* 오프라인/네트워크 오류 시 계약기간관리 기준 자동값만 표시 */}
+}
+
+async function saveSchedEmpMonth(empId,yr,mo){
+  const moStr=String(mo).padStart(2,'0');
+  const prefix=empId+'_'+yr+'-'+moStr+'-';
+  const days=Object.keys(schedOverrides)
+    .filter(k=>k.startsWith(prefix))
+    .map(k=>({date:k.slice(empId.length+1),state:schedOverrides[k].state,note:schedOverrides[k].note||''}));
+  const key=empId+'_'+yr+'_'+moStr;
+  try{
+    await _sbUpsert('sched_saved',[{key,emp_id:empId,yr,mo,days_json:JSON.stringify(days),updated:new Date().toISOString()}]);
+  }catch(e){_toast('스케줄 저장 실패 (네트워크 확인)','error');}
+}
+
+function schedCellHtml(empId,ds){
+  const st=getScheduleState(empId,ds);
+  if(!st.state)return`<td style="text-align:center;font-size:11px;color:var(--tx3);background:var(--bg)">계약외</td>`;
+  const label=st.note?`${st.state}(${st.note})`:st.state;
+  let bg='#EFF6FF',fg='#2563EB';
+  if(st.state==='무급휴일'){bg='#F3F4F6';fg='#374151';}
+  else if(st.state==='주휴일'){bg='#FFF0F5';fg='#BE185D';}
+  if(st.note){bg='#FEF3C7';fg='#92400E';}
+  return`<td style="position:relative;text-align:center;font-size:11px;font-weight:600;padding:6px 20px 6px 6px;white-space:nowrap;background:${bg};color:${fg}">${label}<button type="button" onclick="event.stopPropagation();toggleSchedMenu(this,'${empId}','${ds}')" title="수정" style="position:absolute;top:3px;right:3px;width:15px;height:15px;line-height:13px;padding:0;border:none;border-radius:3px;background:rgba(0,0,0,.08);color:inherit;font-size:9px;cursor:pointer">✎</button></td>`;
+}
+
+async function renderSchedMgmt(){
+  const yrEl=document.getElementById('schedYear'),moEl=document.getElementById('schedMonth');
+  if(!yrEl||!moEl)return;
+  const yr=parseInt(yrEl.value),mo=parseInt(moEl.value);
+  const loadKey=yr+'_'+mo;
+  if(_schedLoadedKey!==loadKey){
+    await loadSchedOverrides(yr,mo);
+    _schedLoadedKey=loadKey;
+  }
+  const emps=getSchedEmpList(yr,mo);
+  const days=dim(yr,mo);
+  const head=document.getElementById('schedHead'),body=document.getElementById('schedBody');
+  if(!head||!body)return;
+  head.innerHTML='<tr><th class="sk" style="padding:7px 9px;min-width:90px">날짜</th><th style="padding:7px 9px;min-width:44px">요일</th><th style="padding:7px 9px;min-width:70px">휴일여부</th>'
+    +emps.map(e=>`<th style="padding:7px 9px;min-width:90px" title="사번: ${e.사번}">${e.이름}</th>`).join('')+'</tr>';
+  if(!emps.length){
+    body.innerHTML=`<tr><td colspan="3" style="text-align:center;padding:30px;color:var(--tx3);font-size:13px">해당 월에 재직 중인 인원이 없습니다.</td></tr>`;
+    return;
+  }
+  let rows='';
+  for(let d=1;d<=days;d++){
+    const ds=dStr(yr,mo,d);
+    const dow=new Date(ds).getDay();
+    const hol=isHoliday(ds);
+    rows+=`<tr${hol?' style="background:#FEF2F2"':(dow===0||dow===6?' style="background:#F8FAFC"':'')}>`
+      +`<td class="sk" style="font-family:monospace">${ds}</td><td>${DAYS[dow]}</td><td>${hol?'공휴일':''}</td>`
+      +emps.map(e=>schedCellHtml(e.사번,ds)).join('')
+      +'</tr>';
+  }
+  body.innerHTML=rows;
+}
+
+async function reloadSchedMonth(){
+  _schedLoadedKey=null;
+  await renderSchedMgmt();
+}
+
+// 셀 수정 팝업(구분(N) 열 팝업과 동일 구조 — body에 상주시켜 sticky 밖으로 노출)
+(function(){
+  let _popup=null,_eid=null,_ds=null;
+  function _ensure(){
+    if(_popup&&document.body.contains(_popup))return;
+    _popup=document.createElement('div');
+    _popup.id='schedPopup';
+    _popup.style.cssText='display:none;position:fixed;z-index:99999;background:#fff;border:1px solid var(--bd2);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.18);padding:4px;flex-direction:column;gap:2px;min-width:104px;';
+    const mk=(label,state,note,bg,fg,bd)=>{
+      const b=document.createElement('button');
+      b.textContent=label;
+      b.style.cssText=`font-size:10px;padding:3px 8px;border:1px solid ${bd};border-radius:4px;background:${bg};cursor:pointer;font-family:var(--fn);color:${fg};font-weight:700;width:100%;text-align:left`;
+      b.onclick=function(e){e.stopPropagation();if(_eid&&_ds)applySchedCell(_eid,_ds,state,note);};
+      return b;
+    };
+    _popup.appendChild(mk('평일근무','평일근무','','#EFF6FF','#2563EB','#BFDBFE'));
+    _popup.appendChild(mk('무급휴일','무급휴일','','#F3F4F6','#374151','#E5E7EB'));
+    _popup.appendChild(mk('주휴일','주휴일','','#FFF0F5','#BE185D','#FBCFE8'));
+    _popup.appendChild(mk('연차','평일근무','연차','#FEF3C7','#92400E','#FDE68A'));
+    _popup.appendChild(mk('결근','평일근무','결근','#FEF3C7','#92400E','#FDE68A'));
+    document.body.appendChild(_popup);
+  }
+  function _open(el,eid,ds){
+    _ensure();_eid=eid;_ds=ds;
+    const rect=el.getBoundingClientRect();
+    const mw=_popup.offsetWidth||110;
+    let left=rect.left;if(left+mw>window.innerWidth)left=window.innerWidth-mw-6;if(left<0)left=4;
+    let top=rect.bottom+3;if(top+184>window.innerHeight)top=rect.top-188;
+    _popup.style.left=left+'px';_popup.style.top=top+'px';_popup.style.display='flex';
+  }
+  function _close(){if(_popup)_popup.style.display='none';_eid=null;_ds=null;}
+  window._openSchedMenu=_open;
+  window._closeSchedMenu=_close;
+  window._schedPopupVisible=function(){return _popup&&_popup.style.display==='flex';};
+  document.addEventListener('mousedown',function(e){
+    if(_popup&&_popup.style.display==='flex'&&!_popup.contains(e.target)){_close();_activeSchedCell=null;}
+  },true);
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape'&&_popup&&_popup.style.display==='flex'){_close();_activeSchedCell=null;}
+  });
+})();
+let _activeSchedCell=null;
+function toggleSchedMenu(el,eid,ds){
+  if(_activeSchedCell===el&&window._schedPopupVisible()){window._closeSchedMenu();_activeSchedCell=null;return;}
+  _activeSchedCell=el;
+  window._openSchedMenu(el,eid,ds);
+}
+function applySchedCell(empId,ds,state,note){
+  schedOverrides[empId+'_'+ds]={state,note:note||''};
+  window._closeSchedMenu();_activeSchedCell=null;
+  renderSchedMgmt();
+  const yrEl=document.getElementById('schedYear'),moEl=document.getElementById('schedMonth');
+  if(yrEl&&moEl)saveSchedEmpMonth(empId,parseInt(yrEl.value),parseInt(moEl.value));
 }
 
 // ============================================================
@@ -7321,10 +7514,11 @@ const MENU_LIST=[
   {id:'hr7',label:'계정관리'},
   {id:'hr8',label:'퇴직정산'},
   {id:'hr9',label:'퇴직금 계산'},
+  {id:'hr10',label:'월별 스케줄 등록'},
 ];
 const ROLE_LABEL={hr:'HR 담당자',emp:'CX 직원',field:'현장운영자'};
 // 역할별 기본 메뉴 접근 허용
-const ROLE_DEFAULT_MENUS={hr:['hr1','hr2','hr3','hr4','hr5','hr6','hr7','hr8','hr9'],emp:['hr3'],field:['hr3']};
+const ROLE_DEFAULT_MENUS={hr:['hr1','hr2','hr3','hr4','hr5','hr6','hr7','hr8','hr9','hr10'],emp:['hr3'],field:['hr3']};
 
 function renderAccPage(){
   const list=getAccounts();
