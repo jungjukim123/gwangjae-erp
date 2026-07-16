@@ -553,6 +553,7 @@ tr.con-edit-row td:last-child{border-right:2px solid #E07B2A!important}
     </div>
   </div>
   <div class="sg" id="salStats"></div>
+  <div id="salColSel" style="background:var(--card);border:1px solid var(--bd);border-radius:var(--rs);padding:10px 14px;margin-bottom:10px"></div>
   <div class="tw" id="salTW">
     <table id="salT" style="min-width:3200px;table-layout:fixed">
       <thead><tr id="salHead"></tr></thead>
@@ -4656,6 +4657,75 @@ function buildSalHead(){
     const cls=c.time?'r sal-th':c.r?'r sal-th':'';
     return`<th class="${cls}" style="width:${c.w}px;min-width:${c.w}px"><div class="th-inner" style="justify-content:${c.r?'flex-end':'center'}"><span class="th-txt">${c.t}</span><button class="th-filter" data-tid="salT" data-ci="${i}" title="필터">▾</button><div class="col-resizer" onmousedown="initColResize(event,this)"></div></div></th>`;
   }).join('');
+  applySalColVisibility();
+}
+
+// ── 급여계산 표 열(컬럼) 표시/숨김 — 기본급~소급급여(지급항목), 소득세~공제액계(공제항목)만 선택 가능
+// (NO~퇴사일 기본정보 열, 근무시간 열, 지급액계/실지급액 합계 열은 항상 표시)
+const SAL_PAY_COLS=[
+  {i:15,t:'기본급'},{i:16,t:'식대'},{i:17,t:'직책수당'},{i:18,t:'야간근로수당'},
+  {i:19,t:'주휴수당'},{i:20,t:'연장근로수당'},{i:21,t:'휴일근로수당'},{i:22,t:'휴일연장근로수당'},
+  {i:23,t:'연차수당'},{i:24,t:'기타수당'},{i:25,t:'소급급여'}
+];
+const SAL_DED_COLS=[
+  {i:27,t:'소득세'},{i:28,t:'지방소득세'},{i:29,t:'건강보험'},{i:30,t:'장기요양'},
+  {i:31,t:'국민연금'},{i:32,t:'고용보험'},{i:33,t:'기타공제'},
+  {i:34,t:'중도정산소득세'},{i:35,t:'중도정산지방소득세'},
+  {i:36,t:'연말정산소득세'},{i:37,t:'연말정산지방소득세'},
+  {i:38,t:'건강보험정산'},{i:39,t:'장기요양정산'},
+  {i:40,t:'건강보험연말정산'},{i:41,t:'장기요양연말정산'},
+  {i:42,t:'공제액계'}
+];
+if(typeof salColHidden==='undefined') var salColHidden=new Set();
+
+function buildSalColSel(){
+  const el=document.getElementById('salColSel');
+  if(!el)return;
+  const chk=c=>`<label style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--tx2)"><input type="checkbox" ${salColHidden.has(c.i)?'':'checked'} onchange="toggleSalCol(${c.i},this.checked)" style="accent-color:#2563EB"> ${c.t}</label>`;
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap">
+    <div style="display:flex;flex-direction:column;gap:10px;flex:1;min-width:280px">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--tx3);letter-spacing:.06em;margin-bottom:6px">지급항목</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px 14px">${SAL_PAY_COLS.map(chk).join('')}</div>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--tx3);letter-spacing:.06em;margin-bottom:6px">공제항목</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px 14px">${SAL_DED_COLS.map(chk).join('')}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;flex-shrink:0">
+      <button class="btn sm" onclick="hideEmptySalCols()">👁 값 없는 열 제외</button>
+      <button class="btn sm" onclick="showAllSalCols()">🔎 전체 열 보기</button>
+    </div>
+  </div>`;
+}
+function toggleSalCol(ci,checked){
+  if(checked)salColHidden.delete(ci);else salColHidden.add(ci);
+  applySalColVisibility();
+}
+function applySalColVisibility(){
+  let style=document.getElementById('salColStyle');
+  if(!style){style=document.createElement('style');style.id='salColStyle';document.head.appendChild(style);}
+  style.textContent=[...salColHidden].map(ci=>`#salT th:nth-child(${ci+1}),#salT td:nth-child(${ci+1}){display:none}`).join('\n');
+}
+function hideEmptySalCols(){
+  const bodyRows=[...document.querySelectorAll('#salBody tr')].filter(tr=>!tr.classList.contains('ghd'));
+  if(!bodyRows.length){alert('표시할 데이터가 없습니다.');return;}
+  [...SAL_PAY_COLS,...SAL_DED_COLS].forEach(c=>{
+    const allEmpty=bodyRows.every(tr=>{
+      const td=tr.children[c.i];
+      const txt=td?td.textContent.trim():'';
+      return txt===''||txt==='-';
+    });
+    if(allEmpty)salColHidden.add(c.i);
+  });
+  applySalColVisibility();
+  buildSalColSel();
+}
+function showAllSalCols(){
+  salColHidden.clear();
+  applySalColVisibility();
+  buildSalColSel();
 }
 // 급여 기타/소급 저장소
 if(typeof salExtra==='undefined') var salExtra={};
@@ -7296,6 +7366,7 @@ function nav(pid,el){
   }
   if(pid==='hr4'){
     buildSalHead();
+    buildSalColSel();
     // 마지막 연동 월 복원
     if(salSyncedYrMo){
       const sYr=document.getElementById('salYear');
