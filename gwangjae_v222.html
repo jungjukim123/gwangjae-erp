@@ -370,6 +370,8 @@ tr.con-edit-row td:last-child{border-right:2px solid #E07B2A!important}
     <div class="logo-s">Gwangjae ERP</div>
     <div class="logo-t">부산관제센터 <span class="logo-dot"></span></div>
   </div>
+  <div class="nsec hr-menu" style="display:none">메인</div>
+  <div class="ni hr-menu" style="display:none" onclick="nav('hr11',this)">🏠 메인 대시보드</div>
   <div class="nsec hr-menu" style="display:none">인원관리</div>
   <div class="ni hr-menu" style="display:none" onclick="nav('hr1',this)">인원현황</div>
   <div class="ni hr-menu" style="display:none" onclick="nav('hr2',this)">계약기간관리</div>
@@ -410,6 +412,48 @@ tr.con-edit-row td:last-child{border-right:2px solid #E07B2A!important}
 <!-- MAIN -->
 <main id="main">
 <div class="page-wrap">
+
+<!-- HR ⓪ 메인 대시보드 -->
+<div class="page" id="page-hr11">
+  <div class="ph">
+    <div class="ph-l"><div class="pt">메인 대시보드</div><div class="psub">이번 달 계약종료 예정자 · 주간 근무 스케줄 한눈에 보기</div></div>
+  </div>
+
+  <div class="section" style="padding:16px 18px">
+    <div style="font-size:14px;font-weight:800;margin-bottom:10px">📋 이번 달 계약종료 예정자</div>
+    <div class="tw" id="dashExpTW" style="max-height:320px">
+      <table id="dashExpT">
+        <thead><tr>
+          <th style="padding:0"><div class="th-inner"><span class="th-txt">NO</span></div></th>
+          <th style="padding:0"><div class="th-inner"><span class="th-txt">사번</span></div></th>
+          <th style="padding:0"><div class="th-inner"><span class="th-txt">소속</span></div></th>
+          <th style="padding:0"><div class="th-inner"><span class="th-txt">이름</span></div></th>
+          <th style="padding:0"><div class="th-inner"><span class="th-txt">계약종료일</span></div></th>
+          <th style="padding:0"><div class="th-inner"><span class="th-txt">D-day</span></div></th>
+        </tr></thead>
+        <tbody id="dashExpBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section" style="padding:16px 18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div style="font-size:14px;font-weight:800">🗓 주간 근무 스케줄</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn sm" onclick="dashWeekShift(-1)">◀ 이전주</button>
+        <div id="dashWeekLabel" style="font-size:12px;font-weight:700;color:var(--tx2);min-width:150px;text-align:center"></div>
+        <button class="btn sm" onclick="dashWeekShift(1)">다음주 ▶</button>
+        <button class="btn sm" onclick="dashWeekShift(0)">오늘</button>
+      </div>
+    </div>
+    <div class="tw" id="dashSchedTW" style="max-height:560px">
+      <table id="dashSchedT" style="min-width:960px">
+        <thead><tr id="dashSchedHead"></tr></thead>
+        <tbody id="dashSchedBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
 <!-- HR ① 인원현황 -->
 <div class="page" id="page-hr1">
@@ -836,6 +880,8 @@ function doLogin(){
       if(moEl)moEl.value=String(r0.mo);
     }
     _hideLoading();
+    // ★ 로그인 시에는 항상 메인 대시보드로 시작 (새로고침 시 마지막 방문 페이지 복원은 그대로 유지)
+    localStorage.setItem('gwangjae_last_page','hr11');
     applyUserAndInit(acc);
     startPolling(); // 로그인 후 30초 폴링 시작
   });
@@ -7349,6 +7395,7 @@ function nav(pid,el){
   const pg=document.getElementById('page-'+pid);if(pg)pg.classList.add('on');if(el)el.classList.add('on');
   // ★ 마지막 방문 페이지 저장
   localStorage.setItem('gwangjae_last_page',pid);
+  if(pid==='hr11'){renderDashExpiring();dashWeekShift(0);}
   if(pid==='hr1'){buildEmpHead();renderEmp();}
   if(pid==='hr2'){buildConHead();renderCon();}
   if(pid==='hr3'){
@@ -7516,6 +7563,124 @@ async function reloadSchedMonth(){
   await renderSchedMgmt();
 }
 
+// ============================================================
+// 메인 대시보드 (hr11) — 이번 달 계약종료 예정자 + 주간 근무 스케줄
+// ============================================================
+
+// 사번(없으면 이름) 그룹의 최신 계약 중, 아직 퇴사하지 않았고 이번 달에 계약이 종료되는 인원
+function _dashContractsEndingThisMonth(){
+  const now=new Date();
+  const ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const groups={};
+  contracts.forEach(c=>{
+    const k=c.사번||('__name__'+c.이름);
+    if(!groups[k])groups[k]=[];
+    groups[k].push(c);
+  });
+  const result=[];
+  Object.values(groups).forEach(g=>{
+    g.sort((a,b)=>new Date(b.cs)-new Date(a.cs));
+    const latest=g[0];
+    if(!latest||!latest.ce||latest.구분==='퇴사')return;
+    const quit=latest.사번?getQuitDate(latest.사번):'';
+    if(quit&&quit!=='')return;
+    if(latest.ce.slice(0,7)===ym)result.push(latest);
+  });
+  result.sort((a,b)=>a.ce.localeCompare(b.ce));
+  return result;
+}
+
+function renderDashExpiring(){
+  const body=document.getElementById('dashExpBody');
+  if(!body)return;
+  const list=_dashContractsEndingThisMonth();
+  if(!list.length){
+    body.innerHTML=`<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--tx3)">이번 달 계약종료 예정자가 없습니다.</td></tr>`;
+    return;
+  }
+  const today=new Date();today.setHours(0,0,0,0);
+  body.innerHTML=list.map((c,idx)=>{
+    const dday=Math.round((new Date(c.ce)-today)/86400000);
+    const ddayLabel=dday===0?'D-DAY':(dday>0?`D-${dday}`:`D+${-dday}`);
+    return`<tr>
+      <td style="text-align:center;font-size:11px">${idx+1}</td>
+      <td style="text-align:center;font-family:monospace;font-size:11px">${c.사번||'-'}</td>
+      <td style="text-align:center;font-size:11px">${c.소속}</td>
+      <td style="text-align:center"><strong>${c.이름}</strong></td>
+      <td style="text-align:center;font-size:11px;color:var(--red);font-weight:700">${c.ce}</td>
+      <td style="text-align:center;font-size:11px;font-weight:700;color:${dday<=7?'var(--red)':'var(--orange)'}">${ddayLabel}</td>
+    </tr>`;
+  }).join('');
+}
+
+// 주간 근무 스케줄 — 월요일 시작 주 단위로 이동
+let _dashWeekAnchor=null;
+function _dashMonday(d){
+  const nd=new Date(d);
+  const day=nd.getDay();
+  nd.setDate(nd.getDate()+(day===0?-6:1-day));
+  nd.setHours(0,0,0,0);
+  return nd;
+}
+function _dashDateStr(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function dashWeekShift(delta){
+  if(delta===0||!_dashWeekAnchor)_dashWeekAnchor=_dashMonday(new Date());
+  if(delta)_dashWeekAnchor.setDate(_dashWeekAnchor.getDate()+delta*7);
+  renderDashSched();
+}
+function renderDashSched(){
+  const head=document.getElementById('dashSchedHead'),body=document.getElementById('dashSchedBody');
+  if(!head||!body)return;
+  if(!_dashWeekAnchor)_dashWeekAnchor=_dashMonday(new Date());
+  const days=[];
+  for(let i=0;i<7;i++){const d=new Date(_dashWeekAnchor);d.setDate(d.getDate()+i);days.push(d);}
+  const todayStr=_dashDateStr(new Date());
+  const label=document.getElementById('dashWeekLabel');
+  if(label){
+    const f=days[0],l=days[6];
+    label.textContent=`${f.getFullYear()}.${String(f.getMonth()+1).padStart(2,'0')}.${String(f.getDate()).padStart(2,'0')} ~ ${String(l.getMonth()+1).padStart(2,'0')}.${String(l.getDate()).padStart(2,'0')}`;
+  }
+  const DOWL=['월','화','수','목','금','토','일'];
+  head.innerHTML='<th class="sk" style="padding:0;min-width:60px"><div class="th-inner" style="justify-content:center"><span class="th-txt">시간</span></div></th>'
+    +days.map((d,i)=>{
+      const ds=_dashDateStr(d);
+      return`<th style="padding:0;min-width:120px;${ds===todayStr?'background:#DCEAFE':''}"><div class="th-inner" style="flex-direction:column;gap:0;padding:5px 4px"><span class="th-txt">${DOWL[i]}</span><span style="font-weight:400;font-size:10px;color:var(--tx3);text-transform:none">${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}</span></div></th>`;
+    }).join('');
+
+  // 주가 걸친 월 각각의 재직자 목록을 모아서 사용 (월 경계 주간 대비)
+  const empMap=new Map();
+  new Set([days[0].getFullYear()+'_'+(days[0].getMonth()+1),days[6].getFullYear()+'_'+(days[6].getMonth()+1)])
+    .forEach(k=>{const[y,m]=k.split('_').map(Number);getSchedEmpList(y,m).forEach(e=>empMap.set(e.사번,e));});
+  const emps=Array.from(empMap.values());
+
+  const dayWork=days.map(d=>{
+    const ds=_dashDateStr(d);
+    const list=[];
+    emps.forEach(e=>{
+      const st=getScheduleState(e.사번,ds);
+      if(st.state!=='평일근무')return;
+      const active=contracts.filter(c=>c.사번===e.사번&&c.구분!=='퇴사'&&c.cs<=ds&&c.ce>=ds).sort((a,b)=>new Date(b.cs)-new Date(a.cs))[0];
+      list.push({이름:e.이름,st:(active&&active.st)||'09:00',et:(active&&active.et)||'18:00'});
+    });
+    return list;
+  });
+
+  let rows='';
+  for(let h=0;h<24;h++){
+    const hh=String(h).padStart(2,'0')+':00';
+    const hhEnd=String(h+1).padStart(2,'0')+':00';
+    rows+=`<tr><td class="sk" style="text-align:center;font-family:monospace;font-size:11px">${hh}</td>`;
+    dayWork.forEach(list=>{
+      const names=list.filter(p=>p.st<hhEnd&&p.et>hh).map(p=>p.이름);
+      rows+=`<td style="font-size:10px;line-height:1.6;padding:4px 6px;vertical-align:top">${names.map(n=>`<div style="background:#EFF6FF;color:#2563EB;border-radius:4px;padding:1px 6px;margin-bottom:2px;display:inline-block;font-weight:600">${n}</div>`).join('')}</td>`;
+    });
+    rows+='</tr>';
+  }
+  body.innerHTML=rows;
+}
+
 // 셀 수정 팝업(구분(N) 열 팝업과 동일 구조 — body에 상주시켜 sticky 밖으로 노출)
 (function(){
   let _popup=null,_eid=null,_ds=null;
@@ -7575,6 +7740,7 @@ function applySchedCell(empId,ds,state,note){
 // ⑦ 계정관리 페이지 함수
 // ============================================================
 const MENU_LIST=[
+  {id:'hr11',label:'메인 대시보드'},
   {id:'hr1',label:'인원현황'},
   {id:'hr2',label:'계약기간관리'},
   {id:'hr3',label:'월별 근태 현황'},
@@ -7588,7 +7754,7 @@ const MENU_LIST=[
 ];
 const ROLE_LABEL={hr:'HR 담당자',emp:'CX 직원',field:'현장운영자'};
 // 역할별 기본 메뉴 접근 허용
-const ROLE_DEFAULT_MENUS={hr:['hr1','hr2','hr3','hr4','hr5','hr6','hr7','hr8','hr9','hr10'],emp:['hr3'],field:['hr3']};
+const ROLE_DEFAULT_MENUS={hr:['hr11','hr1','hr2','hr3','hr4','hr5','hr6','hr7','hr8','hr9','hr10'],emp:['hr3'],field:['hr3']};
 
 function renderAccPage(){
   const list=getAccounts();
