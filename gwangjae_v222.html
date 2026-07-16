@@ -7460,6 +7460,16 @@ function nav(pid,el){
 let schedOverrides={};   // key: `${사번}_${YYYY-MM-DD}` → {state:'평일근무'|'무급휴일'|'주휴일', note:''|'연차'|'결근'}
 let _schedLoadedKey=null;
 
+// 인원별 구분 색상 — 헤더 배지 + 셀 좌측 테두리에 사용 (재직자 순번 기준 순환)
+const SCHED_COLORS=[
+  {bg:'#DBEAFE',fg:'#1E40AF'},{bg:'#DCFCE7',fg:'#15803D'},{bg:'#FEF3C7',fg:'#92400E'},
+  {bg:'#FCE7F3',fg:'#BE185D'},{bg:'#EDE9FE',fg:'#6D28D9'},{bg:'#CFFAFE',fg:'#0E7490'},
+  {bg:'#FFEDD5',fg:'#C2410C'},{bg:'#E0E7FF',fg:'#4338CA'},{bg:'#ECFCCB',fg:'#4D7C0F'},
+  {bg:'#FEE2E2',fg:'#991B1B'},{bg:'#F1F5F9',fg:'#475569'},{bg:'#FAE8FF',fg:'#A21CAF'},
+  {bg:'#D1FAE5',fg:'#047857'},{bg:'#FFE4E6',fg:'#BE123C'}
+];
+function _schedEmpColor(idx){return SCHED_COLORS[idx%SCHED_COLORS.length];}
+
 function buildSchedHead(){
   const yrEl=document.getElementById('schedYear');
   if(yrEl&&!yrEl.dataset.built){
@@ -7515,15 +7525,16 @@ async function saveSchedEmpMonth(empId,yr,mo){
   }catch(e){_toast('스케줄 저장 실패 (네트워크 확인)','error');}
 }
 
-function schedCellHtml(empId,ds){
+function schedCellHtml(empId,ds,empColor){
+  const bl=`border-left:3px solid ${empColor}`;
   const st=getScheduleState(empId,ds);
-  if(!st.state)return`<td style="text-align:center;font-size:11px;color:var(--tx3);background:var(--bg)">계약외</td>`;
+  if(!st.state)return`<td style="text-align:center;font-size:11px;color:var(--tx3);background:var(--bg);${bl}">계약외</td>`;
   const label=st.note?`${st.state}(${st.note})`:st.state;
   let bg='#EFF6FF',fg='#2563EB';
   if(st.state==='무급휴일'){bg='#F3F4F6';fg='#374151';}
   else if(st.state==='주휴일'){bg='#FFF0F5';fg='#BE185D';}
   if(st.note){bg='#FEF3C7';fg='#92400E';}
-  return`<td style="position:relative;text-align:center;font-size:11px;font-weight:600;padding:6px 20px 6px 6px;white-space:nowrap;background:${bg};color:${fg}">${label}<button type="button" onclick="event.stopPropagation();toggleSchedMenu(this,'${empId}','${ds}')" title="수정" style="position:absolute;top:3px;right:3px;width:15px;height:15px;line-height:13px;padding:0;border:none;border-radius:3px;background:rgba(0,0,0,.08);color:inherit;font-size:9px;cursor:pointer">✎</button></td>`;
+  return`<td style="position:relative;text-align:center;font-size:11px;font-weight:600;padding:6px 20px 6px 6px;white-space:nowrap;background:${bg};color:${fg};${bl}">${label}<button type="button" onclick="event.stopPropagation();toggleSchedMenu(this,'${empId}','${ds}')" title="수정" style="position:absolute;top:3px;right:3px;width:15px;height:15px;line-height:13px;padding:0;border:none;border-radius:3px;background:rgba(0,0,0,.08);color:inherit;font-size:9px;cursor:pointer">✎</button></td>`;
 }
 
 async function renderSchedMgmt(){
@@ -7540,7 +7551,7 @@ async function renderSchedMgmt(){
   const head=document.getElementById('schedHead'),body=document.getElementById('schedBody');
   if(!head||!body)return;
   head.innerHTML='<tr><th class="sk" style="padding:7px 9px;min-width:90px">날짜</th><th style="padding:7px 9px;min-width:44px">요일</th><th style="padding:7px 9px;min-width:70px">휴일여부</th>'
-    +emps.map(e=>`<th style="padding:7px 9px;min-width:90px" title="사번: ${e.사번}">${e.이름}</th>`).join('')+'</tr>';
+    +emps.map((e,idx)=>{const c=_schedEmpColor(idx);return`<th style="padding:7px 9px;min-width:90px;border-left:3px solid ${c.fg}" title="사번: ${e.사번}"><span style="display:inline-block;padding:2px 8px;border-radius:20px;background:${c.bg};color:${c.fg};font-weight:700">${e.이름}</span></th>`;}).join('')+'</tr>';
   if(!emps.length){
     body.innerHTML=`<tr><td colspan="3" style="text-align:center;padding:30px;color:var(--tx3);font-size:13px">해당 월에 재직 중인 인원이 없습니다.</td></tr>`;
     return;
@@ -7552,7 +7563,7 @@ async function renderSchedMgmt(){
     const hol=isHoliday(ds);
     rows+=`<tr${hol?' style="background:#FEF2F2"':(dow===0||dow===6?' style="background:#F8FAFC"':'')}>`
       +`<td class="sk" style="font-family:monospace">${ds}</td><td>${DAYS[dow]}</td><td>${hol?'공휴일':''}</td>`
-      +emps.map(e=>schedCellHtml(e.사번,ds)).join('')
+      +emps.map((e,idx)=>schedCellHtml(e.사번,ds,_schedEmpColor(idx).fg)).join('')
       +'</tr>';
   }
   body.innerHTML=rows;
@@ -7625,12 +7636,43 @@ function _dashMonday(d){
 function _dashDateStr(d){
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
-function dashWeekShift(delta){
+async function dashWeekShift(delta){
   if(delta===0||!_dashWeekAnchor)_dashWeekAnchor=_dashMonday(new Date());
   if(delta)_dashWeekAnchor.setDate(_dashWeekAnchor.getDate()+delta*7);
-  renderDashSched();
+  await renderDashSched();
 }
-function renderDashSched(){
+// 대시보드 전용 스케줄 수기수정 캐시 — hr10의 schedOverrides/loadSchedOverrides는
+// 조회할 때마다 전체를 비우고 그 달만 다시 채우는 단일 월 캐시라서, 주간뷰가 두 달에
+// 걸치면 나중에 부른 달이 먼저 불러온 달의 값을 지워버림. 그래서 여러 달을 동시에
+// 들고 있을 수 있는 별도의 누적 캐시를 둔다.
+let _dashSchedOv={};
+let _dashSchedLoadedMonths=new Set();
+async function _dashLoadSchedOverridesForMonth(yr,mo){
+  const key=yr+'_'+mo;
+  if(_dashSchedLoadedMonths.has(key))return;
+  _dashSchedLoadedMonths.add(key);
+  try{
+    const res=await fetch(`${SB_URL}/rest/v1/sched_saved?yr=eq.${yr}&mo=eq.${mo}&limit=5000`,{headers:SB_HDR});
+    if(!res.ok)return;
+    const rows=await res.json();
+    rows.forEach(r=>{
+      let days=[];
+      try{days=JSON.parse(r.days_json||'[]');}catch(e){}
+      days.forEach(d=>{if(d&&d.date)_dashSchedOv[r.emp_id+'_'+d.date]={state:d.state,note:d.note||''};});
+    });
+  }catch(e){/* 오프라인/네트워크 오류 시 계약기간관리 기준 자동값만 표시 */}
+}
+// 월별 스케줄 등록의 getScheduleState와 동일 로직(수기수정 우선, 없으면 계약기간관리 자동산출)이되
+// 대시보드 전용 캐시(_dashSchedOv)를 참조
+function _dashGetScheduleState(empId,ds){
+  const ov=_dashSchedOv[empId+'_'+ds];
+  if(ov)return ov;
+  const raw=getSched(empId,ds);
+  if(raw==='주휴')return{state:'주휴일',note:''};
+  if(raw==='계약기간 없음')return{state:'',note:''};
+  return{state:raw>0?'평일근무':'무급휴일',note:''};
+}
+async function renderDashSched(){
   const head=document.getElementById('dashSchedHead'),body=document.getElementById('dashSchedBody');
   if(!head||!body)return;
   if(!_dashWeekAnchor)_dashWeekAnchor=_dashMonday(new Date());
@@ -7649,17 +7691,18 @@ function renderDashSched(){
       return`<th style="padding:0;min-width:120px;${ds===todayStr?'background:#DCEAFE':''}"><div class="th-inner" style="flex-direction:column;gap:0;padding:5px 4px"><span class="th-txt">${DOWL[i]}</span><span style="font-weight:400;font-size:10px;color:var(--tx3);text-transform:none">${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}</span></div></th>`;
     }).join('');
 
-  // 주가 걸친 월 각각의 재직자 목록을 모아서 사용 (월 경계 주간 대비)
+  // 주가 걸친 월 각각의 재직자 목록 + 수기수정 스케줄(월별 스케줄 등록)을 모아서 사용 (월 경계 주간 대비)
+  const monthKeys=new Set([days[0].getFullYear()+'_'+(days[0].getMonth()+1),days[6].getFullYear()+'_'+(days[6].getMonth()+1)]);
+  await Promise.all(Array.from(monthKeys).map(k=>{const[y,m]=k.split('_').map(Number);return _dashLoadSchedOverridesForMonth(y,m);}));
   const empMap=new Map();
-  new Set([days[0].getFullYear()+'_'+(days[0].getMonth()+1),days[6].getFullYear()+'_'+(days[6].getMonth()+1)])
-    .forEach(k=>{const[y,m]=k.split('_').map(Number);getSchedEmpList(y,m).forEach(e=>empMap.set(e.사번,e));});
+  monthKeys.forEach(k=>{const[y,m]=k.split('_').map(Number);getSchedEmpList(y,m).forEach(e=>empMap.set(e.사번,e));});
   const emps=Array.from(empMap.values());
 
   const dayWork=days.map(d=>{
     const ds=_dashDateStr(d);
     const list=[];
     emps.forEach(e=>{
-      const st=getScheduleState(e.사번,ds);
+      const st=_dashGetScheduleState(e.사번,ds);
       if(st.state!=='평일근무')return;
       const active=contracts.filter(c=>c.사번===e.사번&&c.구분!=='퇴사'&&c.cs<=ds&&c.ce>=ds).sort((a,b)=>new Date(b.cs)-new Date(a.cs))[0];
       list.push({이름:e.이름,st:(active&&active.st)||'09:00',et:(active&&active.et)||'18:00'});
@@ -7730,6 +7773,7 @@ function toggleSchedMenu(el,eid,ds){
 }
 function applySchedCell(empId,ds,state,note){
   schedOverrides[empId+'_'+ds]={state,note:note||''};
+  if(typeof _dashSchedOv!=='undefined')_dashSchedOv[empId+'_'+ds]={state,note:note||''}; // 메인 대시보드 캐시도 동기화
   window._closeSchedMenu();_activeSchedCell=null;
   renderSchedMgmt();
   const yrEl=document.getElementById('schedYear'),moEl=document.getElementById('schedMonth');
