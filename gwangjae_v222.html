@@ -604,7 +604,7 @@ tr.con-edit-row td:last-child{border-right:2px solid #E07B2A!important}
 <!-- HR ⑥ 급여설정관리 -->
 <div class="page" id="page-hr6">
   <div class="ph">
-    <div class="ph-l"><div class="pt">급여설정관리</div><div class="psub">인별 소득세·4대보험 공제 기준 설정 | 퇴사자 포함 전체 인원 | 월별 독립 저장</div></div>
+    <div class="ph-l"><div class="pt">급여설정관리</div><div class="psub">인별 소득세·4대보험 공제 기준 설정 | 귀속월 기준 재직자만 표시(당월 퇴사자 포함) | 월별 독립 저장</div></div>
     <div class="bg-row">
       <label style="font-size:11px;font-weight:700;color:var(--tx3)">귀속년도</label>
       <select id="salCfgYear" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderSalCfg()">
@@ -3826,12 +3826,18 @@ function renderSalCfg(){
     const sp=badge.querySelector('span');
     if(sp)sp.textContent='📅 '+yr+'년 '+String(mo).padStart(2,'0')+'월 기준 설정';
   }
-  // ★ 퇴사자 포함 전체 인원 표시 (필터는 th-filter로 처리)
+  // ★ 선택한 귀속월 기준 재직자만 표시 — 귀속월 이전에 퇴사한 인원은 제외 (당월 퇴사자는 포함)
   // 계약기간관리에 등록된 사번 기준으로 신규 추가 반영
   const cfgEids=new Set(Object.keys(salCfg));
+  const monthFirst=dStr(yr,mo,1);
   // 입사일 최신순 정렬 (입사일 없으면 뒤로)
   // 계약이 하나도 남아있지 않으면(전체 삭제됨) 목록에서 제외
-  const list=employees.filter(e=>contracts.some(c=>c.사번===e.사번)).sort((a,b)=>{
+  const list=employees.filter(e=>{
+    if(!contracts.some(c=>c.사번===e.사번))return false;
+    const q=getQuitDate(e.사번);
+    if(!q||q==='')return true;
+    return q>=monthFirst;
+  }).sort((a,b)=>{
     const ja=getJoinDate(a.사번)||'';
     const jb=getJoinDate(b.사번)||'';
     if(jb&&ja)return jb.localeCompare(ja);
