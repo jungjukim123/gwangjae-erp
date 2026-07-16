@@ -4706,7 +4706,7 @@ function buildSalHead(){
   ];
   document.getElementById('salHead').innerHTML=cols.map((c,i)=>{
     const cls=c.time?'r sal-th':c.r?'r sal-th':'';
-    return`<th class="${cls}" style="width:${c.w}px;min-width:${c.w}px"><div class="th-inner" style="justify-content:${c.r?'flex-end':'center'}"><span class="th-txt">${c.t}</span><button class="th-filter" data-tid="salT" data-ci="${i}" title="필터">▾</button><div class="col-resizer" onmousedown="initColResize(event,this)"></div></div></th>`;
+    return`<th class="${cls}" data-col="${i}" style="width:${c.w}px;min-width:${c.w}px"><div class="th-inner" style="justify-content:${c.r?'flex-end':'center'}"><span class="th-txt">${c.t}</span><button class="th-filter" data-tid="salT" data-ci="${i}" title="필터">▾</button><div class="col-resizer" onmousedown="initColResize(event,this)"></div></div></th>`;
   }).join('');
   applySalColVisibility();
 }
@@ -4756,7 +4756,7 @@ function toggleSalCol(ci,checked){
 function applySalColVisibility(){
   let style=document.getElementById('salColStyle');
   if(!style){style=document.createElement('style');style.id='salColStyle';document.head.appendChild(style);}
-  style.textContent=[...salColHidden].map(ci=>`#salT th:nth-child(${ci+1}),#salT td:nth-child(${ci+1}){display:none}`).join('\n');
+  style.textContent=[...salColHidden].map(ci=>`#salT [data-col="${ci}"]{display:none}`).join('\n');
 }
 function hideEmptySalCols(){
   const bodyRows=[...document.querySelectorAll('#salBody tr')].filter(tr=>!tr.classList.contains('ghd'));
@@ -5066,11 +5066,12 @@ function renderSal(){
     const taxFmt=v=>v!==0?v.toLocaleString():'-';
     // ── 기본급~장기요양연말정산 열 공용: 마우스오버 시 셀 중앙에 "수정" 버튼(#salEditBtn) 노출, 수기입력된 값은 주황색으로 표시
     // 확정된 월은 수정 자체가 불가능하므로 편집 트리거(sal-cell 클래스/data-* 속성)를 아예 렌더링하지 않음
-    const salTd=(field,label,val,fmtFn,bold)=>{
+    const salTd=(field,label,val,fmtFn,bold,ci)=>{
       const manual=!confirmed&&getSalManual(d.사번,yr,mo,field)!==undefined;
       const style=bold?`font-weight:800;font-size:11px;color:${manual?'var(--orange)':'var(--tx)'}`:`font-size:11px;color:${manual?'var(--orange)':'#000000'}`;
       const attrs=confirmed?'':` data-emp="${d.사번}" data-yr="${yr}" data-mo="${mo}" data-field="${field}" data-label="${label}" data-val="${val}"`;
-      return`<td class="r${confirmed?'':' sal-cell'}" style="${style}"${attrs}>${fmtFn(val)}</td>`;
+      const colAttr=ci!==undefined?` data-col="${ci}"`:'';
+      return`<td class="r${confirmed?'':' sal-cell'}" style="${style}"${colAttr}${attrs}>${fmtFn(val)}</td>`;
     };
     const extraBtn=(type,val,grad,color)=>confirmed?'':
       `<button onclick="editSalExtra('${d.사번}',${yr},${mo},'${type}',${val})" style="width:24px;height:24px;border-radius:6px;border:1px solid var(--bd2);background:${grad};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;color:${color};transition:all .15s" onmouseover="this.style.filter='brightness(.95)'" onmouseout="this.style.filter='none'">✎</button>`;
@@ -5090,50 +5091,50 @@ function renderSal(){
       <td class="r" style="font-size:11px;color:#000000">${fh(d.mX)}</td>
       <td class="r" style="font-size:11px;color:#000000">${fh(d.mAA)}</td>
       <td class="r" style="font-size:11px;color:#000000">${fh(d.mAB)}</td>
-      ${salTd('기본급','기본급',d.기본급,cFmt)}
-      ${salTd('식대','식대',d.식대,cFmt)}
-      ${salTd('직책수당','직책수당',d.직책수당,cFmt)}
-      ${salTd('야간수당','야간근로수당',d.야간수당,cFmt)}
-      ${salTd('주휴수당','주휴수당',d.주휴수당,cFmt)}
-      ${salTd('연장수당','연장근로수당',d.연장수당,cFmt)}
-      ${salTd('휴일수당','휴일근로수당',d.휴일수당,cFmt)}
-      ${salTd('휴일연장','휴일연장근로수당',d.휴일연장,cFmt)}
-      <td class="r">
+      ${salTd('기본급','기본급',d.기본급,cFmt,false,15)}
+      ${salTd('식대','식대',d.식대,cFmt,false,16)}
+      ${salTd('직책수당','직책수당',d.직책수당,cFmt,false,17)}
+      ${salTd('야간수당','야간근로수당',d.야간수당,cFmt,false,18)}
+      ${salTd('주휴수당','주휴수당',d.주휴수당,cFmt,false,19)}
+      ${salTd('연장수당','연장근로수당',d.연장수당,cFmt,false,20)}
+      ${salTd('휴일수당','휴일근로수당',d.휴일수당,cFmt,false,21)}
+      ${salTd('휴일연장','휴일연장근로수당',d.휴일연장,cFmt,false,22)}
+      <td class="r" data-col="23">
         <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
           <span style="color:var(--tx3);font-size:11px">${d.연차!==0?nFmt(d.연차):'-'}</span>
           ${extraBtn('연차',d.연차,'linear-gradient(135deg,#CCFBF1,#99F6E4)','#0F766E')}
         </div>
       </td>
-      <td class="r">
+      <td class="r" data-col="24">
         <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
           <span style="color:var(--tx3);font-size:11px">${d.기타!==0?nFmt(d.기타):'-'}</span>
           ${extraBtn('기타',d.기타,'linear-gradient(135deg,#EFF6FF,#DBEAFE)','#2563EB')}
         </div>
       </td>
-      <td class="r">
+      <td class="r" data-col="25">
         <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
           <span style="color:var(--tx3);font-size:11px">${d.소급!==0?nFmt(d.소급):'-'}</span>
           ${extraBtn('소급',d.소급,'linear-gradient(135deg,#EEF2FF,#E0E7FF)','#6366F1')}
         </div>
       </td>
-      ${salTd('지급액계','지급액계',d.지급액계,v=>v.toLocaleString(),true)}
-      ${salTd('소득세','소득세',d.소득세,taxFmt)}
-      ${salTd('지방소득세','지방소득세',d.지방소득세,taxFmt)}
-      ${salTd('건강보험','건강보험',d.건강보험,taxFmt)}
-      ${salTd('장기요양','장기요양',d.장기요양,taxFmt)}
-      ${salTd('국민연금','국민연금',d.국민연금,taxFmt)}
-      ${salTd('고용보험','고용보험',d.고용보험,taxFmt)}
-      ${salTd('기타공제','기타공제',d.기타공제,taxFmt)}
-      ${salTd('중도정산소득세','중도정산소득세',d.중도정산소득세,taxFmt)}
-      ${salTd('중도정산지방소득세','중도정산지방소득세',d.중도정산지방소득세,taxFmt)}
-      ${salTd('연말정산소득세','연말정산소득세',d.연말정산소득세,taxFmt)}
-      ${salTd('연말정산지방소득세','연말정산지방소득세',d.연말정산지방소득세,taxFmt)}
-      ${salTd('건강보험정산','건강보험정산',d.건강보험정산,taxFmt)}
-      ${salTd('장기요양정산','장기요양정산',d.장기요양정산,taxFmt)}
-      ${salTd('건강보험연말정산','건강보험연말정산',d.건강보험연말정산,taxFmt)}
-      ${salTd('장기요양연말정산','장기요양연말정산',d.장기요양연말정산,taxFmt)}
-      <td class="r" style="font-weight:800;color:var(--purple);font-size:11px">${d.공제액계!==0?d.공제액계.toLocaleString():'-'}</td>
-      <td class="r" style="font-weight:800;color:var(--tx);font-size:11px">${d.실지급액!==0?d.실지급액.toLocaleString():'-'}</td>
+      ${salTd('지급액계','지급액계',d.지급액계,v=>v.toLocaleString(),true,26)}
+      ${salTd('소득세','소득세',d.소득세,taxFmt,false,27)}
+      ${salTd('지방소득세','지방소득세',d.지방소득세,taxFmt,false,28)}
+      ${salTd('건강보험','건강보험',d.건강보험,taxFmt,false,29)}
+      ${salTd('장기요양','장기요양',d.장기요양,taxFmt,false,30)}
+      ${salTd('국민연금','국민연금',d.국민연금,taxFmt,false,31)}
+      ${salTd('고용보험','고용보험',d.고용보험,taxFmt,false,32)}
+      ${salTd('기타공제','기타공제',d.기타공제,taxFmt,false,33)}
+      ${salTd('중도정산소득세','중도정산소득세',d.중도정산소득세,taxFmt,false,34)}
+      ${salTd('중도정산지방소득세','중도정산지방소득세',d.중도정산지방소득세,taxFmt,false,35)}
+      ${salTd('연말정산소득세','연말정산소득세',d.연말정산소득세,taxFmt,false,36)}
+      ${salTd('연말정산지방소득세','연말정산지방소득세',d.연말정산지방소득세,taxFmt,false,37)}
+      ${salTd('건강보험정산','건강보험정산',d.건강보험정산,taxFmt,false,38)}
+      ${salTd('장기요양정산','장기요양정산',d.장기요양정산,taxFmt,false,39)}
+      ${salTd('건강보험연말정산','건강보험연말정산',d.건강보험연말정산,taxFmt,false,40)}
+      ${salTd('장기요양연말정산','장기요양연말정산',d.장기요양연말정산,taxFmt,false,41)}
+      <td class="r" style="font-weight:800;color:var(--purple);font-size:11px" data-col="42">${d.공제액계!==0?d.공제액계.toLocaleString():'-'}</td>
+      <td class="r" style="font-weight:800;color:var(--tx);font-size:11px" data-col="43">${d.실지급액!==0?d.실지급액.toLocaleString():'-'}</td>
     </tr>`;
   });
 
@@ -5142,25 +5143,25 @@ function renderSal(){
   const sumRow=`<tr class="ghd" style="font-size:13px">
     <td colspan="9" style="font-size:13px;font-weight:800;text-align:left">지급액계 (${filtered.length}명)${confirmed?' <span style="color:#D93644">🔒 확정됨</span>':''}</td>
     <td colspan="6"></td>
-    <td class="r">${nFmt(totBase)}</td>
-    <td class="r">${totMeal!==0?nFmt(totMeal):'-'}</td>
-    <td class="r">${totPos!==0?nFmt(totPos):'-'}</td>
-    <td class="r">${totNightFixed!==0?nFmt(totNightFixed):'-'}</td>
-    <td class="r">${totJuhyu!==0?nFmt(totJuhyu):'-'}</td>
-    <td class="r">${totOT!==0?nFmt(totOT):'-'}</td>
-    <td class="r">${totHol!==0?nFmt(totHol):'-'}</td>
-    <td class="r">${totHolOT!==0?nFmt(totHolOT):'-'}</td>
-    <td class="r">${totYeoncha!==0?nFmt(totYeoncha):'-'}</td>
-    <td class="r">${totEtc!==0?nFmt(totEtc):'-'}</td>
-    <td class="r">${totSogup!==0?nFmt(totSogup):'-'}</td>
-    <td class="r">${nFmt(totAN)}</td>
-    <td class="r">${totSoDeuk!==0?nFmt(totSoDeuk):'-'}</td><td class="r">${totJibang!==0?nFmt(totJibang):'-'}</td>
-    <td class="r">${totHealth!==0?nFmt(totHealth):'-'}</td><td class="r">${totCare!==0?nFmt(totCare):'-'}</td><td class="r">${totPension!==0?nFmt(totPension):'-'}</td><td class="r">${totEmp!==0?nFmt(totEmp):'-'}</td><td class="r">${totEtcDed!==0?nFmt(totEtcDed):'-'}</td>
-    <td class="r">${totJDJS!==0?nFmt(totJDJS):'-'}</td><td class="r">${totJDJB!==0?nFmt(totJDJB):'-'}</td>
-    <td class="r">${totYMJS!==0?nFmt(totYMJS):'-'}</td><td class="r">${totYMJB!==0?nFmt(totYMJB):'-'}</td>
-    <td class="r">${totHIJS!==0?nFmt(totHIJS):'-'}</td><td class="r">${totCareJS!==0?nFmt(totCareJS):'-'}</td>
-    <td class="r">${totHIYM!==0?nFmt(totHIYM):'-'}</td><td class="r">${totCareYM!==0?nFmt(totCareYM):'-'}</td>
-    <td class="r">${(()=>{const t=totSoDeuk+totJibang+totHealth+totCare+totPension+totEmp+totEtcDed+totJDJS+totJDJB+totYMJS+totYMJB+totHIJS+totCareJS+totHIYM+totCareYM;return t!==0?nFmt(t):'-';})()}</td><td class="r">${(()=>{const ded=totSoDeuk+totJibang+totHealth+totCare+totPension+totEmp+totEtcDed+totJDJS+totJDJB+totYMJS+totYMJB+totHIJS+totCareJS+totHIYM+totCareYM;return(totAN-ded)!==0?nFmt(totAN-ded):'-';})()}</td>
+    <td class="r" data-col="15">${nFmt(totBase)}</td>
+    <td class="r" data-col="16">${totMeal!==0?nFmt(totMeal):'-'}</td>
+    <td class="r" data-col="17">${totPos!==0?nFmt(totPos):'-'}</td>
+    <td class="r" data-col="18">${totNightFixed!==0?nFmt(totNightFixed):'-'}</td>
+    <td class="r" data-col="19">${totJuhyu!==0?nFmt(totJuhyu):'-'}</td>
+    <td class="r" data-col="20">${totOT!==0?nFmt(totOT):'-'}</td>
+    <td class="r" data-col="21">${totHol!==0?nFmt(totHol):'-'}</td>
+    <td class="r" data-col="22">${totHolOT!==0?nFmt(totHolOT):'-'}</td>
+    <td class="r" data-col="23">${totYeoncha!==0?nFmt(totYeoncha):'-'}</td>
+    <td class="r" data-col="24">${totEtc!==0?nFmt(totEtc):'-'}</td>
+    <td class="r" data-col="25">${totSogup!==0?nFmt(totSogup):'-'}</td>
+    <td class="r" data-col="26">${nFmt(totAN)}</td>
+    <td class="r" data-col="27">${totSoDeuk!==0?nFmt(totSoDeuk):'-'}</td><td class="r" data-col="28">${totJibang!==0?nFmt(totJibang):'-'}</td>
+    <td class="r" data-col="29">${totHealth!==0?nFmt(totHealth):'-'}</td><td class="r" data-col="30">${totCare!==0?nFmt(totCare):'-'}</td><td class="r" data-col="31">${totPension!==0?nFmt(totPension):'-'}</td><td class="r" data-col="32">${totEmp!==0?nFmt(totEmp):'-'}</td><td class="r" data-col="33">${totEtcDed!==0?nFmt(totEtcDed):'-'}</td>
+    <td class="r" data-col="34">${totJDJS!==0?nFmt(totJDJS):'-'}</td><td class="r" data-col="35">${totJDJB!==0?nFmt(totJDJB):'-'}</td>
+    <td class="r" data-col="36">${totYMJS!==0?nFmt(totYMJS):'-'}</td><td class="r" data-col="37">${totYMJB!==0?nFmt(totYMJB):'-'}</td>
+    <td class="r" data-col="38">${totHIJS!==0?nFmt(totHIJS):'-'}</td><td class="r" data-col="39">${totCareJS!==0?nFmt(totCareJS):'-'}</td>
+    <td class="r" data-col="40">${totHIYM!==0?nFmt(totHIYM):'-'}</td><td class="r" data-col="41">${totCareYM!==0?nFmt(totCareYM):'-'}</td>
+    <td class="r" data-col="42">${(()=>{const t=totSoDeuk+totJibang+totHealth+totCare+totPension+totEmp+totEtcDed+totJDJS+totJDJB+totYMJS+totYMJB+totHIJS+totCareJS+totHIYM+totCareYM;return t!==0?nFmt(t):'-';})()}</td><td class="r" data-col="43">${(()=>{const ded=totSoDeuk+totJibang+totHealth+totCare+totPension+totEmp+totEtcDed+totJDJS+totJDJB+totYMJS+totYMJB+totHIJS+totCareJS+totHIYM+totCareYM;return(totAN-ded)!==0?nFmt(totAN-ded):'-';})()}</td>
   </tr>`;
 
   document.getElementById('salBody').innerHTML=(rows.join('')||`<tr><td colspan="${N}" style="text-align:center;padding:40px;color:var(--tx3)">데이터 없음</td></tr>`)+sumRow;
