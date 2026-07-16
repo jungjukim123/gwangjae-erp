@@ -7096,7 +7096,8 @@ function saveConRow(){
   const st입력=document.getElementById('cn2-st').value;
   const et입력=document.getElementById('cn2-et').value;
   const 소정입력=Number(document.getElementById('cn2-hrs').value)||40;
-  const 휴게입력=Number(document.getElementById('cn2-br').value)||1;
+  const 휴게입력값=document.getElementById('cn2-br').value;
+  const 휴게입력=휴게입력값===''?1:Number(휴게입력값);
 
   contracts.unshift({
     no: contracts.reduce((a,b)=>Math.max(a,b.no),0)+1,
@@ -7229,7 +7230,7 @@ function startEditCon(no){
     <td>${timeInp(c.st||'09:00')}</td>
     <td>${timeInp(c.et||'18:00')}</td>
     <td>${numInp(c.소정||40,'50px','0.5')}</td>
-    <td>${numInp(c.휴게||1,'45px','0.5')}</td>
+    <td>${numInp(c.휴게!==undefined&&c.휴게!==''?c.휴게:1,'45px','0.5')}</td>
     ${dayKeys.map(k=>`<td><input class="con-inp" type="text" value="${c[k]!==undefined?c[k]:'-'}" style="width:38px;text-align:center"></td>`).join('')}
     <td><input class="con-inp" type="email" value="${c.email||''}" placeholder="이메일" style="width:120px"></td>
     <td><input class="con-inp" type="tel" value="${c.phone||''}" placeholder="010-0000-0000" style="width:110px"></td>
@@ -7277,7 +7278,7 @@ function saveEditCon(no){
   c.st=iv(12);
   c.et=iv(13);
   c.소정=Number(iv(14))||40;
-  c.휴게=Number(iv(15))||1;
+  c.휴게=iv(15)===''?1:Number(iv(15));
   const dayKeys=['mon','tue','wed','thu','fri','sat','sun'];
   dayKeys.forEach((k,i)=>{const v=iv(16+i);c[k]=v==='주휴'?'주휴':(isNaN(Number(v))?v:Number(v));});
   c.email=iv(23);
