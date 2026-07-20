@@ -438,12 +438,14 @@ tr.con-edit-row td:last-child{border-right:2px solid #E07B2A!important}
 
   <div class="section" style="padding:16px 18px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-      <div style="font-size:14px;font-weight:800">🗓 주간 근무 스케줄</div>
+      <div style="font-size:14px;font-weight:800">🗓 근무 스케줄</div>
       <div style="display:flex;gap:6px;align-items:center">
-        <button class="btn sm" onclick="dashWeekShift(-1)">◀ 이전주</button>
+        <button id="dashModeWeekBtn" class="btn sm p" onclick="dashSetSchedMode('week')">주간</button>
+        <button id="dashModeMonthBtn" class="btn sm" onclick="dashSetSchedMode('month')">월간</button>
+        <button class="btn sm" onclick="dashSchedNav(-1)">◀ 이전</button>
         <div id="dashWeekLabel" style="font-size:12px;font-weight:700;color:var(--tx2);min-width:150px;text-align:center"></div>
-        <button class="btn sm" onclick="dashWeekShift(1)">다음주 ▶</button>
-        <button class="btn sm" onclick="dashWeekShift(0)">오늘</button>
+        <button class="btn sm" onclick="dashSchedNav(1)">다음 ▶</button>
+        <button class="btn sm" onclick="dashSchedNav(0)">오늘</button>
       </div>
     </div>
     <div class="tw" id="dashSchedTW" style="max-height:560px">
@@ -7439,7 +7441,7 @@ function nav(pid,el){
   const pg=document.getElementById('page-'+pid);if(pg)pg.classList.add('on');if(el)el.classList.add('on');
   // ★ 마지막 방문 페이지 저장
   localStorage.setItem('gwangjae_last_page',pid);
-  if(pid==='hr11'){renderDashExpiring();dashWeekShift(0);}
+  if(pid==='hr11'){renderDashExpiring();dashSchedNav(0);}
   if(pid==='hr1'){buildEmpHead();renderEmp();}
   if(pid==='hr2'){buildConHead();renderCon();}
   if(pid==='hr3'){
@@ -7668,8 +7670,10 @@ function renderDashExpiring(){
   }).join('');
 }
 
-// 주간 근무 스케줄 — 월요일 시작 주 단위로 이동
+// 근무 스케줄 — 주간/월간 전환 가능, 월요일 시작 주 단위 또는 달력월 단위로 이동
 let _dashWeekAnchor=null;
+let _dashMonthAnchor=null; // {y,m}
+let _dashSchedMode='week'; // 'week' | 'month'
 function _dashMonday(d){
   const nd=new Date(d);
   const day=nd.getDay();
@@ -7680,9 +7684,28 @@ function _dashMonday(d){
 function _dashDateStr(d){
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
-async function dashWeekShift(delta){
-  if(delta===0||!_dashWeekAnchor)_dashWeekAnchor=_dashMonday(new Date());
-  if(delta)_dashWeekAnchor.setDate(_dashWeekAnchor.getDate()+delta*7);
+async function dashSetSchedMode(mode){
+  if(_dashSchedMode===mode)return;
+  _dashSchedMode=mode;
+  const wb=document.getElementById('dashModeWeekBtn'),mb=document.getElementById('dashModeMonthBtn');
+  if(wb)wb.classList.toggle('p',mode==='week');
+  if(mb)mb.classList.toggle('p',mode==='month');
+  if(mode==='month'&&!_dashMonthAnchor){const n=new Date();_dashMonthAnchor={y:n.getFullYear(),m:n.getMonth()+1};}
+  await renderDashSched();
+}
+async function dashSchedNav(delta){
+  if(_dashSchedMode==='month'){
+    if(delta===0||!_dashMonthAnchor){const n=new Date();_dashMonthAnchor={y:n.getFullYear(),m:n.getMonth()+1};}
+    else{
+      let{y,m}=_dashMonthAnchor;
+      m+=delta;
+      if(m<1){m=12;y--;}else if(m>12){m=1;y++;}
+      _dashMonthAnchor={y,m};
+    }
+  }else{
+    if(delta===0||!_dashWeekAnchor)_dashWeekAnchor=_dashMonday(new Date());
+    if(delta)_dashWeekAnchor.setDate(_dashWeekAnchor.getDate()+delta*7);
+  }
   await renderDashSched();
 }
 // 대시보드 전용 스케줄 수기수정 캐시 — hr10의 schedOverrides/loadSchedOverrides는
@@ -7719,87 +7742,92 @@ function _dashGetScheduleState(empId,ds){
 async function renderDashSched(){
   const head=document.getElementById('dashSchedHead'),body=document.getElementById('dashSchedBody');
   if(!head||!body)return;
-  if(!_dashWeekAnchor)_dashWeekAnchor=_dashMonday(new Date());
   const days=[];
-  for(let i=0;i<7;i++){const d=new Date(_dashWeekAnchor);d.setDate(d.getDate()+i);days.push(d);}
-  const todayStr=_dashDateStr(new Date());
   const label=document.getElementById('dashWeekLabel');
-  if(label){
-    const f=days[0],l=days[6];
-    label.textContent=`${f.getFullYear()}.${String(f.getMonth()+1).padStart(2,'0')}.${String(f.getDate()).padStart(2,'0')} ~ ${String(l.getMonth()+1).padStart(2,'0')}.${String(l.getDate()).padStart(2,'0')}`;
+  if(_dashSchedMode==='month'){
+    if(!_dashMonthAnchor){const n=new Date();_dashMonthAnchor={y:n.getFullYear(),m:n.getMonth()+1};}
+    const{y,m}=_dashMonthAnchor,nDays=dim(y,m);
+    for(let d=1;d<=nDays;d++)days.push(new Date(y,m-1,d));
+    if(label)label.textContent=`${y}년 ${String(m).padStart(2,'0')}월`;
+  }else{
+    if(!_dashWeekAnchor)_dashWeekAnchor=_dashMonday(new Date());
+    for(let i=0;i<7;i++){const d=new Date(_dashWeekAnchor);d.setDate(d.getDate()+i);days.push(d);}
+    if(label){
+      const f=days[0],l=days[6];
+      label.textContent=`${f.getFullYear()}.${String(f.getMonth()+1).padStart(2,'0')}.${String(f.getDate()).padStart(2,'0')} ~ ${String(l.getMonth()+1).padStart(2,'0')}.${String(l.getDate()).padStart(2,'0')}`;
+    }
   }
-  const DOWL=['월','화','수','목','금','토','일'];
+  const todayStr=_dashDateStr(new Date());
+  const DOWL=['일','월','화','수','목','금','토'];
 
-  // 주가 걸친 월 각각의 재직자 목록 + 수기수정 스케줄(월별 스케줄 등록)을 모아서 사용 (월 경계 주간 대비)
-  const monthKeys=new Set([days[0].getFullYear()+'_'+(days[0].getMonth()+1),days[6].getFullYear()+'_'+(days[6].getMonth()+1)]);
+  // 표시되는 모든 날짜가 걸치는 월들의 재직자 목록 + 수기수정 스케줄(월별 스케줄 등록)을 모아서 사용
+  const monthKeys=new Set(days.map(d=>d.getFullYear()+'_'+(d.getMonth()+1)));
   await Promise.all(Array.from(monthKeys).map(k=>{const[y,m]=k.split('_').map(Number);return _dashLoadSchedOverridesForMonth(y,m);}));
   const empMap=new Map();
   monthKeys.forEach(k=>{const[y,m]=k.split('_').map(Number);getSchedEmpList(y,m).forEach(e=>empMap.set(e.사번,e));});
-  // 이름순 정렬 — 인원별 색상(월별 스케줄 등록의 SCHED_COLORS 재사용)을 주가 바뀌어도 사람마다 일관되게 배정하기 위함
+  // 이름순 정렬 — 인원별 색상(월별 스케줄 등록의 SCHED_COLORS 재사용)을 기간이 바뀌어도 사람마다 일관되게 배정하기 위함
   const emps=Array.from(empMap.values()).sort((a,b)=>(a.이름||'').localeCompare(b.이름||'','ko'));
   const empColor=new Map(emps.map((e,idx)=>[e.사번,_schedEmpColor(idx)]));
 
-  // 요일별로 그 날 실제 근무하는 인원의 [시작시간~종료시간] 블록을 만들고,
-  // 겹치는 사람은 서로 다른 레인(lane)에 배치해 rowspan으로 이어붙여 표시(연속 근무시간을 하나의 칸으로 병합)
-  const dayInfo=days.map(d=>{
-    const ds=_dashDateStr(d);
+  // 헤더: 날짜(고정 첫 열) + 00~23시
+  head.innerHTML='<th class="sk" style="padding:0;min-width:100px"><div class="th-inner" style="justify-content:center"><span class="th-txt">날짜</span></div></th>'
+    +Array.from({length:24},(_,h)=>`<th style="padding:0;min-width:42px"><div class="th-inner" style="justify-content:center"><span class="th-txt">${String(h).padStart(2,'0')}</span></div></th>`).join('');
+
+  let rows='';
+  days.forEach(d=>{
+    const ds=_dashDateStr(d),dow=d.getDay(),hol=isHoliday(ds);
     const blocks=[];
     emps.forEach(e=>{
       const st=_dashGetScheduleState(e.사번,ds);
       if(st.state!=='평일근무')return;
-      // ★ 해당 날짜(ds)를 실제로 포함하는(cs~ce) 계약만 선택 — 달력 상단에 표시된 그 주의 날짜 기준으로 매번 새로 조회
+      // ★ 해당 날짜(ds)를 실제로 포함하는(cs~ce) 계약만 선택 — 표시 중인 그 날짜 기준으로 매번 새로 조회
       const active=contracts.filter(c=>c.사번===e.사번&&c.구분!=='퇴사'&&c.cs<=ds&&c.ce>=ds).sort((a,b)=>new Date(b.cs)-new Date(a.cs))[0];
       const stT=(active&&active.st)||'09:00',etT=(active&&active.et)||'18:00';
-      const[stH,stM]=stT.split(':').map(Number),[etH,etM]=etT.split(':').map(Number);
+      const[stH,stM]=stT.split(':').map(Number);
+      let[etH,etM]=etT.split(':').map(Number);
       if(isNaN(stH)||isNaN(etH))return;
-      const startRow=Math.max(0,stH);
-      const endRow=Math.min(24,etM>0?etH+1:etH);
-      if(endRow<=startRow)return; // 자정 넘김 등 처리 불가한 구간은 표시하지 않음(기존 동작과 동일)
-      blocks.push({사번:e.사번,이름:e.이름,startRow,endRow});
+      if(etH===0&&etM===0)etH=24; // 종료시간이 "0:00"이면 자정(24:00)까지 근무한다는 뜻 — 그렇지 않으면 근무구간이 사라져버림
+      const startCol=Math.max(0,stH);
+      const endCol=Math.min(24,etM>0?etH+1:etH);
+      if(endCol<=startCol)return;
+      blocks.push({사번:e.사번,이름:e.이름,startCol,endCol});
     });
-    blocks.sort((a,b)=>a.startRow-b.startRow||a.이름.localeCompare(b.이름,'ko'));
-    // 레인 배정(interval partitioning): 먼저 끝난 레인부터 재사용
+    blocks.sort((a,b)=>a.startCol-b.startCol||a.이름.localeCompare(b.이름,'ko'));
+    // 레인 배정(interval partitioning): 시간대가 겹치는 사람은 같은 날짜 안에서 서로 다른 줄(레인)에 배치
     const laneEnd=[];
     blocks.forEach(b=>{
-      let lane=laneEnd.findIndex(end=>end<=b.startRow);
+      let lane=laneEnd.findIndex(end=>end<=b.startCol);
       if(lane===-1){lane=laneEnd.length;laneEnd.push(0);}
       b.lane=lane;
-      laneEnd[lane]=b.endRow;
+      laneEnd[lane]=b.endCol;
     });
     const laneCount=Math.max(1,laneEnd.length);
-    const byStart={};
-    blocks.forEach(b=>{byStart[b.startRow+'_'+b.lane]=b;});
-    return{laneCount,byStart};
-  });
+    const byLaneStart=Array.from({length:laneCount},()=>({}));
+    blocks.forEach(b=>{byLaneStart[b.lane][b.startCol]=b;});
 
-  head.innerHTML='<th class="sk" style="padding:0;min-width:60px"><div class="th-inner" style="justify-content:center"><span class="th-txt">시간</span></div></th>'
-    +days.map((d,i)=>{
-      const ds=_dashDateStr(d),lc=dayInfo[i].laneCount;
-      return`<th colspan="${lc}" style="padding:0;min-width:${58*lc}px;${ds===todayStr?'background:#DCEAFE':''}"><div class="th-inner" style="flex-direction:column;gap:0;padding:5px 4px"><span class="th-txt">${DOWL[i]}</span><span style="font-weight:400;font-size:10px;color:var(--tx3);text-transform:none">${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}</span></div></th>`;
-    }).join('');
-
-  const coveredUntil=dayInfo.map(info=>Array(info.laneCount).fill(0));
-  let rows='';
-  for(let h=0;h<24;h++){
-    const hh=String(h).padStart(2,'0')+':00';
-    rows+=`<tr><td class="sk" style="text-align:center;font-family:monospace;font-size:11px">${hh}</td>`;
-    dayInfo.forEach((info,di)=>{
-      for(let lane=0;lane<info.laneCount;lane++){
-        if(coveredUntil[di][lane]>h)continue; // 위 칸의 rowspan이 이 행까지 덮고 있으면 셀을 생성하지 않음
-        const b=info.byStart[h+'_'+lane];
+    const dateBg=ds===todayStr?'#DCEAFE':(hol?'#FEF2F2':(dow===0||dow===6?'#F8FAFC':''));
+    for(let lane=0;lane<laneCount;lane++){
+      let cells='';
+      if(lane===0){
+        cells+=`<td class="sk" rowspan="${laneCount}" style="text-align:center;font-family:monospace;font-size:11px;background:${dateBg||'var(--card)'}">${ds.slice(5)} (${DOWL[dow]})${hol?'<br><span style="color:var(--red);font-size:9px;font-weight:700">공휴일</span>':''}</td>`;
+      }
+      const laneMap=byLaneStart[lane];
+      let h=0;
+      while(h<24){
+        const b=laneMap[h];
         if(b){
-          const span=b.endRow-b.startRow;
-          coveredUntil[di][lane]=b.endRow;
+          const span=b.endCol-b.startCol;
           const c=empColor.get(b.사번)||{bg:'#EFF6FF',fg:'#2563EB'};
-          // 배경색을 td 자체에 칠해 rowspan으로 이어진 전체 구간이 하나의 연속된 색 블록으로 보이게 함
-          rows+=`<td rowspan="${span}" style="padding:4px 6px;vertical-align:top;border-left:1px solid var(--bd);background:${c.bg}"><div style="color:${c.fg};font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.이름}</div></td>`;
+          cells+=`<td colspan="${span}" style="padding:4px 6px;border-left:1px solid var(--bd);background:${c.bg}"><div style="color:${c.fg};font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.이름}</div></td>`;
+          h+=span;
         }else{
-          rows+=`<td style="padding:0;border-left:1px solid var(--bd)"></td>`;
+          cells+=`<td style="padding:0;border-left:1px solid var(--bd)"></td>`;
+          h++;
         }
       }
-    });
-    rows+='</tr>';
-  }
+      rows+=`<tr>${cells}</tr>`;
+    }
+  });
   body.innerHTML=rows;
 }
 
