@@ -7729,39 +7729,74 @@ async function renderDashSched(){
     label.textContent=`${f.getFullYear()}.${String(f.getMonth()+1).padStart(2,'0')}.${String(f.getDate()).padStart(2,'0')} ~ ${String(l.getMonth()+1).padStart(2,'0')}.${String(l.getDate()).padStart(2,'0')}`;
   }
   const DOWL=['월','화','수','목','금','토','일'];
-  head.innerHTML='<th class="sk" style="padding:0;min-width:60px"><div class="th-inner" style="justify-content:center"><span class="th-txt">시간</span></div></th>'
-    +days.map((d,i)=>{
-      const ds=_dashDateStr(d);
-      return`<th style="padding:0;min-width:120px;${ds===todayStr?'background:#DCEAFE':''}"><div class="th-inner" style="flex-direction:column;gap:0;padding:5px 4px"><span class="th-txt">${DOWL[i]}</span><span style="font-weight:400;font-size:10px;color:var(--tx3);text-transform:none">${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}</span></div></th>`;
-    }).join('');
 
   // 주가 걸친 월 각각의 재직자 목록 + 수기수정 스케줄(월별 스케줄 등록)을 모아서 사용 (월 경계 주간 대비)
   const monthKeys=new Set([days[0].getFullYear()+'_'+(days[0].getMonth()+1),days[6].getFullYear()+'_'+(days[6].getMonth()+1)]);
   await Promise.all(Array.from(monthKeys).map(k=>{const[y,m]=k.split('_').map(Number);return _dashLoadSchedOverridesForMonth(y,m);}));
   const empMap=new Map();
   monthKeys.forEach(k=>{const[y,m]=k.split('_').map(Number);getSchedEmpList(y,m).forEach(e=>empMap.set(e.사번,e));});
-  const emps=Array.from(empMap.values());
+  // 이름순 정렬 — 인원별 색상(월별 스케줄 등록의 SCHED_COLORS 재사용)을 주가 바뀌어도 사람마다 일관되게 배정하기 위함
+  const emps=Array.from(empMap.values()).sort((a,b)=>(a.이름||'').localeCompare(b.이름||'','ko'));
+  const empColor=new Map(emps.map((e,idx)=>[e.사번,_schedEmpColor(idx)]));
 
-  const dayWork=days.map(d=>{
+  // 요일별로 그 날 실제 근무하는 인원의 [시작시간~종료시간] 블록을 만들고,
+  // 겹치는 사람은 서로 다른 레인(lane)에 배치해 rowspan으로 이어붙여 표시(연속 근무시간을 하나의 칸으로 병합)
+  const dayInfo=days.map(d=>{
     const ds=_dashDateStr(d);
-    const list=[];
+    const blocks=[];
     emps.forEach(e=>{
       const st=_dashGetScheduleState(e.사번,ds);
       if(st.state!=='평일근무')return;
+      // ★ 해당 날짜(ds)를 실제로 포함하는(cs~ce) 계약만 선택 — 달력 상단에 표시된 그 주의 날짜 기준으로 매번 새로 조회
       const active=contracts.filter(c=>c.사번===e.사번&&c.구분!=='퇴사'&&c.cs<=ds&&c.ce>=ds).sort((a,b)=>new Date(b.cs)-new Date(a.cs))[0];
-      list.push({이름:e.이름,st:(active&&active.st)||'09:00',et:(active&&active.et)||'18:00'});
+      const stT=(active&&active.st)||'09:00',etT=(active&&active.et)||'18:00';
+      const[stH,stM]=stT.split(':').map(Number),[etH,etM]=etT.split(':').map(Number);
+      if(isNaN(stH)||isNaN(etH))return;
+      const startRow=Math.max(0,stH);
+      const endRow=Math.min(24,etM>0?etH+1:etH);
+      if(endRow<=startRow)return; // 자정 넘김 등 처리 불가한 구간은 표시하지 않음(기존 동작과 동일)
+      blocks.push({사번:e.사번,이름:e.이름,startRow,endRow});
     });
-    return list;
+    blocks.sort((a,b)=>a.startRow-b.startRow||a.이름.localeCompare(b.이름,'ko'));
+    // 레인 배정(interval partitioning): 먼저 끝난 레인부터 재사용
+    const laneEnd=[];
+    blocks.forEach(b=>{
+      let lane=laneEnd.findIndex(end=>end<=b.startRow);
+      if(lane===-1){lane=laneEnd.length;laneEnd.push(0);}
+      b.lane=lane;
+      laneEnd[lane]=b.endRow;
+    });
+    const laneCount=Math.max(1,laneEnd.length);
+    const byStart={};
+    blocks.forEach(b=>{byStart[b.startRow+'_'+b.lane]=b;});
+    return{laneCount,byStart};
   });
 
+  head.innerHTML='<th class="sk" style="padding:0;min-width:60px"><div class="th-inner" style="justify-content:center"><span class="th-txt">시간</span></div></th>'
+    +days.map((d,i)=>{
+      const ds=_dashDateStr(d),lc=dayInfo[i].laneCount;
+      return`<th colspan="${lc}" style="padding:0;min-width:${58*lc}px;${ds===todayStr?'background:#DCEAFE':''}"><div class="th-inner" style="flex-direction:column;gap:0;padding:5px 4px"><span class="th-txt">${DOWL[i]}</span><span style="font-weight:400;font-size:10px;color:var(--tx3);text-transform:none">${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}</span></div></th>`;
+    }).join('');
+
+  const coveredUntil=dayInfo.map(info=>Array(info.laneCount).fill(0));
   let rows='';
   for(let h=0;h<24;h++){
     const hh=String(h).padStart(2,'0')+':00';
-    const hhEnd=String(h+1).padStart(2,'0')+':00';
     rows+=`<tr><td class="sk" style="text-align:center;font-family:monospace;font-size:11px">${hh}</td>`;
-    dayWork.forEach(list=>{
-      const names=list.filter(p=>p.st<hhEnd&&p.et>hh).map(p=>p.이름);
-      rows+=`<td style="font-size:10px;line-height:1.6;padding:4px 6px;vertical-align:top">${names.map(n=>`<div style="background:#EFF6FF;color:#2563EB;border-radius:4px;padding:1px 6px;margin-bottom:2px;display:inline-block;font-weight:600">${n}</div>`).join('')}</td>`;
+    dayInfo.forEach((info,di)=>{
+      for(let lane=0;lane<info.laneCount;lane++){
+        if(coveredUntil[di][lane]>h)continue; // 위 칸의 rowspan이 이 행까지 덮고 있으면 셀을 생성하지 않음
+        const b=info.byStart[h+'_'+lane];
+        if(b){
+          const span=b.endRow-b.startRow;
+          coveredUntil[di][lane]=b.endRow;
+          const c=empColor.get(b.사번)||{bg:'#EFF6FF',fg:'#2563EB'};
+          // 배경색을 td 자체에 칠해 rowspan으로 이어진 전체 구간이 하나의 연속된 색 블록으로 보이게 함
+          rows+=`<td rowspan="${span}" style="padding:4px 6px;vertical-align:top;border-left:1px solid var(--bd);background:${c.bg}"><div style="color:${c.fg};font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.이름}</div></td>`;
+        }else{
+          rows+=`<td style="padding:0;border-left:1px solid var(--bd)"></td>`;
+        }
+      }
     });
     rows+='</tr>';
   }
