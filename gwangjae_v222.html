@@ -449,7 +449,7 @@ tr.con-edit-row td:last-child{border-right:2px solid #E07B2A!important}
       </div>
     </div>
     <div class="tw" id="dashSchedTW" style="max-height:560px">
-      <table id="dashSchedT" style="min-width:960px">
+      <table id="dashSchedT" style="width:100%;min-width:1200px">
         <thead><tr id="dashSchedHead"></tr></thead>
         <tbody id="dashSchedBody"></tbody>
       </table>
@@ -7769,9 +7769,12 @@ async function renderDashSched(){
   const emps=Array.from(empMap.values()).sort((a,b)=>(a.이름||'').localeCompare(b.이름||'','ko'));
   const empColor=new Map(emps.map((e,idx)=>[e.사번,_schedEmpColor(idx)]));
 
-  // 헤더: 날짜(고정 첫 열) + 00~23시
+  // 헤더: 날짜(고정 첫 열) + 00시~24시(각 시간대를 "HH:00~HH:00" 구간으로 표시)
   head.innerHTML='<th class="sk" style="padding:0;min-width:100px"><div class="th-inner" style="justify-content:center"><span class="th-txt">날짜</span></div></th>'
-    +Array.from({length:24},(_,h)=>`<th style="padding:0;min-width:42px"><div class="th-inner" style="justify-content:center"><span class="th-txt">${String(h).padStart(2,'0')}</span></div></th>`).join('');
+    +Array.from({length:24},(_,h)=>{
+      const hh=String(h).padStart(2,'0'),hhNext=String((h+1)%24).padStart(2,'0');
+      return`<th style="padding:0;min-width:58px"><div class="th-inner" style="flex-direction:column;gap:0;justify-content:center;padding:4px 2px"><span style="font-weight:700;font-size:9px;color:#3D4F6F">${hh}:00</span><span style="font-weight:400;font-size:8px;color:var(--tx3)">~${hhNext}:00</span></div></th>`;
+    }).join('');
 
   let rows='';
   days.forEach(d=>{
