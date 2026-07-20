@@ -498,7 +498,7 @@ tr.con-edit-row td:last-child{border-right:2px solid #E07B2A!important}
   </div>
   <div class="sg" id="empStats"></div>
   <div class="tw" id="empTW">
-    <table id="empT" style="min-width:1300px">
+    <table id="empT" style="width:100%;min-width:1300px">
       <thead><tr id="empHead"></tr></thead>
       <tbody id="empBody"></tbody>
     </table>
@@ -2591,7 +2591,7 @@ document.addEventListener('click',function(ev){
 // ============================================================
 const EMP_COLS=['NO','계약구분','구분','채용경로','이름','사번','소속','입사일','퇴사일','임금구분','시급','기본급','식대','직책수당','야간근로수당','계약시작','계약종료','시업','종료','소정','휴게','월소정'];
 function buildEmpHead(){
-  document.getElementById('empHead').innerHTML=EMP_COLS.map((t,i)=>th(t,'empT',i)).join('');
+  document.getElementById('empHead').innerHTML=EMP_COLS.map((t,i)=>th(t,'empT',i,t==='월소정'?'c':'')).join('');
 }
 // CONTRACT TABLE HEADERS (②)
 const CON_COLS=['NO','구분','발송여부','구분2','이름','사번','소속','입사일','퇴사일','임금구분','시급','기본급','식대','직책수당','야간근로수당','계약시작','계약종료','시업','종료','소정','휴게','월','화','수','목','금','토','일','이메일','전화','SlackID','발송','삭제'];
