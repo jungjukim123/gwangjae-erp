@@ -416,11 +416,24 @@ tr.con-edit-row td:last-child{border-right:2px solid #E07B2A!important}
 <!-- HR ⓪ 메인 대시보드 -->
 <div class="page" id="page-hr11">
   <div class="ph">
-    <div class="ph-l"><div class="pt">메인 대시보드</div><div class="psub">이번 달 계약종료 예정자 · 주간 근무 스케줄 한눈에 보기</div></div>
+    <div class="ph-l"><div class="pt">메인 대시보드</div><div class="psub">계약종료 예정자 · 근무 스케줄 한눈에 보기</div></div>
   </div>
 
   <div class="section" style="padding:16px 18px">
-    <div style="font-size:14px;font-weight:800;margin-bottom:10px">📋 이번 달 계약종료 예정자</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div style="font-size:14px;font-weight:800">📋 계약종료 예정자</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <select id="dashExpYear" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderDashExpiring()"></select>
+        <select id="dashExpMonth" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderDashExpiring()">
+          <option value="1">01월</option><option value="2">02월</option>
+          <option value="3">03월</option><option value="4">04월</option>
+          <option value="5">05월</option><option value="6">06월</option>
+          <option value="7">07월</option><option value="8">08월</option>
+          <option value="9">09월</option><option value="10">10월</option>
+          <option value="11">11월</option><option value="12">12월</option>
+        </select>
+      </div>
+    </div>
     <div class="tw" id="dashExpTW" style="max-height:320px">
       <table id="dashExpT">
         <thead><tr>
@@ -7441,7 +7454,7 @@ function nav(pid,el){
   const pg=document.getElementById('page-'+pid);if(pg)pg.classList.add('on');if(el)el.classList.add('on');
   // ★ 마지막 방문 페이지 저장
   localStorage.setItem('gwangjae_last_page',pid);
-  if(pid==='hr11'){renderDashExpiring();dashSchedNav(0);}
+  if(pid==='hr11'){buildDashExpHead();renderDashExpiring();dashSchedNav(0);}
   if(pid==='hr1'){buildEmpHead();renderEmp();}
   if(pid==='hr2'){buildConHead();renderCon();}
   if(pid==='hr3'){
@@ -7621,13 +7634,23 @@ async function reloadSchedMonth(){
 }
 
 // ============================================================
-// 메인 대시보드 (hr11) — 이번 달 계약종료 예정자 + 주간 근무 스케줄
+// 메인 대시보드 (hr11) — 계약종료 예정자(귀속년월 선택) + 근무 스케줄
 // ============================================================
 
-// 사번(없으면 이름) 그룹의 최신 계약 중, 아직 퇴사하지 않았고 이번 달에 계약이 종료되는 인원
-function _dashContractsEndingThisMonth(){
-  const now=new Date();
-  const ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+function buildDashExpHead(){
+  const yrEl=document.getElementById('dashExpYear');
+  if(yrEl&&!yrEl.dataset.built){
+    const now=new Date();
+    yrEl.innerHTML=['2025','2026','2027'].map(y=>`<option value="${y}">${y}년</option>`).join('');
+    yrEl.value=String(now.getFullYear());
+    const moEl=document.getElementById('dashExpMonth');
+    if(moEl)moEl.value=String(now.getMonth()+1);
+    yrEl.dataset.built='1';
+  }
+}
+
+// 사번(없으면 이름) 그룹의 최신 계약 중, 아직 퇴사하지 않았고 선택한 귀속년월에 계약이 종료되는 인원
+function _dashContractsEndingInMonth(ym){
   const groups={};
   contracts.forEach(c=>{
     const k=c.사번||('__name__'+c.이름);
@@ -7650,9 +7673,12 @@ function _dashContractsEndingThisMonth(){
 function renderDashExpiring(){
   const body=document.getElementById('dashExpBody');
   if(!body)return;
-  const list=_dashContractsEndingThisMonth();
+  const yr=parseInt((document.getElementById('dashExpYear')||{}).value)||new Date().getFullYear();
+  const mo=parseInt((document.getElementById('dashExpMonth')||{}).value)||(new Date().getMonth()+1);
+  const ym=yr+'-'+String(mo).padStart(2,'0');
+  const list=_dashContractsEndingInMonth(ym);
   if(!list.length){
-    body.innerHTML=`<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--tx3)">이번 달 계약종료 예정자가 없습니다.</td></tr>`;
+    body.innerHTML=`<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--tx3)">${yr}년 ${String(mo).padStart(2,'0')}월 계약종료 예정자가 없습니다.</td></tr>`;
     return;
   }
   const today=new Date();today.setHours(0,0,0,0);
@@ -7769,15 +7795,11 @@ async function renderDashSched(){
   const emps=Array.from(empMap.values()).sort((a,b)=>(a.이름||'').localeCompare(b.이름||'','ko'));
   const empColor=new Map(emps.map((e,idx)=>[e.사번,_schedEmpColor(idx)]));
 
-  // 헤더: 날짜(고정 첫 열) + 00시~24시(각 시간대를 "HH:00~HH:00" 구간으로 표시)
-  head.innerHTML='<th class="sk" style="padding:0;min-width:100px"><div class="th-inner" style="justify-content:center"><span class="th-txt">날짜</span></div></th>'
-    +Array.from({length:24},(_,h)=>{
-      const hh=String(h).padStart(2,'0'),hhNext=String((h+1)%24).padStart(2,'0');
-      return`<th style="padding:0;min-width:58px"><div class="th-inner" style="flex-direction:column;gap:0;justify-content:center;padding:4px 2px"><span style="font-weight:700;font-size:9px;color:#3D4F6F">${hh}:00</span><span style="font-weight:400;font-size:8px;color:var(--tx3)">~${hhNext}:00</span></div></th>`;
-    }).join('');
-
-  let rows='';
-  days.forEach(d=>{
+  // 1단계: 날짜별 근무 블록·레인을 먼저 계산하고, 실제로 근무자가 있는 시간대만 모아둔다
+  // (근무가 전혀 없는 시간대 열은 헤더에서부터 아예 감춘다 — 계약기간관리에 그 시간대 인원이
+  //  추가되는 순간 usedHours에 포함되어 자동으로 다시 나타난다)
+  const usedHours=new Set();
+  const dayCalc=days.map(d=>{
     const ds=_dashDateStr(d),dow=d.getDay(),hol=isHoliday(ds);
     const blocks=[];
     emps.forEach(e=>{
@@ -7794,6 +7816,7 @@ async function renderDashSched(){
       const endCol=Math.min(24,etM>0?etH+1:etH);
       if(endCol<=startCol)return;
       blocks.push({사번:e.사번,이름:e.이름,startCol,endCol});
+      for(let h=startCol;h<endCol;h++)usedHours.add(h);
     });
     blocks.sort((a,b)=>a.startCol-b.startCol||a.이름.localeCompare(b.이름,'ko'));
     // 레인 배정(interval partitioning): 시간대가 겹치는 사람은 같은 날짜 안에서 서로 다른 줄(레인)에 배치
@@ -7807,31 +7830,53 @@ async function renderDashSched(){
     const laneCount=Math.max(1,laneEnd.length);
     const byLaneStart=Array.from({length:laneCount},()=>({}));
     blocks.forEach(b=>{byLaneStart[b.lane][b.startCol]=b;});
+    return{ds,dow,hol,laneCount,byLaneStart};
+  });
+  const hourList=[...usedHours].sort((a,b)=>a-b);
 
+  // 헤더: 날짜(고정 첫 열) + 근무자가 있는 시간대만 "HH:00~HH:00" 한 줄로 표시(위 날짜 헤더와 굵기·색 통일)
+  head.innerHTML='<th class="sk" style="padding:0;min-width:120px"><div class="th-inner" style="justify-content:center"><span class="th-txt">날짜</span></div></th>'
+    +hourList.map(h=>{
+      const hh=String(h).padStart(2,'0'),hhNext=String((h+1)%24).padStart(2,'0');
+      return`<th style="padding:0;min-width:92px"><div class="th-inner" style="justify-content:center"><span class="th-txt">${hh}:00~${hhNext}:00</span></div></th>`;
+    }).join('');
+
+  let rows='';
+  let todayRowId=null;
+  dayCalc.forEach(info=>{
+    const{ds,dow,laneCount,byLaneStart,hol}=info;
     const dateBg=ds===todayStr?'#DCEAFE':(hol?'#FEF2F2':(dow===0||dow===6?'#F8FAFC':''));
     for(let lane=0;lane<laneCount;lane++){
       let cells='';
       if(lane===0){
-        cells+=`<td class="sk" rowspan="${laneCount}" style="text-align:center;font-family:monospace;font-size:11px;background:${dateBg||'var(--card)'}">${ds.slice(5)} (${DOWL[dow]})${hol?'<br><span style="color:var(--red);font-size:9px;font-weight:700">공휴일</span>':''}</td>`;
+        const rid=ds===todayStr?` id="dashTodayRow"`:'';
+        if(rid)todayRowId='dashTodayRow';
+        cells+=`<td class="sk"${rid} rowspan="${laneCount}" style="text-align:center;font-size:11px;background:${dateBg||'var(--card)'}">${ds.replace(/-/g,'.')}(${DOWL[dow]})${hol?'<br><span style="color:var(--red);font-size:9px;font-weight:700">공휴일</span>':''}</td>`;
       }
       const laneMap=byLaneStart[lane];
-      let h=0;
-      while(h<24){
-        const b=laneMap[h];
+      let pos=0;
+      while(pos<hourList.length){
+        const realH=hourList[pos];
+        const b=laneMap[realH];
         if(b){
           const span=b.endCol-b.startCol;
           const c=empColor.get(b.사번)||{bg:'#EFF6FF',fg:'#2563EB'};
           cells+=`<td colspan="${span}" style="padding:4px 6px;border-left:1px solid var(--bd);background:${c.bg}"><div style="color:${c.fg};font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.이름}</div></td>`;
-          h+=span;
+          pos+=span;
         }else{
           cells+=`<td style="padding:0;border-left:1px solid var(--bd)"></td>`;
-          h++;
+          pos++;
         }
       }
       rows+=`<tr>${cells}</tr>`;
     }
   });
-  body.innerHTML=rows;
+  body.innerHTML=rows||`<tr><td style="text-align:center;padding:30px;color:var(--tx3)">표시할 근무 스케줄이 없습니다.</td></tr>`;
+  // "오늘" 이동 — 오늘 날짜 행이 현재 보이는 기간(주간/월간)에 포함되어 있으면 스크롤로 바로 보여줌
+  if(todayRowId){
+    const todayCell=document.getElementById(todayRowId);
+    if(todayCell)todayCell.scrollIntoView({block:'center',inline:'start'});
+  }
 }
 
 // 셀 수정 팝업(구분(N) 열 팝업과 동일 구조 — body에 상주시켜 sticky 밖으로 노출)
