@@ -287,6 +287,7 @@ tr.con-edit-row td:last-child{border-right:2px solid #E07B2A!important}
 /* ══ 선택된 계약 건 — 테두리 대신 은은한 배경색 + 왼쪽 강조선으로 표시(신규/편집 행의 테두리 강조와 구분) ══ */
 tr.con-selected td{background:#F5F3FF!important}
 tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
+#conT tbody tr td{cursor:pointer}
 </style>
 </head>
 <body>
@@ -6965,7 +6966,7 @@ function renderCon(){
       :c.발송==='완료'?`<span class="bdg bg" style="font-size:10px">✓ 발송완료</span>`
       :`<button class="btn sm bl" onclick="sendDoc(${c.no},'계약서')">📧 계약서</button>`;
     const trCls=[isExit?'retd':'',_selectedConNo===c.no?'con-selected':''].filter(Boolean).join(' ');
-    return`<tr${trCls?` class="${trCls}"`:''} data-con-no="${c.no}">
+    return`<tr${trCls?` class="${trCls}"`:''} data-con-no="${c.no}" style="cursor:pointer" onclick="if(!event.target.closest('button,input'))toggleConSelect(${c.no})">
       <td class="c"><input type="checkbox" ${_selectedConNo===c.no?'checked':''} onclick="toggleConSelect(${c.no})" style="cursor:pointer;width:14px;height:14px"></td>
       <td>${idx+1}</td>
       <td><span class="bdg ${tm[c.구분]||'bs'}">${c.구분}</span></td>
