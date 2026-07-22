@@ -51,5 +51,20 @@
       "Bash(curl -s -m 15 'https://dcvitbydqidndwbqqprm.supabase.co/rest/v1/contracts?%EC%9D%B4%EB%A6%84=eq.%EB%B3%80%EC%A0%95%EC%9D%B8&select=no,%EC%82%AC%EB%B2%88,%EC%9D%B4%EB%A6%84,%EA%B5%AC%EB%B6%84,cs,ce,%ED%87%B4%EC%82%AC' -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjdml0YnlkcWlkbmR3YnFxcHJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDE1ODMsImV4cCI6MjA5Nzc3NzU4M30.xHDxj8-0jTTOrWTErOMPQB4EvyKhuOsgkPAjAB2txmc' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjdml0YnlkcWlkbmR3YnFxcHJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDE1ODMsImV4cCI6MjA5Nzc3NzU4M30.xHDxj8-0jTTOrWTErOMPQB4EvyKhuOsgkPAjAB2txmc' -w '\\\\nSTATUS:%{http_code}\\\\n')",
       "Bash(curl -s -m 15 'https://dcvitbydqidndwbqqprm.supabase.co/rest/v1/employees?%EC%82%AC%EB%B2%88=eq.B2600406&select=*' -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjdml0YnlkcWlkbmR3YnFxcHJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDE1ODMsImV4cCI6MjA5Nzc3NzU4M30.xHDxj8-0jTTOrWTErOMPQB4EvyKhuOsgkPAjAB2txmc' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjdml0YnlkcWlkbmR3YnFxcHJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDE1ODMsImV4cCI6MjA5Nzc3NzU4M30.xHDxj8-0jTTOrWTErOMPQB4EvyKhuOsgkPAjAB2txmc' -w '\\\\nSTATUS:%{http_code}\\\\n')"
     ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "$env:PATH += ';C:\\Program Files\\Git\\cmd'; Set-Location 'c:\\Users\\jungjukim\\OneDrive - 바로고\\바탕 화면\\AX PRJECT\\2. 관제센터 플랫폼 구축'; git add -A; git commit -m 'auto: 파일 수정'; if ($LASTEXITCODE -eq 0) { git push origin main }",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
   }
 }
