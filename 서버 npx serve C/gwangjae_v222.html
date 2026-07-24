@@ -1119,6 +1119,10 @@ let _somyungData = {};
 // slackData — PERSISTENCE saveAll에서 참조하므로 반드시 먼저 선언
 let slackData={};
 
+// ★ 월별 스케줄 등록(sched_saved) 데이터 — _applyData에서 gbn 계산 시 contracts보다 우선 적용
+// key: `${사번}_${YYYY-MM-DD}` → {state:'평일근무'|'무급휴일'|'주휴일', note:''}
+let _schedSaved = {};
+
 // ============================================================
 // ★ SUPABASE 설정 ★
 // ============================================================
@@ -1292,6 +1296,16 @@ function _applyData(data) {
   // ★ 외부(Supabase) 동기화 발생 — 월별 근태 현황의 재렌더링 스킵 캐시를 무효화
   _hrAttDataVersion++;
 
+  // ★ 월별 스케줄 등록(sched_saved) 데이터 로드 — gbn 계산 중간 레이어로 사용
+  if (data.sched_saved && data.sched_saved.length) {
+    _schedSaved = {};
+    data.sched_saved.forEach(r => {
+      let days = [];
+      try { days = JSON.parse(r.days_json || '[]'); } catch(e) {}
+      days.forEach(d => { if(d && d.date) _schedSaved[r.emp_id + '_' + d.date] = {state: d.state, note: d.note || ''}; });
+    });
+  }
+
   // employees — 사번 기준 중복 제거 후 로드 (Supabase에 중복 저장된 경우 방어)
   if (data.employees && data.employees.length) {
     const _empMap = new Map();
@@ -1437,6 +1451,16 @@ function _applyData(data) {
         else {
           gbn = isHoliday(ds) ? '공휴일' : '평일';
           소정 = typeof sojeong === 'number' ? sojeong : sched;
+        }
+        // ★ 월별 스케줄 등록(sched_saved) override — contracts 기본값보다 우선, gbn수기보다 낮음
+        const _sov = _schedSaved[emp.사번 + '_' + ds];
+        if (_sov && _sov.state && gbn !== '계약기간 없음') {
+          if (_sov.state === '주휴일')       { gbn = '주휴일';  소정 = 0; }
+          else if (_sov.state === '무급휴일') { gbn = '무급휴일'; 소정 = 0; }
+          else if (_sov.state === '평일근무') {
+            gbn = isHoliday(ds) ? '공휴일' : '평일';
+            소정 = typeof sojeong === 'number' ? sojeong : (typeof sched === 'number' ? sched : 0);
+          }
         }
         const sd = (days || []).find(x => x.date === ds) || {};
         const _sojeong = (sd.소정수기 !== undefined && sd.소정수기 !== '') ? (sd.소정수기 === '0' ? 0 : sd.소정수기) : 소정;
@@ -1729,13 +1753,14 @@ async function loadSaved() {
   _setDbStatus('syncing', '불러오는 중...');
   _setLoadingMsg('Supabase에서 데이터 불러오는 중...');
   try {
-    const [empRows, conRows, attRows, slackRows, hrRows, metaRows] = await Promise.all([
+    const [empRows, conRows, attRows, slackRows, hrRows, metaRows, schedRows] = await Promise.all([
       _sbSelect('employees'),
       _sbSelect('contracts'),
       _sbSelect('att_data'),
       _sbSelect('slack_data'),
       _sbSelect('hr_saved'),
       _sbSelect('meta'),
+      _sbSelect('sched_saved'),
     ]);
 
     // 데이터 구조 변환 후 _applyData 형식으로 맞춤
@@ -1753,6 +1778,7 @@ async function loadSaved() {
       contracts: conRows.map(c => { const {key, ...rest} = c; return {...rest, _dbKey: key}; }), // slackId 포함됨 (★ _dbKey: 사번 입력으로 key 변경 시 이전 row 삭제용)
       att_data, slack_data,
       hr_saved: hrRows,
+      sched_saved: schedRows,
       meta, ver: 5
     };
 
@@ -7959,9 +7985,32 @@ function toggleSchedMenu(el,eid,ds){
   _activeSchedCell=el;
   window._openSchedMenu(el,eid,ds);
 }
+function _applySchedOvToHrRows(empId,ds,state){
+  Object.values(_hrRowsCache).forEach(rows=>{
+    const row=rows.find(r=>r.emp&&r.emp.사번===empId);
+    if(!row)return;
+    const day=row.days.find(d=>d.date===ds);
+    if(!day||day.gbn==='계약기간 없음')return;
+    if(day.gbn수기!==undefined&&day.gbn수기!=='')return; // gbn수기 최우선 유지
+    const sojeong=getSchedSojeong(empId,ds);
+    const sched=getSched(empId,ds);
+    if(state==='주휴일'){day.gbn='주휴일';day.소정=0;}
+    else if(state==='무급휴일'){day.gbn='무급휴일';day.소정=0;}
+    else if(state==='평일근무'){
+      day.gbn=isHoliday(ds)?'공휴일':'평일';
+      day.소정=typeof sojeong==='number'?sojeong:(typeof sched==='number'?sched:0);
+    }
+  });
+  _hrAttDataVersion++;
+  const hr3el=document.getElementById('hr3');
+  if(hr3el&&hr3el.style.display!=='none')renderHrAtt();
+}
 function applySchedCell(empId,ds,state,note){
   schedOverrides[empId+'_'+ds]={state,note:note||''};
   if(typeof _dashSchedOv!=='undefined')_dashSchedOv[empId+'_'+ds]={state,note:note||''}; // 메인 대시보드 캐시도 동기화
+  // ★ _schedSaved 동기화 및 hrAttRows 즉시 반영
+  _schedSaved[empId+'_'+ds]={state,note:note||''};
+  _applySchedOvToHrRows(empId,ds,state);
   window._closeSchedMenu();_activeSchedCell=null;
   renderSchedMgmt();
   const yrEl=document.getElementById('schedYear'),moEl=document.getElementById('schedMonth');
