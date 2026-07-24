@@ -7609,8 +7609,8 @@ function getSchedEmpList(yr,mo){
 
 // 특정 직원·날짜의 스케줄 상태: 수기 수정값이 있으면 그것을, 없으면 계약기간관리 요일별 스케줄에서 자동 산출
 function getScheduleState(empId,ds){
-  const ov=schedOverrides[empId+'_'+ds];
-  if(ov)return ov;
+  const ov=schedOverrides[empId+'_'+ds]||_schedSaved[empId+'_'+ds];
+  if(ov&&ov.state)return ov;
   const raw=getSched(empId,ds); // '주휴' | 숫자(h) | '계약기간 없음'
   if(raw==='주휴')return{state:'주휴일',note:''};
   if(raw==='계약기간 없음')return{state:'',note:''};
