@@ -2736,11 +2736,11 @@ async function syncSlack(){
       let dateStr=row.날짜||'';
       const timeStr=row.시간||'';
       if(!name||!gubun||!dateStr)continue;
-      // 퇴근이고 시간이 00:01 이상(자정 넘김)이면 전날 퇴근 + 시간 00:00 처리
+      // 퇴근이고 시간이 00:00~00:59(자정 넘김)이면 전날 퇴근 + 시간 00:00 처리
       let fixedTimeStr=timeStr;
       if(gubun==='퇴근'&&timeStr){
         const [hh,mm]=timeStr.split(':').map(Number);
-        if(hh===0&&mm>=1){
+        if(hh===0){
           const prev=new Date(dateStr);
           prev.setDate(prev.getDate()-1);
           dateStr=_localDate(prev);
@@ -3149,10 +3149,10 @@ async function slackDownload(){
       let dateStr=row.날짜;
       const gubun=(row.구분||'').trim();
       const timeStr=row.시간||'';
-      // 퇴근 00:01 이상 → 전날로 보정 후 필터
+      // 퇴근 00:00~00:59 → 전날로 보정 후 필터
       if(gubun==='퇴근'&&timeStr){
         const [hh,mm]=timeStr.split(':').map(Number);
-        if(hh===0&&mm>=1){
+        if(hh===0){
           const prev=new Date(dateStr);
           prev.setDate(prev.getDate()-1);
           dateStr=_localDate(prev);
@@ -3172,10 +3172,10 @@ async function slackDownload(){
       const gubun=(row.구분||'').trim();
       let dateStr=row.날짜||'';
       let timeStr=row.시간||'';
-      // 퇴근 00:01 이상이면 전날+00:00
+      // 퇴근 00:00~00:59면 전날+00:00
       if(gubun==='퇴근'&&timeStr){
         const [hh,mm]=timeStr.split(':').map(Number);
-        if(hh===0&&mm>=1){
+        if(hh===0){
           const prev=new Date(dateStr);
           prev.setDate(prev.getDate()-1);
           dateStr=_localDate(prev);
