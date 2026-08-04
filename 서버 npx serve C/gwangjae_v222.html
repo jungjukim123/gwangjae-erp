@@ -2107,7 +2107,7 @@ function getMergedEmp(e){
     ...e,
     구분: con.type||e.구분,
     임금: con.임금||e.임금,
-    시급: Number(con.시급)||e.시급||0,
+    시급: (con.임금||e.임금)==='시급직'?(Number(con.시급)||e.시급||0):0,
     기본: Number(con.기본)||e.기본||0,
     식대: Number(con.식대)||e.식대||0,
     직책: Number(con.직책)||e.직책||0,
@@ -6869,7 +6869,7 @@ function downloadConExcel(){
   ];
   const wsData=[hdr,...sortedList.map((c,idx)=>[
     idx+1,c.구분,c.발송||'미발송',c.type,c.이름,c.사번,c.소속,c.입사,c.퇴사||'',
-    c.임금,c.시급||0,c.기본||0,c.식대||0,c.직책||0,c.야간||0,
+    c.임금,c.임금==='시급직'?(c.시급||0):0,c.기본||0,c.식대||0,c.직책||0,c.야간||0,
     c.cs,c.ce,c.st,c.et,c.소정,c.휴게,
     c.mon,c.tue,c.wed,c.thu,c.fri,c.sat,c.sun,
     c.email||'',c.phone||'',c.slackId||''
@@ -7100,7 +7100,7 @@ function renderCon(){
       <td style="font-size:11px">${c.입사}</td>
       <td style="font-size:11px;color:${c.퇴사?'var(--red)':'var(--tx3)'}">${c.퇴사||'-'}</td>
       <td><span class="bdg ${c.임금==='월급직'?'bb':'bt'}" style="font-size:10px">${c.임금}</span></td>
-      <td>${c.시급||'-'}</td>
+      <td>${c.임금==='시급직'?(c.시급||'-'):'-'}</td>
       <td style="text-align:right">${c.기본?nFmt(c.기본):'-'}</td>
       <td style="text-align:right">${c.식대?nFmt(c.식대):'-'}</td>
       <td style="text-align:right;color:${(c.직책||0)>0?'var(--purple)':'var(--tx3)'}">${(c.직책||0)>0?nFmt(c.직책):'-'}</td>
@@ -7341,7 +7341,7 @@ function saveConRow(){
   const 소속입력=document.getElementById('cn2-soct').value||'딜버';
   const 입사입력=document.getElementById('cn2-join').value||'';
   const 임금입력=document.getElementById('cn2-stype').value;
-  const 시급입력=Number(document.getElementById('cn2-rate').value)||0;
+  const 시급입력=임금입력==='시급직'?(Number(document.getElementById('cn2-rate').value)||0):0;
   const 기본입력=Number(document.getElementById('cn2-base').value)||0;
   const 식대입력=Number(document.getElementById('cn2-meal').value)||0;
   const st입력=document.getElementById('cn2-st').value;
@@ -7519,7 +7519,7 @@ function saveEditCon(no){
   c.입사=iv(3);
   c.퇴사=iv(4);
   c.임금=sv(2);
-  c.시급=Number(iv(5))||0;
+  c.시급=c.임금==='시급직'?(Number(iv(5))||0):0;
   c.기본=Number(iv(6))||0;
   c.식대=Number(iv(7))||0;
   c.직책=Number(iv(8))||0;
