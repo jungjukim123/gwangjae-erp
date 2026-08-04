@@ -382,6 +382,8 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
   <div class="nsec hr-menu" style="display:none">근태관리</div>
   <div class="ni hr-menu" style="display:none" onclick="nav('hr3',this)">월별 근태 현황</div>
   <div class="ni hr-menu" style="display:none" onclick="nav('hr5',this)">근태소명관리</div>
+  <div class="ni hr-menu" style="display:none" onclick="nav('hr12',this)">연차현황</div>
+  <div class="ni hr-menu" style="display:none" onclick="nav('hr13',this)">연차사용현황</div>
   <div class="nsec hr-menu" style="display:none">스케줄관리</div>
   <div class="ni hr-menu" style="display:none" onclick="nav('hr10',this)">월별 스케줄 등록</div>
   <div class="nsec hr-menu" style="display:none">급여관리</div>
@@ -666,6 +668,48 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
         </table>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- HR ⑫ 연차현황 -->
+<div class="page" id="page-hr12">
+  <div class="ph">
+    <div class="ph-l"><div class="pt">연차현황</div><div class="psub">입사일 기준 연차 발생·사용·잔여 자동 계산 · 계약기간관리처럼 회차 누적 표시</div></div>
+    <div class="bg-row">
+      <div class="swrap"><input type="text" class="sinp" id="lsQ" placeholder="이름·사번" oninput="renderLeaveStatus()" onkeydown="if(event.key==='Enter'){renderLeaveStatus();this.blur();}" style="width:150px"></div>
+      <button class="btn bl" onclick="downloadLeaveStatusExcel()">⬇ 엑셀 다운로드</button>
+    </div>
+  </div>
+  <div class="tw" id="lsTW">
+    <table id="lsT" style="width:100%;min-width:1100px">
+      <thead><tr id="lsHead"></tr></thead>
+      <tbody id="lsBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- HR ⑬ 연차사용현황 -->
+<div class="page" id="page-hr13">
+  <div class="ph">
+    <div class="ph-l"><div class="pt">연차사용현황</div><div class="psub">월별근태현황 연차/반차 자동연동(읽기전용) + 수동 추가/엑셀 업로드</div></div>
+    <div class="bg-row">
+      <select id="luYear" style="padding:6px 10px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderLeaveUsage()">
+        <option value="all">전체 기간</option>
+        <option value="2025">2025년</option>
+        <option value="2026">2026년</option>
+        <option value="2027">2027년</option>
+      </select>
+      <div class="swrap"><input type="text" class="sinp" id="luQ" placeholder="이름·사번" oninput="renderLeaveUsage()" onkeydown="if(event.key==='Enter'){renderLeaveUsage();this.blur();}" style="width:150px"></div>
+      <button class="btn p" onclick="addLeaveUsageRow()">+ 사용 추가</button>
+      <label class="btn am" style="cursor:pointer">📂 엑셀 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="uploadLeaveUsageExcel(event)"></label>
+      <button class="btn bl" onclick="downloadLeaveUsageExcel()">⬇ 엑셀 다운로드</button>
+    </div>
+  </div>
+  <div class="tw" id="luTW">
+    <table id="luT" style="width:100%;min-width:1000px">
+      <thead><tr id="luHead"></tr></thead>
+      <tbody id="luBody"></tbody>
+    </table>
   </div>
 </div>
 
@@ -1543,6 +1587,7 @@ function _applyData(data) {
     try { if (_v('salCfg'))        salCfg        = JSON.parse(_v('salCfg'));          } catch(e) {}
     try { if (_v('salConfirmed'))  _salConfirmed = JSON.parse(_v('salConfirmed'));    } catch(e) {}
     try { if (_v('salSnapshot'))   _salSnapshot  = JSON.parse(_v('salSnapshot'));     } catch(e) {}
+    try { if (_v('leaveUsage'))    leaveUsage    = JSON.parse(_v('leaveUsage'));      } catch(e) {}
     // 계정 목록 복원
     try {
       const raw = _v('accounts');
@@ -1717,6 +1762,7 @@ async function saveAll() {
       { key: 'salCfg',        value: JSON.stringify(salCfg||{}),           updated: _now },
       { key: 'salConfirmed',  value: JSON.stringify(_salConfirmed||{}),    updated: _now },
       { key: 'salSnapshot',   value: JSON.stringify(_salSnapshot||{}),     updated: _now },
+      { key: 'leaveUsage',    value: JSON.stringify(leaveUsage||[]),       updated: _now },
     ];
 
     // 로컬 캐시 즉시 저장
@@ -1756,15 +1802,13 @@ async function loadSaved() {
   _setDbStatus('syncing', '불러오는 중...');
   _setLoadingMsg('Supabase에서 데이터 불러오는 중...');
   try {
-    const [empRows, conRows, attRows, slackRows, hrRows, metaRows, schedRows] = await Promise.all([
-      _sbSelect('employees'),
-      _sbSelect('contracts'),
-      _sbSelect('att_data'),
-      _sbSelect('slack_data'),
-      _sbSelect('hr_saved'),
-      _sbSelect('meta'),
-      _sbSelect('sched_saved'),
-    ]);
+    // ★ Promise.all이 아닌 allSettled 사용 — 테이블 하나가 없거나 일시 오류여도
+    //   (예: sched_saved 테이블 미생성) 나머지 테이블 동기화까지 통째로 오프라인 폴백되지 않도록 함
+    const _tables = ['employees','contracts','att_data','slack_data','hr_saved','meta','sched_saved'];
+    const _results = await Promise.allSettled(_tables.map(t => _sbSelect(t)));
+    const _failed = [];
+    _results.forEach((r, i) => { if (r.status === 'rejected') { _failed.push(_tables[i]); console.warn(`_sbSelect(${_tables[i]}) 실패:`, r.reason); } });
+    const [empRows, conRows, attRows, slackRows, hrRows, metaRows, schedRows] = _results.map(r => r.status === 'fulfilled' ? r.value : []);
 
     // 데이터 구조 변환 후 _applyData 형식으로 맞춤
     const att_data = {};
@@ -1791,7 +1835,7 @@ async function loadSaved() {
     _applyData(data);
     const t = new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
     _dbOk = true;
-    _setDbStatus('ok', `동기화 완료 ${t}`);
+    _setDbStatus('ok', _failed.length ? `동기화 완료 ${t} (⚠️ ${_failed.join(', ')} 테이블 없음/실패)` : `동기화 완료 ${t}`);
     return true;
   } catch(e) {
     console.warn('loadSaved 실패, 로컬 캐시 시도:', e);
@@ -1832,6 +1876,8 @@ async function manualSync() {
     else if(p==='hr3') renderHrAtt();
     else if(p==='hr4') { buildSalHead(); renderSal(); }
     else if(p==='hr5') renderSomyung();
+    else if(p==='hr12') renderLeaveStatus();
+    else if(p==='hr13') renderLeaveUsage();
   } catch(e) {
     _setDbStatus('error', '동기화 실패');
     _toast('❌ 동기화 실패. 인터넷 연결을 확인해주세요.', 'error');
@@ -1901,6 +1947,8 @@ function _onRealtimeChange(msg) {
     else if(p==='hr3') renderHrAtt();
     else if(p==='hr4') { buildSalHead(); renderSal(); }
     else if(p==='hr5') renderSomyung();
+    else if(p==='hr12') renderLeaveStatus();
+    else if(p==='hr13') renderLeaveUsage();
     _toast('☁️ 실시간 동기화 완료', 'ok');
   }, 500);
 }
@@ -2122,6 +2170,80 @@ function getMergedEmp(e){
   };
 }
 function rate(e){const m=getMergedEmp(e);return m.임금==='시급직'?m.시급:((m.기본||0)+(m.식대||0)+(m.직책||0))/(m.월소정||209)}
+
+// ============================================================
+// 연차현황 / 연차사용현황 — 계산 헬퍼
+// ============================================================
+let leaveUsage=[]; // 수동/엑셀 업로드분만 저장: {no,사번,구분('연차'|'반차'),사용일,updated} — 월별근태현황 자동연동분은 저장하지 않고 매번 계산
+
+function addDaysStr(ds,n){const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return _localDate(d);}
+function addMonthsClamped(ds,n){const[y,m,d]=ds.split('-').map(Number);const t=(m-1)+n;const ny=y+Math.floor(t/12);const nm=(t%12+12)%12+1;return dStr(ny,nm,Math.min(d,dim(ny,nm)));}
+function addYearsClamped(ds,n){return addMonthsClamped(ds,n*12);}
+
+// 사번의 임금구분(급여종)을 특정 날짜 시점 계약 기준으로 조회 — getWeekSojeong과 동일 패턴
+function getConWageType(empId,ds){
+  const m=contracts.filter(c=>c.사번===empId&&c.구분!=='퇴사'&&c.cs<=ds&&c.ce>=ds).sort((a,b)=>new Date(b.cs)-new Date(a.cs));
+  if(m.length)return m[0].임금||'시급직';
+  const e=employees.find(x=>x.사번===empId);return e?.임금||'시급직';
+}
+
+// 연차 발생 회차 계산 (입사일 기준 근로기준법 표준: 1년미만 매월1일 최대11일 / 1년이상 15+2년마다1일 가산 최대25일)
+function buildLeaveAccrualRows(empId){
+  const join=getJoinDate(empId);if(!join)return[];
+  const today=dStr(new Date().getFullYear(),new Date().getMonth()+1,new Date().getDate());
+  const quit=getQuitDate(empId);
+  const asOf=(quit&&quit<today)?quit:today;
+  const rows=[];
+  const bucket0Ce=addDaysStr(addYearsClamped(join,1),-1);
+  let months=0;
+  for(let n=1;n<=11;n++){if(addMonthsClamped(join,n)<=asOf)months=n;else break;}
+  rows.push({구분:'1년미만연차',cs:join,ce:bucket0Ce,발생:months});
+  let n=1;
+  while(n<=60){
+    const bStart=addYearsClamped(join,n);
+    if(bStart>asOf)break;
+    const bEnd=addDaysStr(addYearsClamped(join,n+1),-1);
+    rows.push({구분:'1년이상연차',cs:bStart,ce:bEnd,발생:Math.min(15+Math.floor((n-1)/2),25)});
+    n++;
+  }
+  return rows;
+}
+
+// 사번의 전체 연차/반차 사용 이력(월별근태현황 자동연동 + 수동/업로드) 통합 조회, 사용일 오름차순
+function getLeaveUsageRecords(empId){
+  const list=[];
+  Object.values(_hrRowsCache).forEach(monthRows=>{
+    monthRows.forEach(r=>{
+      if(!r.emp||r.emp.사번!==empId)return;
+      r.days.forEach(d=>{if(d.bigo==='연차'||d.bigo==='반차')list.push({사번:empId,구분:d.bigo,사용일:d.date,source:'auto'});});
+    });
+  });
+  leaveUsage.forEach(u=>{if(u.사번===empId)list.push({...u,source:'manual'});});
+  const seen=new Set();
+  return list.filter(u=>{
+    const k=u.사번+'_'+u.사용일+'_'+u.구분;
+    if(seen.has(k))return u.source==='auto'; // 자동연동이 우선(중복은 저장 시 이미 차단되지만 방어적으로 처리)
+    seen.add(k);return true;
+  }).sort((a,b)=>a.사용일<b.사용일?-1:(a.사용일>b.사용일?1:0));
+}
+
+// 발생 회차 배열에 사용 이력을 선입선출(FIFO)로 소진 — rows에 사용/잔여 필드 채움
+function allocateLeaveUsage(rows,usageRecords){
+  rows.forEach(r=>r.사용=0);
+  usageRecords.forEach(u=>{
+    let remain=u.구분==='반차'?0.5:1;
+    for(const r of rows){
+      if(u.사용일<r.cs)continue;
+      const avail=r.발생-r.사용;
+      if(avail<=0)continue;
+      const take=Math.min(avail,remain);
+      r.사용+=take;remain-=take;
+      if(remain<=0)break;
+    }
+  });
+  rows.forEach(r=>r.잔여=Math.round((r.발생-r.사용)*10)/10);
+}
+
 function getSched(empId,ds){
   const dow=new Date(ds).getDay(),key=DOW_KEYS[dow];
   const m=contracts.filter(c=>c.사번===empId&&c.구분!=='퇴사'&&c.cs<=ds&&c.ce>=ds).sort((a,b)=>new Date(b.cs)-new Date(a.cs));
@@ -7594,6 +7716,216 @@ function submitAttReq(){
   closeModal('modal-attreq');renderMyAtt();saveAll();alert('✓ 수정 요청이 제출되었습니다');
 }
 // ============================================================
+// ⑫ 연차현황 — 입사일 기준 자동 계산 (읽기전용)
+// ============================================================
+const LS_COLS=['사번','이름','급여종','입사일','퇴사일','구분','사용시작일','사용종료일','발생일수','사용일수','잔여연차'];
+function buildLsHead(){
+  document.getElementById('lsHead').innerHTML=LS_COLS.map((t,i)=>th(t,'lsT',i)).join('');
+}
+function renderLeaveStatus(){
+  const q=(document.getElementById('lsQ')||{}).value||'';
+  const list=employees.filter(e=>contracts.some(c=>c.사번===e.사번)&&(!q||e.이름.includes(q)||e.사번.includes(q)));
+  const html=[];
+  list.forEach(e=>{
+    const rows=buildLeaveAccrualRows(e.사번);
+    if(!rows.length)return;
+    allocateLeaveUsage(rows,getLeaveUsageRecords(e.사번));
+    const 급여종=getMergedEmp(e).임금;
+    const quitDate=getQuitDate(e.사번);
+    rows.forEach(r=>{
+      html.push(`<tr>
+        <td style="font-family:monospace;font-size:11px">${e.사번}</td>
+        <td><strong>${e.이름}</strong></td>
+        <td><span class="bdg ${급여종==='월급직'?'bb':'bt'}" style="font-size:10px">${급여종}</span></td>
+        <td style="font-size:11px">${getJoinDate(e.사번)||'-'}</td>
+        <td style="font-size:11px;color:${quitDate?'var(--red)':'var(--tx3)'}">${quitDate||'-'}</td>
+        <td><span class="bdg ${r.구분==='1년미만연차'?'ba':'bg'}" style="font-size:10px">${r.구분}</span></td>
+        <td style="font-size:11px">${r.cs}</td>
+        <td style="font-size:11px">${r.ce}</td>
+        <td class="c">${r.발생}</td>
+        <td class="c">${r.사용}</td>
+        <td class="c" style="font-weight:700">${r.잔여}</td>
+      </tr>`);
+    });
+  });
+  document.getElementById('lsBody').innerHTML=html.join('')||`<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--tx3)">표시할 데이터가 없습니다</td></tr>`;
+  applyFilter('lsT');
+}
+function downloadLeaveStatusExcel(){
+  const q=(document.getElementById('lsQ')||{}).value||'';
+  const list=employees.filter(e=>contracts.some(c=>c.사번===e.사번)&&(!q||e.이름.includes(q)||e.사번.includes(q)));
+  const rows=[];
+  list.forEach(e=>{
+    const accRows=buildLeaveAccrualRows(e.사번);
+    if(!accRows.length)return;
+    allocateLeaveUsage(accRows,getLeaveUsageRecords(e.사번));
+    const 급여종=getMergedEmp(e).임금;
+    const quitDate=getQuitDate(e.사번);
+    accRows.forEach(r=>rows.push([e.사번,e.이름,급여종,getJoinDate(e.사번)||'',quitDate||'',r.구분,r.cs,r.ce,r.발생,r.사용,r.잔여]));
+  });
+  if(!rows.length){alert('다운로드할 데이터가 없습니다.');return;}
+  const hdr=['사번','이름','급여종','입사일','퇴사일','구분','사용시작일','사용종료일','발생일수','사용일수','잔여연차'];
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet([hdr,...rows]);
+  ws['!cols']=hdr.map(()=>({wch:12}));
+  XLSX.utils.book_append_sheet(wb,ws,'연차현황');
+  const p=n=>String(n).padStart(2,'0');
+  const now=new Date();
+  XLSX.writeFile(wb,`연차현황_${now.getFullYear()}${p(now.getMonth()+1)}${p(now.getDate())}.xlsx`);
+}
+
+// ============================================================
+// ⑬ 연차사용현황 — 월별근태현황 자동연동(읽기전용) + 수동 추가/엑셀 업로드
+// ============================================================
+const LU_COLS=['사번','이름','급여종','구분','입사일','사용일','소정근로시간','사용시간','출처','관리'];
+function buildLuHead(){
+  document.getElementById('luHead').innerHTML=LU_COLS.map((t,i)=>th(t,'luT',i)).join('');
+}
+function renderLeaveUsage(){
+  const q=(document.getElementById('luQ')||{}).value||'';
+  const yr=(document.getElementById('luYear')||{}).value||'all';
+  const targets=employees.filter(e=>contracts.some(c=>c.사번===e.사번)&&(!q||e.이름.includes(q)||e.사번.includes(q)));
+  const rows=[];
+  targets.forEach(e=>{
+    getLeaveUsageRecords(e.사번).forEach(u=>{
+      if(yr!=='all'&&!u.사용일.startsWith(yr))return;
+      rows.push({emp:e,u});
+    });
+  });
+  rows.sort((a,b)=>a.u.사용일<b.u.사용일?1:(a.u.사용일>b.u.사용일?-1:0));
+  document.getElementById('luBody').innerHTML=rows.map(({emp,u})=>{
+    const sojeongRaw=getSchedSojeong(emp.사번,u.사용일);
+    const sojeong=typeof sojeongRaw==='number'?sojeongRaw:0;
+    const 배율=u.구분==='반차'?0.5:1;
+    const 사용시간=Math.round(sojeong*배율*100)/100;
+    const 급여종=getConWageType(emp.사번,u.사용일);
+    const isAuto=u.source==='auto';
+    return`<tr>
+      <td style="font-family:monospace;font-size:11px">${emp.사번}</td>
+      <td><strong>${emp.이름}</strong></td>
+      <td><span class="bdg ${급여종==='월급직'?'bb':'bt'}" style="font-size:10px">${급여종}</span></td>
+      <td><span class="bdg ${u.구분==='연차'?'bg':'ba'}" style="font-size:10px">${u.구분}</span></td>
+      <td style="font-size:11px">${getJoinDate(emp.사번)||'-'}</td>
+      <td style="font-size:11px">${u.사용일}</td>
+      <td class="c">${sojeong||'-'}</td>
+      <td class="c">${사용시간||'-'}</td>
+      <td class="c">${isAuto?'<span style="font-size:10px;color:var(--tx3)">🔒 자동연동</span>':'<span style="font-size:10px;color:var(--blue)">수동</span>'}</td>
+      <td class="c">${isAuto?'-':`<button class="btn sm d" onclick="deleteLeaveUsageRow(${u.no})">삭제</button>`}</td>
+    </tr>`;
+  }).join('')||`<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--tx3)">사용 이력이 없습니다</td></tr>`;
+  applyFilter('luT');
+}
+function addLeaveUsageRow(){
+  if(document.getElementById('luNewRow')){
+    document.getElementById('luNewRow').scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
+  const tbody=document.getElementById('luBody');if(!tbody)return;
+  const empOpts=employees.filter(e=>contracts.some(c=>c.사번===e.사번)).map(e=>`<option value="${e.사번}">${e.이름}(${e.사번})</option>`).join('');
+  const tr=document.createElement('tr');
+  tr.id='luNewRow';
+  tr.innerHTML=`
+    <td colspan="2"><select class="con-sel" id="lu2-emp" style="min-width:140px">${empOpts}</select></td>
+    <td style="color:var(--tx3);font-size:10px">-</td>
+    <td><select class="con-sel" id="lu2-type"><option>연차</option><option>반차</option></select></td>
+    <td style="color:var(--tx3);font-size:10px">-</td>
+    <td><input class="con-inp" id="lu2-date" type="date"></td>
+    <td style="color:var(--tx3);font-size:10px">-</td>
+    <td style="color:var(--tx3);font-size:10px">-</td>
+    <td style="color:var(--tx3);font-size:10px">NEW</td>
+    <td><div style="display:flex;gap:3px"><button class="btn sm p" onclick="saveLeaveUsageRow()">✓ 저장</button><button class="btn sm" onclick="cancelLeaveUsageRow()">✕</button></div></td>`;
+  tbody.insertBefore(tr,tbody.firstChild);
+  tr.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function cancelLeaveUsageRow(){const row=document.getElementById('luNewRow');if(row)row.remove();}
+function saveLeaveUsageRow(){
+  const 사번=(document.getElementById('lu2-emp')||{}).value;
+  if(!사번){alert('직원을 선택하세요.');return;}
+  const 구분=document.getElementById('lu2-type').value;
+  const 사용일=document.getElementById('lu2-date').value;
+  if(!사용일){alert('사용일을 입력하세요.');return;}
+  const dup=getLeaveUsageRecords(사번).some(u=>u.사용일===사용일&&u.구분===구분);
+  if(dup){alert('이미 등록된 연차/반차 사용일입니다.');return;}
+  const no=leaveUsage.reduce((a,b)=>Math.max(a,b.no||0),0)+1;
+  leaveUsage.push({no,사번,구분,사용일,updated:new Date().toISOString()});
+  cancelLeaveUsageRow();
+  renderLeaveUsage();saveAll();
+}
+function deleteLeaveUsageRow(no){
+  const u=leaveUsage.find(x=>x.no===no);if(!u)return;
+  if(!confirm(`${u.사번} / ${u.사용일} / ${u.구분} 사용 이력을 삭제하시겠습니까?`))return;
+  leaveUsage=leaveUsage.filter(x=>x.no!==no);
+  renderLeaveUsage();saveAll();
+}
+function uploadLeaveUsageExcel(evt){
+  const file=evt.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
+      if(!rows.length){alert('파일이 비어 있습니다.');return;}
+      const header=rows[0].map(h=>String(h).trim());
+      const col=k=>header.indexOf(k);
+      const IDX={사번:col('사번'),구분:col('구분'),사용일:col('사용일')};
+      const toDate=v=>{
+        if(!v||v==='')return'';
+        if(v instanceof Date){const y=v.getFullYear(),m=String(v.getMonth()+1).padStart(2,'0'),d=String(v.getDate()).padStart(2,'0');return`${y}-${m}-${d}`;}
+        if(typeof v==='number'){const dd=new Date(Math.round((v-25569)*86400*1000));const y=dd.getUTCFullYear(),m=String(dd.getUTCMonth()+1).padStart(2,'0'),d=String(dd.getUTCDate()).padStart(2,'0');return`${y}-${m}-${d}`;}
+        return String(v).slice(0,10);
+      };
+      let added=0,skipped=0;
+      const dataRows=rows.slice(1).filter(r=>{const first=String(r[0]||'').trim();return first!==''&&!first.startsWith('※');});
+      let maxNo=leaveUsage.reduce((a,b)=>Math.max(a,b.no||0),0);
+      dataRows.forEach(row=>{
+        const 사번=String(row[IDX.사번]||'').trim();
+        const 구분=String(row[IDX.구분]||'').trim();
+        const 사용일=toDate(row[IDX.사용일]);
+        if(!사번||!사용일||(구분!=='연차'&&구분!=='반차')||!employees.some(e=>e.사번===사번)){skipped++;return;}
+        if(getLeaveUsageRecords(사번).some(u=>u.사용일===사용일&&u.구분===구분)){skipped++;return;}
+        maxNo++;
+        leaveUsage.push({no:maxNo,사번,구분,사용일,updated:new Date().toISOString()});
+        added++;
+      });
+      renderLeaveUsage();saveAll();
+      alert(`✅ 엑셀 업로드 완료!\n추가: ${added}건 / 건너뜀: ${skipped}건`);
+    }catch(err){
+      alert('❌ 업로드 오류: '+err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  evt.target.value='';
+}
+function downloadLeaveUsageExcel(){
+  const q=(document.getElementById('luQ')||{}).value||'';
+  const yr=(document.getElementById('luYear')||{}).value||'all';
+  const targets=employees.filter(e=>contracts.some(c=>c.사번===e.사번)&&(!q||e.이름.includes(q)||e.사번.includes(q)));
+  const rows=[];
+  targets.forEach(e=>{
+    getLeaveUsageRecords(e.사번).forEach(u=>{
+      if(yr!=='all'&&!u.사용일.startsWith(yr))return;
+      rows.push({emp:e,u});
+    });
+  });
+  if(!rows.length){alert('다운로드할 데이터가 없습니다.');return;}
+  rows.sort((a,b)=>a.u.사용일<b.u.사용일?-1:1);
+  const hdr=['사번','이름','급여종','구분','입사일','사용일','소정근로시간','사용시간','출처'];
+  const wsData=[hdr,...rows.map(({emp,u})=>{
+    const sojeongRaw=getSchedSojeong(emp.사번,u.사용일);
+    const sojeong=typeof sojeongRaw==='number'?sojeongRaw:0;
+    const 배율=u.구분==='반차'?0.5:1;
+    return[emp.사번,emp.이름,getConWageType(emp.사번,u.사용일),u.구분,getJoinDate(emp.사번)||'',u.사용일,sojeong,Math.round(sojeong*배율*100)/100,u.source==='auto'?'자동연동':'수동'];
+  })];
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols']=hdr.map(()=>({wch:12}));
+  XLSX.utils.book_append_sheet(wb,ws,'연차사용현황');
+  const p=n=>String(n).padStart(2,'0');
+  const now=new Date();
+  XLSX.writeFile(wb,`연차사용현황_${now.getFullYear()}${p(now.getMonth()+1)}${p(now.getDate())}.xlsx`);
+}
+
+// ============================================================
 // NAV & ROLE
 // ============================================================
 function nav(pid,el){
@@ -7665,6 +7997,8 @@ function nav(pid,el){
   }
   if(pid==='hr7'){renderAccPage();}
   if(pid==='hr10'){buildSchedHead();renderSchedMgmt();}
+  if(pid==='hr12'){buildLsHead();renderLeaveStatus();}
+  if(pid==='hr13'){buildLuHead();renderLeaveUsage();}
 }
 
 // ============================================================
@@ -8128,10 +8462,12 @@ const MENU_LIST=[
   {id:'hr8',label:'퇴직정산'},
   {id:'hr9',label:'퇴직금 계산'},
   {id:'hr10',label:'월별 스케줄 등록'},
+  {id:'hr12',label:'연차현황'},
+  {id:'hr13',label:'연차사용현황'},
 ];
 const ROLE_LABEL={hr:'HR 담당자',emp:'CX 직원',field:'현장운영자'};
 // 역할별 기본 메뉴 접근 허용
-const ROLE_DEFAULT_MENUS={hr:['hr11','hr1','hr2','hr3','hr4','hr5','hr6','hr7','hr8','hr9','hr10'],emp:['hr3'],field:['hr3']};
+const ROLE_DEFAULT_MENUS={hr:['hr11','hr1','hr2','hr3','hr4','hr5','hr6','hr7','hr8','hr9','hr10','hr12','hr13'],emp:['hr3'],field:['hr3']};
 
 function renderAccPage(){
   const list=getAccounts();
