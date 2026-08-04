@@ -498,6 +498,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <select id="empFilter" style="padding:6px 10px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderEmp()">
         <option value="all">전체</option><option value="active">재직중</option><option value="quit">퇴직</option>
       </select>
+      <button class="btn bl" onclick="downloadEmpExcel()">⬇ 엑셀 다운로드</button>
     </div>
   </div>
   <div class="sg" id="empStats"></div>
@@ -6766,6 +6767,54 @@ function renderEmp(){
   </tr>`;
   }).join('');
   applyFilter('empT');
+}
+
+// 현재 화면에 표시된(검색/필터 적용된) 인원현황 목록을 엑셀로 다운로드
+function downloadEmpExcel(){
+  const q=(document.getElementById('empQ')||{}).value||'',f=(document.getElementById('empFilter')||{}).value||'all';
+  const yrVal=(document.getElementById('empYear')||{}).value||'all';
+  const moVal=(document.getElementById('empMonth')||{}).value||'all';
+  const monthSel=(yrVal==='all'||moVal==='all')?'all':(yrVal+'-'+moVal);
+  const isActive=(empId)=>{
+    const quit=getQuitDate(empId);
+    if(!quit)return true;
+    if(monthSel==='all')return false;
+    const [y,m]=monthSel.split('-').map(Number);
+    const monthLast=dStr(y,m,dim(y,m));
+    return quit>monthLast;
+  };
+  const list=employees.filter(e=>{
+    const ok=!q||(e.이름.includes(q)||e.사번.includes(q)||e.소속.includes(q));
+    if(!ok)return false;
+    if(!isVisibleInMonth(e.사번,monthSel))return false;
+    if(f==='active')return isActive(e.사번);
+    if(f==='quit')return!isActive(e.사번);
+    return true;
+  });
+  if(!list.length){alert('다운로드할 데이터가 없습니다.');return;}
+  const hdr=[
+    'NO','급여종','구분','경로','이름','사번','소속','입사일','퇴사일',
+    '임금구분','시급','기본급','식대','직책수당','야간수당',
+    '계약시작(cs)','계약종료(ce)','시업(st)','종료(et)','소정(h/주)','휴게(h)','월소정(h)'
+  ];
+  const wsData=[hdr,...list.map((e,idx)=>{
+    const m=getMergedEmp(e);
+    const quitDate=getQuitDate(e.사번);
+    const monCon=getConForMonth(e.사번,monthSel);
+    const monSojeong=monCon?(Number(monCon.소정)||m.월소정):m.월소정;
+    return[
+      idx+1,e.gbu,m.구분,e.경로||'',e.이름,e.사번,e.소속,e.입사,quitDate||'',
+      m.임금,m.시급||0,m.기본||0,m.식대||0,m.직책||0,m.야간||0,
+      m.cs,m.ce,m.st,m.et,m.소정,m.휴게,monSojeong
+    ];
+  })];
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols']=hdr.map((_,i)=>({wch:i<4?10:i<9?12:14}));
+  XLSX.utils.book_append_sheet(wb,ws,'인원현황');
+  const p=n=>String(n).padStart(2,'0');
+  const now=new Date();
+  XLSX.writeFile(wb,`인원현황_${now.getFullYear()}${p(now.getMonth()+1)}${p(now.getDate())}.xlsx`);
 }
 
 // ============================================================
