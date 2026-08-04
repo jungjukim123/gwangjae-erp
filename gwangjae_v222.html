@@ -521,6 +521,8 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <button class="btn p" id="btnAddConRow" onclick="addConRow()">+ 계약 추가</button>
       <button class="btn p" onclick="topEditSelectedCon()">✏ 수정</button>
       <button class="btn p" onclick="topSaveSelectedCon()">✓ 저장</button>
+      <button class="btn p" onclick="sendContractDoc()">→ 계약서 전송</button>
+      <button class="btn bl" onclick="downloadConExcel()">⬇ 엑셀 다운로드</button>
       <button class="btn bl" onclick="downloadConTemplate()">📋 엑셀 템플릿</button>
       <label class="btn am" style="cursor:pointer">📂 엑셀 일괄 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="uploadConExcel(event)"></label>
     </div>
@@ -6769,6 +6771,51 @@ function renderEmp(){
 // ============================================================
 // ② 계약기간관리 — 엑셀 템플릿 다운로드 & 일괄 업로드
 // ============================================================
+// 현재 화면에 표시된(검색/필터 적용된) 계약 목록을 엑셀로 다운로드
+function downloadConExcel(){
+  const q=(document.getElementById('conQ')||{}).value||'',tf=(document.getElementById('conTypeQ')||{}).value||'all';
+  const list=contracts.filter(c=>{
+    const ok=!q||(c.이름.includes(q)||c.사번.includes(q));
+    if(!ok)return false;if(tf!=='all')return c.구분===tf;return true;
+  });
+  const groupKey=c=>c.사번||('__name__'+c.이름);
+  const groups={};
+  list.forEach(c=>{const k=groupKey(c);if(!groups[k])groups[k]=[];groups[k].push(c);});
+  Object.values(groups).forEach(g=>g.sort((a,b)=>new Date(b.cs)-new Date(a.cs)));
+  const sortedGroups=Object.values(groups).sort((a,b)=>new Date(b[0].cs)-new Date(a[0].cs));
+  const sortedList=sortedGroups.flat();
+  if(!sortedList.length){alert('다운로드할 데이터가 없습니다.');return;}
+  const hdr=[
+    'NO','구분','발송여부','type','이름','사번','소속','입사일','퇴사일',
+    '임금구분','시급','기본급','식대','직책수당','야간수당',
+    '계약시작(cs)','계약종료(ce)','시업(st)','종료(et)','소정(h/주)','휴게(h)',
+    '월(mon)','화(tue)','수(wed)','목(thu)','금(fri)','토(sat)','일(sun)',
+    '이메일','전화번호','SlackID'
+  ];
+  const wsData=[hdr,...sortedList.map((c,idx)=>[
+    idx+1,c.구분,c.발송||'미발송',c.type,c.이름,c.사번,c.소속,c.입사,c.퇴사||'',
+    c.임금,c.시급||0,c.기본||0,c.식대||0,c.직책||0,c.야간||0,
+    c.cs,c.ce,c.st,c.et,c.소정,c.휴게,
+    c.mon,c.tue,c.wed,c.thu,c.fri,c.sat,c.sun,
+    c.email||'',c.phone||'',c.slackId||''
+  ])];
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols']=hdr.map((_,i)=>({wch:i<4?10:i<9?12:14}));
+  XLSX.utils.book_append_sheet(wb,ws,'계약기간관리');
+  const p=n=>String(n).padStart(2,'0');
+  const now=new Date();
+  XLSX.writeFile(wb,`계약기간관리_${now.getFullYear()}${p(now.getMonth()+1)}${p(now.getDate())}.xlsx`);
+}
+
+// 선택된 계약 건의 계약서 전송 — 추후 별도 외부 연동 프로그램과 연결 예정
+function sendContractDoc(){
+  if(_selectedConNo===null){alert('먼저 전송할 계약 건의 체크박스를 선택해주세요.');return;}
+  const c=contracts.find(x=>x.no===_selectedConNo);
+  if(!c){alert('선택한 계약 정보를 찾을 수 없습니다.');return;}
+  alert(`계약서 전송 기능은 준비 중입니다.\n(${c.이름} / ${c.사번})\n\n추후 외부 연동 프로그램과 연결될 예정입니다.`);
+}
+
 function downloadConTemplate(){
   const wb=XLSX.utils.book_new();
   const hdr=[
