@@ -707,8 +707,9 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <button class="btn bl" onclick="downloadLeaveUsageTemplate()">📋 엑셀 템플릿</button>
     </div>
   </div>
-  <div style="font-size:11px;color:var(--tx3);margin:-6px 0 8px">※ "+ 사용 추가"로 행을 여러 개 만든 뒤, 사번 칸에 엑셀·노션에서 복사한 "사번·구분·사용일" 여러 줄을 붙여넣으면 자동으로 행이 채워집니다.</div>
+  <div style="font-size:11px;color:var(--tx3);margin:-6px 0 8px">※ "+ 사용 추가"로 행을 여러 개 만든 뒤, 사번 칸에 엑셀·노션에서 복사한 여러 줄을 붙여넣으면 그 줄 수만큼 행이 자동으로 채워집니다. 구분·사용일 칸도 각각 세로로 복사한 값을 붙여넣으면 해당 행부터 아래로 한 줄씩 채워집니다.</div>
   <datalist id="luEmpDatalist"></datalist>
+  <datalist id="luGubunDatalist"><option>연차</option><option>반차</option><option>반반차</option><option>결근</option><option>공가</option></datalist>
   <div class="tw" id="luTW">
     <table id="luT" style="width:100%;min-width:1000px">
       <thead><tr id="luHead"></tr></thead>
@@ -7848,15 +7849,14 @@ function buildLuPendingRowHtml(p,idx){
   const join=emp?(getJoinDate(p.사번)||''):'';
   const sojeong=(emp&&p.사용일)?getLeaveSojeong(p.사번,p.사용일):null;
   const 사용시간=(typeof sojeong==='number')?Math.round(sojeong*getLeaveTypeFactor(p.구분)*100)/100:null;
-  const gubunOpts=LU_GUBUN_LIST.map(g=>`<option${p.구분===g?' selected':''}>${g}</option>`).join('');
   const nameCell=p.사번?(emp?`<strong>${emp.이름}</strong>`:'<span style="color:var(--red);font-size:11px">미매칭</span>'):'<span style="color:var(--tx3);font-size:10px">-</span>';
   return`<tr class="lu-pending-row" style="background:#EFF6FF">
     <td><input class="con-inp" value="${p.사번||''}" list="luEmpDatalist" placeholder="사번 입력/붙여넣기" style="width:95px;font-family:monospace" onchange="updateLuPendField(${idx},'사번',this.value)" onpaste="luPendPaste(${idx},event)"></td>
     <td>${nameCell}</td>
     <td>${급여종?`<span class="bdg ${급여종==='월급직'?'bb':'bt'}" style="font-size:10px">${급여종}</span>`:'<span style="color:var(--tx3);font-size:10px">-</span>'}</td>
-    <td><select class="con-sel" onchange="updateLuPendField(${idx},'구분',this.value)">${gubunOpts}</select></td>
+    <td><input class="con-inp" list="luGubunDatalist" value="${p.구분||''}" style="width:70px" onchange="updateLuPendField(${idx},'구분',this.value)" onpaste="luPendColumnPaste(${idx},'구분',event)"></td>
     <td style="font-size:11px">${join||'-'}</td>
-    <td><input class="con-inp" type="date" value="${p.사용일||''}" onchange="updateLuPendField(${idx},'사용일',this.value)"></td>
+    <td><input class="con-inp" type="date" value="${p.사용일||''}" onchange="updateLuPendField(${idx},'사용일',this.value)" onpaste="luPendColumnPaste(${idx},'사용일',event)"></td>
     <td class="c">${typeof sojeong==='number'?sojeong:'-'}</td>
     <td class="c">${사용시간!==null?사용시간:'-'}</td>
     <td class="c"><span style="font-size:10px;color:var(--blue)">수기입력</span></td>
@@ -7885,6 +7885,22 @@ function luPendPaste(idx,evt){
     return{사번:(cols[0]||'').trim(),구분:LU_GUBUN_LIST.includes(구분)?구분:'연차',사용일:luPendParseDate(cols[2]||'')};
   });
   _luPendingRows.splice(idx,1,...parsed);
+  renderLeaveUsage();
+}
+// 구분/사용일 칸에 세로로 여러 줄(엑셀 한 열)을 붙여넣으면 해당 행부터 아래로 한 줄씩 채움(부족하면 행 자동 추가)
+function luPendColumnPaste(idx,field,evt){
+  const text=(evt.clipboardData||window.clipboardData).getData('text');
+  evt.preventDefault();
+  if(!text)return;
+  const lines=text.replace(/\r/g,'').split('\n').filter(l=>l.trim()!=='');
+  if(!lines.length)return;
+  lines.forEach((line,i)=>{
+    const ri=idx+i;
+    if(!_luPendingRows[ri])_luPendingRows[ri]={사번:'',구분:'연차',사용일:''};
+    const v=line.trim();
+    if(field==='구분')_luPendingRows[ri].구분=LU_GUBUN_LIST.includes(v)?v:'연차';
+    else if(field==='사용일')_luPendingRows[ri].사용일=luPendParseDate(v);
+  });
   renderLeaveUsage();
 }
 function validateLuPendRow(p){
