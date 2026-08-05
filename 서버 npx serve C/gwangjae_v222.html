@@ -2198,8 +2198,15 @@ function getLatestConEnd(empId){
   if(!cons.length)return'';
   return cons.reduce((max,c)=>c.ce>max?c.ce:max,cons[0].ce);
 }
+// 연차 1일(구분별 배율 적용 전)의 표준 유급 환산시간 = (주소정근로시간 ÷ 40) × 8 — 근로기준법 시간단위 환산 기준
+// 실제 사용일의 요일별 소정근로시간과 무관하게, 연차 발생·소진 회계는 이 표준시간으로 통일 적용(연차사용현황의 '그날 실제 소정근로시간' 표시와는 별개)
+function getLeaveHourPerDay(empId,ds){
+  const wk=getWeekSojeong(empId,ds);
+  return Math.round((wk/40)*8*100)/100;
+}
 // 연차 발생 회차 계산 (입사일 기준 근로기준법 표준: 1년미만 매월1일 최대11일 / 1년이상 15+2년마다1일 가산 최대25일)
 // 계약기간이 1년 미만이거나 갱신 없이 만료된 경우, 입사일부터 최종 계약 종료일까지를 재직기간으로 보고 계산
+// 1년미만연차는 산정월별로 결근 여부를 확인해 결근이 있으면 그 달은 미발생 처리(근로기준법) — detail 배열에 월별 산정내역 보관
 function buildLeaveAccrualRows(empId){
   const join=getJoinDate(empId);if(!join)return[];
   const today=dStr(new Date().getFullYear(),new Date().getMonth()+1,new Date().getDate());
@@ -2210,15 +2217,37 @@ function buildLeaveAccrualRows(empId){
   const rows=[];
   const bucket0CeFull=addDaysStr(addYearsClamped(join,1),-1);
   const bucket0Ce=asOf<bucket0CeFull?asOf:bucket0CeFull;
-  let months=0;
-  for(let n=1;n<=11;n++){if(addMonthsClamped(join,n)<=asOf)months=n;else break;}
-  rows.push({구분:'1년미만연차',cs:join,ce:bucket0Ce,발생:months});
+
+  const absences=getLeaveUsageRecords(empId).filter(u=>u.구분==='결근').map(u=>u.사용일);
+  const detail=[];
+  let 발생시간합=0;
+  for(let n=1;n<=11;n++){
+    const winStart=addMonthsClamped(join,n-1);
+    if(winStart>asOf)break;
+    const winEnd=addDaysStr(addMonthsClamped(join,n),-1);
+    const creditDate=addMonthsClamped(join,n);
+    const 결근일자=absences.filter(d=>d>=winStart&&d<=winEnd);
+    let 발생시간=null,사유='';
+    if(creditDate>asOf){
+      사유=`${creditDate}까지 재직해야 발생하나, 재직기간이 ${asOf}까지라 미발생`;
+    }else if(결근일자.length>0){
+      사유=`해당 산정기간 중 결근(${결근일자.join(', ')})이 있어 미발생`;
+    }else{
+      발생시간=getLeaveHourPerDay(empId,creditDate);
+      발생시간합+=발생시간;
+    }
+    detail.push({산정시작일:winStart,산정종료일:winEnd,결근일자,발생시간,사유});
+  }
+  rows.push({구분:'1년미만연차',cs:join,ce:bucket0Ce,발생:Math.round(발생시간합*100)/100,detail});
+
   let n=1;
   while(n<=60){
     const bStart=addYearsClamped(join,n);
     if(bStart>asOf)break;
     const bEnd=addDaysStr(addYearsClamped(join,n+1),-1);
-    rows.push({구분:'1년이상연차',cs:bStart,ce:bEnd,발생:Math.min(15+Math.floor((n-1)/2),25)});
+    const days=Math.min(15+Math.floor((n-1)/2),25);
+    const hourPerDay=getLeaveHourPerDay(empId,bStart);
+    rows.push({구분:'1년이상연차',cs:bStart,ce:bEnd,발생:Math.round(days*hourPerDay*100)/100});
     n++;
   }
   return rows;
@@ -2255,12 +2284,14 @@ function getLeaveUsageRecords(empId){
   }).sort((a,b)=>a.사용일<b.사용일?-1:(a.사용일>b.사용일?1:0));
 }
 
-// 발생 회차 배열에 사용 이력을 선입선출(FIFO)로 소진 — rows에 사용/잔여 필드 채움 (결근/공가는 연차를 소진하지 않음)
-function allocateLeaveUsage(rows,usageRecords){
+// 발생 회차 배열(시간 단위)에 사용 이력을 선입선출(FIFO)로 소진 — rows에 사용/잔여 필드 채움 (결근/공가는 연차를 소진하지 않음)
+// 사용 시간은 그날의 실제 소정근로시간이 아니라 getLeaveHourPerDay(표준 환산시간)×구분배율로 통일 계산
+function allocateLeaveUsage(rows,usageRecords,empId){
   rows.forEach(r=>r.사용=0);
   usageRecords.forEach(u=>{
-    let remain=getLeaveTypeFactor(u.구분);
-    if(remain<=0)return;
+    const factor=getLeaveTypeFactor(u.구분);
+    if(factor<=0)return;
+    let remain=Math.round(factor*getLeaveHourPerDay(empId,u.사용일)*100)/100;
     for(const r of rows){
       if(u.사용일<r.cs)continue;
       const avail=r.발생-r.사용;
@@ -2270,7 +2301,10 @@ function allocateLeaveUsage(rows,usageRecords){
       if(remain<=0)break;
     }
   });
-  rows.forEach(r=>r.잔여=Math.round((r.발생-r.사용)*10)/10);
+  rows.forEach(r=>{
+    r.사용=Math.round(r.사용*100)/100;
+    r.잔여=Math.round((r.발생-r.사용)*100)/100;
+  });
 }
 
 function getSched(empId,ds){
@@ -7747,9 +7781,49 @@ function submitAttReq(){
 // ============================================================
 // ⑫ 연차현황 — 입사일 기준 자동 계산 (읽기전용)
 // ============================================================
-const LS_COLS=['사번','이름','급여종','입사일','계약종료일','퇴사일','구분','사용시작일','사용종료일','발생일수','사용일수','잔여연차'];
+const LS_COLS=['사번','이름','급여종','입사일','계약종료일','퇴사일','구분','사용시작일','사용종료일','발생시간','사용시간','잔여연차'];
 function buildLsHead(){
   document.getElementById('lsHead').innerHTML=LS_COLS.map((t,i)=>th(t,'lsT',i)).join('');
+}
+// 1년미만연차 행을 클릭하면 월별 산정내역(상세)을 펼쳐 보여줌 — 펼쳐진 사번 저장
+let _lsExpandedEmp=null;
+function toggleLsDetail(empId){
+  _lsExpandedEmp=_lsExpandedEmp===empId?null:empId;
+  renderLeaveStatus();
+}
+// 1년미만연차 월별 산정내역 상세 박스 HTML
+function buildLsDetailHtml(e,detail){
+  const conEnd=getLatestConEnd(e.사번)||'-';
+  const rowsHtml=(detail||[]).map(d=>{
+    const 결근text=d.결근일자&&d.결근일자.length?d.결근일자.join(', '):'-';
+    const isBoundary=d.발생시간===null&&(!d.결근일자||!d.결근일자.length);
+    const trStyle=isBoundary?' style="background:#FEF9C3"':'';
+    return`<tr${trStyle}>
+      <td style="padding:5px 8px;font-size:11px">${d.산정시작일}</td>
+      <td style="padding:5px 8px;font-size:11px">${d.산정종료일}</td>
+      <td style="padding:5px 8px;font-size:11px;${d.결근일자&&d.결근일자.length?'color:var(--red);font-weight:700':'color:var(--tx3)'}">${결근text}</td>
+      <td style="padding:5px 8px;font-size:11px;text-align:center${d.발생시간===null?';color:var(--tx3)':''}" title="${d.사유||''}">${d.발생시간===null?'미발생':d.발생시간+'시간'}</td>
+    </tr>`;
+  }).join('');
+  return`<tr class="ls-detail-row"><td colspan="12" style="padding:14px 18px;background:#F8FAFC">
+    <div style="border:1px solid var(--bd2);border-radius:8px;padding:14px;max-width:640px">
+      <div style="font-weight:700;margin-bottom:6px">${e.이름} — 1년미만연차 월별 산정내역</div>
+      <div style="font-size:11px;color:var(--tx3);margin-bottom:10px">입사일 ${getJoinDate(e.사번)||'-'} · 계약종료일 ${conEnd} · 발생시간은 산정종료일 다음날 기준 (주소정근로시간÷40)×8로 환산</div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#F1F5F9">
+          <th style="padding:5px 8px;font-size:11px;text-align:left">산정시작일</th>
+          <th style="padding:5px 8px;font-size:11px;text-align:left">산정종료일</th>
+          <th style="padding:5px 8px;font-size:11px;text-align:left">결근일수</th>
+          <th style="padding:5px 8px;font-size:11px;text-align:center">발생시간</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+      <div style="font-size:10px;color:var(--tx3);margin-top:8px;line-height:1.6">
+        ※ 노란색 행: 산정종료일 다음날까지 재직해야 발생하는데, 그 전에 재직기간이 끝나 발생하지 않은 달입니다.<br>
+        ※ 산정기간(산정시작일~산정종료일) 중 결근이 1일 이상 있으면 해당 달의 연차는 발생하지 않습니다(근로기준법 제60조).
+      </div>
+    </div>
+  </td></tr>`;
 }
 function renderLeaveStatus(){
   const q=(document.getElementById('lsQ')||{}).value||'';
@@ -7758,25 +7832,30 @@ function renderLeaveStatus(){
   list.forEach(e=>{
     const rows=buildLeaveAccrualRows(e.사번);
     if(!rows.length)return;
-    allocateLeaveUsage(rows,getLeaveUsageRecords(e.사번));
+    allocateLeaveUsage(rows,getLeaveUsageRecords(e.사번),e.사번);
     const 급여종=getMergedEmp(e).임금;
     const quitDate=getQuitDate(e.사번);
     const conEnd=getLatestConEnd(e.사번);
     rows.forEach(r=>{
-      html.push(`<tr>
+      const isU1=r.구분==='1년미만연차';
+      const 잔여disp=r.잔여<0?'-':r.잔여;
+      html.push(`<tr${isU1?` style="cursor:pointer" onclick="toggleLsDetail('${e.사번}')" title="클릭하면 월별 산정내역을 볼 수 있습니다"`:''}>
         <td style="font-family:monospace;font-size:11px">${e.사번}</td>
         <td><strong>${e.이름}</strong></td>
         <td><span class="bdg ${급여종==='월급직'?'bb':'bt'}" style="font-size:10px">${급여종}</span></td>
         <td style="font-size:11px">${getJoinDate(e.사번)||'-'}</td>
         <td style="font-size:11px">${conEnd||'-'}</td>
         <td style="font-size:11px;color:${quitDate?'var(--red)':'var(--tx3)'}">${quitDate||'-'}</td>
-        <td><span class="bdg ${r.구분==='1년미만연차'?'ba':'bg'}" style="font-size:10px">${r.구분}</span></td>
+        <td><span class="bdg ${r.구분==='1년미만연차'?'ba':'bg'}" style="font-size:10px">${r.구분}${isU1?' ▾':''}</span></td>
         <td style="font-size:11px">${r.cs}</td>
         <td style="font-size:11px">${r.ce}</td>
         <td class="c">${r.발생}</td>
         <td class="c">${r.사용}</td>
-        <td class="c" style="font-weight:700">${r.잔여}</td>
+        <td class="c" style="font-weight:700">${잔여disp}</td>
       </tr>`);
+      if(isU1&&_lsExpandedEmp===e.사번){
+        html.push(buildLsDetailHtml(e,r.detail));
+      }
     });
   });
   document.getElementById('lsBody').innerHTML=html.join('')||`<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--tx3)">표시할 데이터가 없습니다</td></tr>`;
@@ -7789,14 +7868,14 @@ function downloadLeaveStatusExcel(){
   list.forEach(e=>{
     const accRows=buildLeaveAccrualRows(e.사번);
     if(!accRows.length)return;
-    allocateLeaveUsage(accRows,getLeaveUsageRecords(e.사번));
+    allocateLeaveUsage(accRows,getLeaveUsageRecords(e.사번),e.사번);
     const 급여종=getMergedEmp(e).임금;
     const quitDate=getQuitDate(e.사번);
     const conEnd=getLatestConEnd(e.사번);
-    accRows.forEach(r=>rows.push([e.사번,e.이름,급여종,getJoinDate(e.사번)||'',conEnd||'',quitDate||'',r.구분,r.cs,r.ce,r.발생,r.사용,r.잔여]));
+    accRows.forEach(r=>rows.push([e.사번,e.이름,급여종,getJoinDate(e.사번)||'',conEnd||'',quitDate||'',r.구분,r.cs,r.ce,r.발생,r.사용,r.잔여<0?'-':r.잔여]));
   });
   if(!rows.length){alert('다운로드할 데이터가 없습니다.');return;}
-  const hdr=['사번','이름','급여종','입사일','계약종료일','퇴사일','구분','사용시작일','사용종료일','발생일수','사용일수','잔여연차'];
+  const hdr=['사번','이름','급여종','입사일','계약종료일','퇴사일','구분','사용시작일','사용종료일','발생시간','사용시간','잔여연차'];
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.aoa_to_sheet([hdr,...rows]);
   ws['!cols']=hdr.map(()=>({wch:12}));
