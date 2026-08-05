@@ -7909,7 +7909,6 @@ function renderLeaveStatus(){
     const conEnd=getLatestConEnd(e.사번);
     rows.forEach(r=>{
       const isU1=r.구분==='1년미만연차';
-      const 잔여disp=r.잔여<0?'-':r.잔여;
       html.push(`<tr${isU1?` style="cursor:pointer" onclick="toggleLsDetail('${e.사번}')" title="클릭하면 월별 산정내역을 볼 수 있습니다"`:''}>
         <td style="font-family:monospace;font-size:11px">${e.사번}</td>
         <td><strong>${e.이름}</strong></td>
@@ -7922,7 +7921,7 @@ function renderLeaveStatus(){
         <td style="font-size:11px">${r.ce}</td>
         <td class="c">${r.발생}</td>
         <td class="c">${r.사용}</td>
-        <td class="c" style="font-weight:700">${잔여disp}</td>
+        <td class="c" style="font-weight:700;${r.잔여<0?'color:var(--red)':''}">${r.잔여}</td>
       </tr>`);
       if(isU1&&_lsExpandedEmp===e.사번){
         html.push(buildLsDetailHtml(e,r.detail));
@@ -7943,7 +7942,7 @@ function downloadLeaveStatusExcel(){
     const 급여종=getMergedEmp(e).임금;
     const quitDate=getQuitDate(e.사번);
     const conEnd=getLatestConEnd(e.사번);
-    accRows.forEach(r=>rows.push([e.사번,e.이름,급여종,getJoinDate(e.사번)||'',conEnd||'',quitDate||'',r.구분,r.cs,r.ce,r.발생,r.사용,r.잔여<0?'-':r.잔여]));
+    accRows.forEach(r=>rows.push([e.사번,e.이름,급여종,getJoinDate(e.사번)||'',conEnd||'',quitDate||'',r.구분,r.cs,r.ce,r.발생,r.사용,r.잔여]));
   });
   if(!rows.length){alert('다운로드할 데이터가 없습니다.');return;}
   const hdr=['사번','이름','급여종','입사일','계약종료일','퇴사일','구분','사용시작일','사용종료일','발생시간','사용시간','잔여연차(시간)'];
