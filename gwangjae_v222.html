@@ -679,6 +679,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
     <div class="ph-l"><div class="pt">연차현황</div><div class="psub">입사일 기준 연차 발생·사용·잔여 자동 계산 · 계약기간관리처럼 회차 누적 표시</div></div>
     <div class="bg-row">
       <div class="swrap"><input type="text" class="sinp" id="lsQ" placeholder="이름·사번" oninput="renderLeaveStatus()" onkeydown="if(event.key==='Enter'){renderLeaveStatus();this.blur();}" style="width:150px"></div>
+      <button class="btn slk" onclick="sendAllLeaveSummary()">💬 전체 잔여연차 알림 발송</button>
       <button class="btn bl" onclick="downloadLeaveStatusExcel()">⬇ 엑셀 다운로드</button>
     </div>
   </div>
@@ -7822,7 +7823,7 @@ function submitAttReq(){
 // ============================================================
 // ⑫ 연차현황 — 입사일 기준 자동 계산 (읽기전용)
 // ============================================================
-const LS_COLS=['사번','이름','급여종','입사일','계약종료일','퇴사일','구분','사용시작일','사용종료일','발생시간','사용시간','잔여연차(시간)'];
+const LS_COLS=['사번','이름','급여종','입사일','계약종료일','퇴사일','구분','사용시작일','사용종료일','발생시간','사용시간','잔여연차(시간)','알림발송'];
 function buildLsHead(){
   document.getElementById('lsHead').innerHTML=LS_COLS.map((t,i)=>th(t,'lsT',i)).join('');
 }
@@ -7925,13 +7926,14 @@ function renderLeaveStatus(){
         <td class="c">${r.발생}</td>
         <td class="c">${r.사용}</td>
         <td class="c" style="font-weight:700;${r.잔여<0?'color:var(--red)':''}">${r.잔여}</td>
+        <td class="c">${isU1?`<button class="btn sm p" onclick="event.stopPropagation();sendLeaveSummaryToEmp('${e.사번}')">💬 발송</button>`:'-'}</td>
       </tr>`);
       if(isU1&&_lsExpandedEmp===e.사번){
         html.push(buildLsDetailHtml(e,r.detail));
       }
     });
   });
-  document.getElementById('lsBody').innerHTML=html.join('')||`<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--tx3)">표시할 데이터가 없습니다</td></tr>`;
+  document.getElementById('lsBody').innerHTML=html.join('')||`<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--tx3)">표시할 데이터가 없습니다</td></tr>`;
   applyFilter('lsT');
 }
 function downloadLeaveStatusExcel(){
@@ -7956,6 +7958,55 @@ function downloadLeaveStatusExcel(){
   const p=n=>String(n).padStart(2,'0');
   const now=new Date();
   XLSX.writeFile(wb,`연차현황_${now.getFullYear()}${p(now.getMonth()+1)}${p(now.getDate())}.xlsx`);
+}
+
+// ── 연차현황 Slack 알림 발송 (개별/전체) — GAS 주간 자동발송(YeonchaWeekly)과 동일한 메시지 형식 ──
+// 사번의 전체 발생/사용/잔여를 회차 합산해 하나의 요약으로 계산
+function getLeaveSummaryForEmp(empId){
+  const rows=buildLeaveAccrualRows(empId);
+  if(!rows.length)return null;
+  allocateLeaveUsage(rows,getLeaveUsageRecords(empId),empId);
+  const 총발생=Math.round(rows.reduce((a,r)=>a+r.발생,0)*100)/100;
+  const 총사용=Math.round(rows.reduce((a,r)=>a+r.사용,0)*100)/100;
+  const 총잔여=Math.round((총발생-총사용)*100)/100;
+  return{총발생,총사용,총잔여};
+}
+function buildLeaveSummaryText(emp,summary){
+  const now=new Date();
+  const yyyymm=`${now.getFullYear()}년 ${String(now.getMonth()+1).padStart(2,'0')}월`;
+  return`📌 *[연차현황 안내]* ${yyyymm}\n안녕하세요, 피플팀입니다.\n\n👤 *${emp.이름}*\n• 발생: ${summary.총발생}시간\n• 사용: ${summary.총사용}시간\n• 잔여: ${summary.총잔여}시간\n\n※ 자세한 내역은 관제센터 프로그램 > 연차현황에서 확인하실 수 있습니다.`;
+}
+// 특정 직원 1명에게 연차현황 DM 발송
+async function sendLeaveSummaryToEmp(empId){
+  const emp=employees.find(e=>e.사번===empId);
+  if(!emp)return;
+  const con=contracts.filter(c=>c.사번===empId&&c.구분!=='퇴사').sort((a,b)=>new Date(b.cs)-new Date(a.cs))[0];
+  const slackId=con?.slackId||'';
+  if(!slackId){alert(emp.이름+'님의 SlackID가 등록되어 있지 않습니다.\n② 계약기간관리에서 해당 직원의 SlackID(U로 시작)를 입력해주세요.');return;}
+  const summary=getLeaveSummaryForEmp(empId);
+  if(!summary){alert('연차 정보를 계산할 수 없습니다(입사일을 확인해주세요).');return;}
+  const ok=await _sendSlackMsg(buildLeaveSummaryText(emp,summary), slackId);
+  if(ok)_toast('✅ '+emp.이름+'님께 연차현황 발송 완료','ok');
+}
+// 전체 재직자(SlackID 등록자)에게 순차적으로 연차현황 DM 발송
+async function sendAllLeaveSummary(){
+  const list=employees.filter(e=>contracts.some(c=>c.사번===e.사번));
+  if(!list.length){alert('발송할 대상이 없습니다.');return;}
+  if(!confirm(`전체 재직자 중 SlackID가 등록된 인원에게 연차현황(발생·사용·잔여)을 개인 DM으로 발송하시겠습니까?`))return;
+  const today=dStr(new Date().getFullYear(),new Date().getMonth()+1,new Date().getDate());
+  let sent=0,skipped=0;
+  for(const e of list){
+    const quitDate=getQuitDate(e.사번);
+    if(quitDate&&quitDate<today){skipped++;continue;} // 이미 퇴사한 직원은 제외
+    const con=contracts.filter(c=>c.사번===e.사번&&c.구분!=='퇴사').sort((a,b)=>new Date(b.cs)-new Date(a.cs))[0];
+    const slackId=con?.slackId||'';
+    if(!slackId){skipped++;continue;}
+    const summary=getLeaveSummaryForEmp(e.사번);
+    if(!summary){skipped++;continue;}
+    const ok=await _sendSlackMsg(buildLeaveSummaryText(e,summary), slackId);
+    if(ok)sent++;else skipped++;
+  }
+  _toast(`✅ 연차현황 전체 발송 완료 — 발송 ${sent}건 / 스킵 ${skipped}건`,'ok');
 }
 
 // ============================================================
