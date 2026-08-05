@@ -701,11 +701,14 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       </select>
       <div class="swrap"><input type="text" class="sinp" id="luQ" placeholder="이름·사번" oninput="renderLeaveUsage()" onkeydown="if(event.key==='Enter'){renderLeaveUsage();this.blur();}" style="width:150px"></div>
       <button class="btn p" onclick="addLeaveUsageRow()">+ 사용 추가</button>
+      <button class="btn p" onclick="saveAllLuPendRows()">✓ 전체 저장</button>
       <label class="btn am" style="cursor:pointer">📂 엑셀 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="uploadLeaveUsageExcel(event)"></label>
       <button class="btn bl" onclick="downloadLeaveUsageExcel()">⬇ 엑셀 다운로드</button>
       <button class="btn bl" onclick="downloadLeaveUsageTemplate()">📋 엑셀 템플릿</button>
     </div>
   </div>
+  <div style="font-size:11px;color:var(--tx3);margin:-6px 0 8px">※ "+ 사용 추가"로 행을 여러 개 만든 뒤, 사번 칸에 엑셀·노션에서 복사한 "사번·구분·사용일" 여러 줄을 붙여넣으면 자동으로 행이 채워집니다.</div>
+  <datalist id="luEmpDatalist"></datalist>
   <div class="tw" id="luTW">
     <table id="luT" style="width:100%;min-width:1000px">
       <thead><tr id="luHead"></tr></thead>
@@ -7824,9 +7827,111 @@ function getLeaveSojeong(empId,ds){
 function buildLuHead(){
   document.getElementById('luHead').innerHTML=LU_COLS.map((t,i)=>th(t,'luT',i)).join('');
 }
+// 저장 대기 중인 신규 입력행(다중 추가 + 붙여넣기 지원): {사번,구분,사용일}
+let _luPendingRows=[];
+// 사번 → 계약기간관리(employees/contracts) 기준 직원 매칭
+function luPendMatchEmp(사번){
+  if(!사번)return null;
+  return employees.find(e=>e.사번===사번&&contracts.some(c=>c.사번===사번))||null;
+}
+function luPendParseDate(s){
+  s=(s||'').trim();
+  if(!s)return'';
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+  const m=s.match(/(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
+  if(m)return`${m[1]}-${String(+m[2]).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`;
+  return s;
+}
+function buildLuPendingRowHtml(p,idx){
+  const emp=luPendMatchEmp(p.사번);
+  const 급여종=(emp&&p.사용일)?getConWageType(p.사번,p.사용일):'';
+  const join=emp?(getJoinDate(p.사번)||''):'';
+  const sojeong=(emp&&p.사용일)?getLeaveSojeong(p.사번,p.사용일):null;
+  const 사용시간=(typeof sojeong==='number')?Math.round(sojeong*getLeaveTypeFactor(p.구분)*100)/100:null;
+  const gubunOpts=LU_GUBUN_LIST.map(g=>`<option${p.구분===g?' selected':''}>${g}</option>`).join('');
+  const nameCell=p.사번?(emp?`<strong>${emp.이름}</strong>`:'<span style="color:var(--red);font-size:11px">미매칭</span>'):'<span style="color:var(--tx3);font-size:10px">-</span>';
+  return`<tr class="lu-pending-row" style="background:#EFF6FF">
+    <td><input class="con-inp" value="${p.사번||''}" list="luEmpDatalist" placeholder="사번 입력/붙여넣기" style="width:95px;font-family:monospace" onchange="updateLuPendField(${idx},'사번',this.value)" onpaste="luPendPaste(${idx},event)"></td>
+    <td>${nameCell}</td>
+    <td>${급여종?`<span class="bdg ${급여종==='월급직'?'bb':'bt'}" style="font-size:10px">${급여종}</span>`:'<span style="color:var(--tx3);font-size:10px">-</span>'}</td>
+    <td><select class="con-sel" onchange="updateLuPendField(${idx},'구분',this.value)">${gubunOpts}</select></td>
+    <td style="font-size:11px">${join||'-'}</td>
+    <td><input class="con-inp" type="date" value="${p.사용일||''}" onchange="updateLuPendField(${idx},'사용일',this.value)"></td>
+    <td class="c">${typeof sojeong==='number'?sojeong:'-'}</td>
+    <td class="c">${사용시간!==null?사용시간:'-'}</td>
+    <td class="c"><span style="font-size:10px;color:var(--blue)">수기입력</span></td>
+    <td><div style="display:flex;gap:3px"><button class="btn sm p" onclick="saveLuPendRow(${idx})">✓ 저장</button><button class="btn sm" onclick="removeLuPendRow(${idx})">✕</button></div></td>
+  </tr>`;
+}
+function updateLuPendField(idx,field,val){
+  if(!_luPendingRows[idx])return;
+  _luPendingRows[idx][field]=field==='사용일'?luPendParseDate(val):val.trim();
+  renderLeaveUsage();
+}
+function removeLuPendRow(idx){
+  _luPendingRows.splice(idx,1);
+  renderLeaveUsage();
+}
+// 엑셀·노션 등에서 복사한 "사번[\t구분\t사용일]" 여러 줄을 사번 칸에 붙여넣으면 자동으로 여러 행에 나눠 채움
+function luPendPaste(idx,evt){
+  const text=(evt.clipboardData||window.clipboardData).getData('text');
+  if(!text||(!text.includes('\t')&&!text.includes('\n')))return; // 단일 값 붙여넣기는 기본 동작 유지
+  evt.preventDefault();
+  const lines=text.replace(/\r/g,'').split('\n').filter(l=>l.trim()!=='');
+  if(!lines.length)return;
+  const parsed=lines.map(line=>{
+    const cols=line.split('\t');
+    const 구분=(cols[1]||'').trim();
+    return{사번:(cols[0]||'').trim(),구분:LU_GUBUN_LIST.includes(구분)?구분:'연차',사용일:luPendParseDate(cols[2]||'')};
+  });
+  _luPendingRows.splice(idx,1,...parsed);
+  renderLeaveUsage();
+}
+function validateLuPendRow(p){
+  if(!luPendMatchEmp(p.사번))return'사번 매칭 실패(계약기간관리에 없는 사번)';
+  if(!p.사용일||!/^\d{4}-\d{2}-\d{2}$/.test(p.사용일))return'사용일 형식 오류(YYYY-MM-DD)';
+  if(!LU_GUBUN_LIST.includes(p.구분))return'구분 오류';
+  if(getLeaveUsageRecords(p.사번).some(u=>u.사용일===p.사용일&&u.구분===p.구분))return'이미 등록된 이력';
+  return null;
+}
+function saveLuPendRow(idx){
+  const p=_luPendingRows[idx];if(!p)return;
+  const err=validateLuPendRow(p);
+  if(err){alert('저장할 수 없습니다: '+err);return;}
+  const no=leaveUsage.reduce((a,b)=>Math.max(a,b.no||0),0)+1;
+  leaveUsage.push({no,사번:p.사번,구분:p.구분,사용일:p.사용일,updated:new Date().toISOString()});
+  _luPendingRows.splice(idx,1);
+  renderLeaveUsage();saveAll();
+}
+function saveAllLuPendRows(){
+  if(!_luPendingRows.length){alert('추가할 행이 없습니다. "+ 사용 추가" 버튼으로 행을 먼저 추가하세요.');return;}
+  let maxNo=leaveUsage.reduce((a,b)=>Math.max(a,b.no||0),0);
+  const remain=[],fails=[];let added=0;
+  _luPendingRows.forEach(p=>{
+    const err=validateLuPendRow(p);
+    if(err){remain.push(p);fails.push(`${p.사번||'(빈값)'} ${p.사용일||''} - ${err}`);return;}
+    maxNo++;
+    leaveUsage.push({no:maxNo,사번:p.사번,구분:p.구분,사용일:p.사용일,updated:new Date().toISOString()});
+    added++;
+  });
+  _luPendingRows=remain;
+  renderLeaveUsage();saveAll();
+  alert(`✅ 저장 완료: ${added}건${fails.length?`\n\n⚠ 저장 실패 ${fails.length}건(행 유지, 수정 후 재저장):\n`+fails.join('\n'):''}`);
+}
+function addLeaveUsageRow(){
+  _luPendingRows.push({사번:'',구분:'연차',사용일:''});
+  renderLeaveUsage();
+  setTimeout(()=>{
+    const list=document.querySelectorAll('#luBody tr.lu-pending-row');
+    const last=list[list.length-1];
+    if(last){last.scrollIntoView({behavior:'smooth',block:'center'});const inp=last.querySelector('input');if(inp)inp.focus();}
+  },0);
+}
 function renderLeaveUsage(){
   const q=(document.getElementById('luQ')||{}).value||'';
   const yr=(document.getElementById('luYear')||{}).value||'all';
+  const dl=document.getElementById('luEmpDatalist');
+  if(dl)dl.innerHTML=employees.filter(e=>contracts.some(c=>c.사번===e.사번)).map(e=>`<option value="${e.사번}">${e.이름}</option>`).join('');
   const targets=employees.filter(e=>contracts.some(c=>c.사번===e.사번)&&(!q||e.이름.includes(q)||e.사번.includes(q)));
   const rows=[];
   targets.forEach(e=>{
@@ -7836,7 +7941,7 @@ function renderLeaveUsage(){
     });
   });
   rows.sort((a,b)=>a.u.사용일<b.u.사용일?1:(a.u.사용일>b.u.사용일?-1:0));
-  document.getElementById('luBody').innerHTML=rows.map(({emp,u})=>{
+  const existingHtml=rows.map(({emp,u})=>{
     const sojeong=getLeaveSojeong(emp.사번,u.사용일);
     const 배율=getLeaveTypeFactor(u.구분);
     const 사용시간=Math.round(sojeong*배율*100)/100;
@@ -7851,47 +7956,13 @@ function renderLeaveUsage(){
       <td style="font-size:11px">${u.사용일}</td>
       <td class="c">${sojeong||'-'}</td>
       <td class="c">${사용시간||'-'}</td>
-      <td class="c">${isAuto?'<span style="font-size:10px;color:var(--tx3)">🔒 자동연동</span>':'<span style="font-size:10px;color:var(--blue)">수동</span>'}</td>
+      <td class="c">${isAuto?'<span style="font-size:10px;color:var(--tx3)">자동입력</span>':'<span style="font-size:10px;color:var(--blue)">수기입력</span>'}</td>
       <td class="c">${isAuto?'-':`<button class="btn sm d" onclick="deleteLeaveUsageRow(${u.no})">삭제</button>`}</td>
     </tr>`;
-  }).join('')||`<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--tx3)">사용 이력이 없습니다</td></tr>`;
+  }).join('');
+  const pendingHtml=_luPendingRows.map((p,idx)=>buildLuPendingRowHtml(p,idx)).join('');
+  document.getElementById('luBody').innerHTML=pendingHtml+existingHtml||`<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--tx3)">사용 이력이 없습니다</td></tr>`;
   applyFilter('luT');
-}
-function addLeaveUsageRow(){
-  if(document.getElementById('luNewRow')){
-    document.getElementById('luNewRow').scrollIntoView({behavior:'smooth',block:'center'});
-    return;
-  }
-  const tbody=document.getElementById('luBody');if(!tbody)return;
-  const empOpts=employees.filter(e=>contracts.some(c=>c.사번===e.사번)).map(e=>`<option value="${e.사번}">${e.이름}(${e.사번})</option>`).join('');
-  const tr=document.createElement('tr');
-  tr.id='luNewRow';
-  tr.innerHTML=`
-    <td colspan="2"><select class="con-sel" id="lu2-emp" style="min-width:140px">${empOpts}</select></td>
-    <td style="color:var(--tx3);font-size:10px">-</td>
-    <td><select class="con-sel" id="lu2-type">${LU_GUBUN_LIST.map(g=>`<option>${g}</option>`).join('')}</select></td>
-    <td style="color:var(--tx3);font-size:10px">-</td>
-    <td><input class="con-inp" id="lu2-date" type="date"></td>
-    <td style="color:var(--tx3);font-size:10px">-</td>
-    <td style="color:var(--tx3);font-size:10px">-</td>
-    <td style="color:var(--tx3);font-size:10px">NEW</td>
-    <td><div style="display:flex;gap:3px"><button class="btn sm p" onclick="saveLeaveUsageRow()">✓ 저장</button><button class="btn sm" onclick="cancelLeaveUsageRow()">✕</button></div></td>`;
-  tbody.insertBefore(tr,tbody.firstChild);
-  tr.scrollIntoView({behavior:'smooth',block:'center'});
-}
-function cancelLeaveUsageRow(){const row=document.getElementById('luNewRow');if(row)row.remove();}
-function saveLeaveUsageRow(){
-  const 사번=(document.getElementById('lu2-emp')||{}).value;
-  if(!사번){alert('직원을 선택하세요.');return;}
-  const 구분=document.getElementById('lu2-type').value;
-  const 사용일=document.getElementById('lu2-date').value;
-  if(!사용일){alert('사용일을 입력하세요.');return;}
-  const dup=getLeaveUsageRecords(사번).some(u=>u.사용일===사용일&&u.구분===구분);
-  if(dup){alert('이미 등록된 연차/반차 사용일입니다.');return;}
-  const no=leaveUsage.reduce((a,b)=>Math.max(a,b.no||0),0)+1;
-  leaveUsage.push({no,사번,구분,사용일,updated:new Date().toISOString()});
-  cancelLeaveUsageRow();
-  renderLeaveUsage();saveAll();
 }
 function deleteLeaveUsageRow(no){
   const u=leaveUsage.find(x=>x.no===no);if(!u)return;
@@ -7955,7 +8026,7 @@ function downloadLeaveUsageExcel(){
   const wsData=[hdr,...rows.map(({emp,u})=>{
     const sojeong=getLeaveSojeong(emp.사번,u.사용일);
     const 배율=getLeaveTypeFactor(u.구분);
-    return[emp.사번,emp.이름,getConWageType(emp.사번,u.사용일),u.구분,getJoinDate(emp.사번)||'',u.사용일,sojeong,Math.round(sojeong*배율*100)/100,u.source==='auto'?'자동연동':'수동'];
+    return[emp.사번,emp.이름,getConWageType(emp.사번,u.사용일),u.구분,getJoinDate(emp.사번)||'',u.사용일,sojeong,Math.round(sojeong*배율*100)/100,u.source==='auto'?'자동입력':'수기입력'];
   })];
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.aoa_to_sheet(wsData);
