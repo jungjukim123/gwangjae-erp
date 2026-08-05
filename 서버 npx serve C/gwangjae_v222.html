@@ -2243,6 +2243,8 @@ function getLeaveHourPerDay(empId,ds){
 // 연차 발생 회차 계산 (입사일 기준 근로기준법 표준: 1년미만 매월1일 최대11일 / 1년이상 15+2년마다1일 가산 최대25일)
 // 계약기간이 1년 미만이거나 갱신 없이 만료된 경우, 입사일부터 최종 계약 종료일까지를 재직기간으로 보고 계산
 // 1년미만연차는 산정월별로 결근 여부를 확인해 결근이 있으면 그 달은 미발생 처리(근로기준법) — detail 배열에 월별 산정내역 보관
+// ★ 주 소정근로시간이 15시간 미만이면 연차가 발생하지 않음(근로기준법 제18조③) — 계약이 기간별로 15시간 위/아래를 오갈 수 있으므로
+//   1년미만연차는 매월 산정일(creditDate) 시점, 1년이상연차는 매 회차 기산일(bStart) 시점의 계약 기준으로 그때그때 판정
 function buildLeaveAccrualRows(empId){
   const join=getJoinDate(empId);if(!join)return[];
   const today=dStr(new Date().getFullYear(),new Date().getMonth()+1,new Date().getDate());
@@ -2264,8 +2266,11 @@ function buildLeaveAccrualRows(empId){
     const creditDate=addMonthsClamped(join,n);
     const 결근일자=absences.filter(d=>d>=winStart&&d<=winEnd);
     let 발생시간=null,사유='';
+    const weekSojeong=getWeekSojeong(empId,creditDate);
     if(creditDate>asOf){
       사유=`${creditDate}까지 재직해야 발생하나, 재직기간이 ${asOf}까지라 미발생`;
+    }else if(weekSojeong<15){
+      사유=`주 소정근로시간이 15시간 미만(${weekSojeong}시간)이라 미발생`;
     }else if(결근일자.length>0){
       사유=`해당 산정기간 중 결근(${결근일자.join(', ')})이 있어 미발생`;
     }else{
@@ -2281,9 +2286,10 @@ function buildLeaveAccrualRows(empId){
     const bStart=addYearsClamped(join,n);
     if(bStart>asOf)break;
     const bEnd=addDaysStr(addYearsClamped(join,n+1),-1);
-    const days=Math.min(15+Math.floor((n-1)/2),25);
+    const under15=getWeekSojeong(empId,bStart)<15;
+    const days=under15?0:Math.min(15+Math.floor((n-1)/2),25);
     const hourPerDay=getLeaveHourPerDay(empId,bStart);
-    rows.push({구분:'1년이상연차',cs:bStart,ce:bEnd,발생:Math.round(days*hourPerDay*100)/100});
+    rows.push({구분:'1년이상연차',cs:bStart,ce:bEnd,발생:under15?0:Math.round(days*hourPerDay*100)/100});
     n++;
   }
   return rows;
