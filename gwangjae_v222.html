@@ -7838,9 +7838,8 @@ function buildLsUsageBoxHtml(e){
     </tr>`;
   }).join('');
   total=Math.round(total*100)/100;
-  return`<div style="border:1px solid var(--bd2);border-radius:8px;padding:14px;max-width:340px;flex:1">
-    <div style="font-weight:700;margin-bottom:6px">${e.이름} — 사용내역</div>
-    <div style="font-size:11px;color:var(--tx3);margin-bottom:10px">사용시간 = 구분배율 × (주소정근로시간÷40)×8 (그날 실제 소정근로시간과 무관하게 표준환산)</div>
+  return`<div style="border:1px solid var(--bd2);border-radius:8px;padding:14px;max-width:520px;flex:1.4">
+    <div style="font-weight:700;margin-bottom:10px">${e.이름} — 사용내역</div>
     <table style="width:100%;border-collapse:collapse">
       <thead><tr style="background:#F1F5F9">
         <th style="padding:5px 8px;font-size:11px;text-align:left">사용일</th>
@@ -8102,7 +8101,12 @@ function renderLeaveUsage(){
       rows.push({emp:e,u});
     });
   });
-  rows.sort((a,b)=>a.u.사용일<b.u.사용일?1:(a.u.사용일>b.u.사용일?-1:0));
+  rows.sort((a,b)=>{
+    const ja=getJoinDate(a.emp.사번)||'',jb=getJoinDate(b.emp.사번)||'';
+    if(ja!==jb)return ja<jb?-1:1;
+    if(a.emp.이름!==b.emp.이름)return a.emp.이름<b.emp.이름?-1:1;
+    return 0;
+  });
   const existingHtml=rows.map(({emp,u})=>{
     const sojeong=getLeaveSojeong(emp.사번,u.사용일);
     const 배율=getLeaveTypeFactor(u.구분);
