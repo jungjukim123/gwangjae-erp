@@ -7814,7 +7814,7 @@ function submitAttReq(){
 // ============================================================
 // ⑫ 연차현황 — 입사일 기준 자동 계산 (읽기전용)
 // ============================================================
-const LS_COLS=['사번','이름','급여종','입사일','계약종료일','퇴사일','구분','사용시작일','사용종료일','발생시간','사용시간','잔여연차'];
+const LS_COLS=['사번','이름','급여종','입사일','계약종료일','퇴사일','구분','사용시작일','사용종료일','발생시간','사용시간','잔여연차(시간)'];
 function buildLsHead(){
   document.getElementById('lsHead').innerHTML=LS_COLS.map((t,i)=>th(t,'lsT',i)).join('');
 }
@@ -7941,7 +7941,7 @@ function downloadLeaveStatusExcel(){
     accRows.forEach(r=>rows.push([e.사번,e.이름,급여종,getJoinDate(e.사번)||'',conEnd||'',quitDate||'',r.구분,r.cs,r.ce,r.발생,r.사용,r.잔여<0?'-':r.잔여]));
   });
   if(!rows.length){alert('다운로드할 데이터가 없습니다.');return;}
-  const hdr=['사번','이름','급여종','입사일','계약종료일','퇴사일','구분','사용시작일','사용종료일','발생시간','사용시간','잔여연차'];
+  const hdr=['사번','이름','급여종','입사일','계약종료일','퇴사일','구분','사용시작일','사용종료일','발생시간','사용시간','잔여연차(시간)'];
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.aoa_to_sheet([hdr,...rows]);
   ws['!cols']=hdr.map(()=>({wch:12}));
