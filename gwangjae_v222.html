@@ -6510,16 +6510,16 @@ function setAttManual(eid,ds,field){if(isMonthConfirmed()){alert("확정된 월�
   rec[field]=t;
   _patchHrAttRow(eid,ds);saveAll();
 }
-// 되돌리기: 출퇴근 기록을 "없음"으로 고정(locked)
-// ★ 수기입력(수동 결정) 우선 원칙: attData[k]를 그냥 지우기만 하면 getAtt()가 slackData(연동 원본)로
-//    다시 폴백해서, 재로드/재동기화 시 지운 값이 되살아나는 문제가 있었음.
-//    locked:true인 "빈 기록"을 그대로 저장해두면 getAt()가 항상 이 값을 최우선으로 쓰고,
-//    Supabase에도 정상 저장/복원되어 새로고침해도 유지됨.
+// 되돌리기: 수기입력/기준시간반영 등 고정(locked) 기록을 완전히 삭제해 연동 원본(slackData)이 다시 보이게 복원
+// ★ 진짜 "출퇴근 없음"으로 강제 고정하고 싶을 때(예: 슬랙 값 자체가 잘못된 경우)는 "수기입력"에서
+//    빈 값으로 저장하면 됨(_ensureAtt가 locked:true로 고정) — 되돌리기와 역할이 겹치지 않도록 분리.
+// Supabase에도 즉시 삭제 반영(로컬 attData만 지우면 saveAll의 upsert가 기존 서버 행을 그대로 두어
+//    새로고침 시 되살아나므로, 반드시 DELETE 요청을 같이 보내야 함)
 function revertAtt(eid,ds){if(isMonthConfirmed()){alert("확정된 월은 수정할 수 없습니다.");return;}
   const k=`${eid}_${ds}`;
-  const cur=getAtt(eid,ds);
-  if(!cur.in&&!cur.out){alert('되돌릴 근태 기록이 없습니다.\n(이미 비어있습니다)');return;}
-  attData[k]={in:'',out:'',source:'manual',locked:true,updated:_kstNow()};
+  if(!attData[k]){alert('되돌릴 근태 기록이 없습니다.\n(수기입력/기준시간반영된 기록이 없습니다)');return;}
+  delete attData[k];
+  fetch(`${SB_URL}/rest/v1/att_data?key=eq.${encodeURIComponent(k)}`,{method:'DELETE',headers:SB_HDR}).catch(()=>{});
   _patchHrAttRow(eid,ds);saveAll();
 }
 
@@ -6682,14 +6682,15 @@ function revertAtt(eid,ds){if(isMonthConfirmed()){alert("확정된 월은 수정
         rec[field]=val;
       });
     } else if(action==='revert'){
-      // ★ 단순 삭제 시 slackData(연동 원본)로 폴백되어 되살아나므로, locked 빈 기록으로 고정 (revertAtt와 동일 원리)
+      // 고정(locked) 기록을 완전히 삭제해 연동 원본(slackData)이 다시 보이게 복원 (revertAtt와 동일 원리)
+      const _delKeys=[];
       _cells.forEach(({eid,ds})=>{
         const k=`${eid}_${ds}`;
-        const cur=getAtt(eid,ds);
-        if(cur.in||cur.out){
-          attData[k]={in:'',out:'',source:'manual',locked:true,updated:_kstNow()};
-        }
+        if(attData[k]){delete attData[k];_delKeys.push(k);}
       });
+      if(_delKeys.length){
+        fetch(`${SB_URL}/rest/v1/att_data?key=in.(${_delKeys.map(encodeURIComponent).join(',')})`,{method:'DELETE',headers:SB_HDR}).catch(()=>{});
+      }
     }
     // 변경된 (eid,ds) 조합만 패치 (중복 제거)
     const _patchedKeys=new Set();
