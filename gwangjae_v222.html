@@ -681,7 +681,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
     </div>
   </div>
   <div class="tw" id="lsTW">
-    <table id="lsT" style="width:100%;min-width:1100px">
+    <table id="lsT" style="width:100%;min-width:1200px">
       <thead><tr id="lsHead"></tr></thead>
       <tbody id="lsBody"></tbody>
     </table>
@@ -2220,13 +2220,26 @@ function buildLeaveAccrualRows(empId){
   return rows;
 }
 
-// 사번의 전체 연차/반차 사용 이력(월별근태현황 자동연동 + 수동/업로드) 통합 조회, 사용일 오름차순
+// 연차사용현황 구분값 목록 및 구분별 연차 소진 비율(=사용시간 배율): 반반차는 1/4, 결근/공가는 유급이나 연차를 소진하지 않음(0)
+const LU_GUBUN_LIST=['연차','반차','반반차','결근','공가'];
+const LU_GUBUN_BADGE={연차:'bg',반차:'ba',반반차:'bv',결근:'br',공가:'bb'};
+function getLeaveTypeFactor(gubun){
+  if(gubun==='반차')return 0.5;
+  if(gubun==='반반차')return 0.25;
+  if(gubun==='결근'||gubun==='공가')return 0;
+  return 1; // 연차
+}
+// 사번의 전체 연차/반차/결근 사용 이력(월별근태현황 자동연동 + 수동/업로드) 통합 조회, 사용일 오름차순
+// ★ 월별근태현황 비고가 '월차'인 경우도 연차사용현황에서는 '연차'로 인식해 반영(월차=연차의 다른 표기)
 function getLeaveUsageRecords(empId){
   const list=[];
   Object.values(_hrRowsCache).forEach(monthRows=>{
     monthRows.forEach(r=>{
       if(!r.emp||r.emp.사번!==empId)return;
-      r.days.forEach(d=>{if(d.bigo==='연차'||d.bigo==='반차')list.push({사번:empId,구분:d.bigo,사용일:d.date,source:'auto'});});
+      r.days.forEach(d=>{
+        if(d.bigo==='연차'||d.bigo==='반차'||d.bigo==='결근')list.push({사번:empId,구분:d.bigo,사용일:d.date,source:'auto'});
+        else if(d.bigo==='월차')list.push({사번:empId,구분:'연차',사용일:d.date,source:'auto'});
+      });
     });
   });
   leaveUsage.forEach(u=>{if(u.사번===empId)list.push({...u,source:'manual'});});
@@ -2238,11 +2251,12 @@ function getLeaveUsageRecords(empId){
   }).sort((a,b)=>a.사용일<b.사용일?-1:(a.사용일>b.사용일?1:0));
 }
 
-// 발생 회차 배열에 사용 이력을 선입선출(FIFO)로 소진 — rows에 사용/잔여 필드 채움
+// 발생 회차 배열에 사용 이력을 선입선출(FIFO)로 소진 — rows에 사용/잔여 필드 채움 (결근/공가는 연차를 소진하지 않음)
 function allocateLeaveUsage(rows,usageRecords){
   rows.forEach(r=>r.사용=0);
   usageRecords.forEach(u=>{
-    let remain=u.구분==='반차'?0.5:1;
+    let remain=getLeaveTypeFactor(u.구분);
+    if(remain<=0)return;
     for(const r of rows){
       if(u.사용일<r.cs)continue;
       const avail=r.발생-r.사용;
@@ -7729,7 +7743,7 @@ function submitAttReq(){
 // ============================================================
 // ⑫ 연차현황 — 입사일 기준 자동 계산 (읽기전용)
 // ============================================================
-const LS_COLS=['사번','이름','급여종','입사일','퇴사일','구분','사용시작일','사용종료일','발생일수','사용일수','잔여연차'];
+const LS_COLS=['사번','이름','급여종','입사일','계약종료일','퇴사일','구분','사용시작일','사용종료일','발생일수','사용일수','잔여연차'];
 function buildLsHead(){
   document.getElementById('lsHead').innerHTML=LS_COLS.map((t,i)=>th(t,'lsT',i)).join('');
 }
@@ -7743,12 +7757,14 @@ function renderLeaveStatus(){
     allocateLeaveUsage(rows,getLeaveUsageRecords(e.사번));
     const 급여종=getMergedEmp(e).임금;
     const quitDate=getQuitDate(e.사번);
+    const conEnd=getLatestConEnd(e.사번);
     rows.forEach(r=>{
       html.push(`<tr>
         <td style="font-family:monospace;font-size:11px">${e.사번}</td>
         <td><strong>${e.이름}</strong></td>
         <td><span class="bdg ${급여종==='월급직'?'bb':'bt'}" style="font-size:10px">${급여종}</span></td>
         <td style="font-size:11px">${getJoinDate(e.사번)||'-'}</td>
+        <td style="font-size:11px">${conEnd||'-'}</td>
         <td style="font-size:11px;color:${quitDate?'var(--red)':'var(--tx3)'}">${quitDate||'-'}</td>
         <td><span class="bdg ${r.구분==='1년미만연차'?'ba':'bg'}" style="font-size:10px">${r.구분}</span></td>
         <td style="font-size:11px">${r.cs}</td>
@@ -7759,7 +7775,7 @@ function renderLeaveStatus(){
       </tr>`);
     });
   });
-  document.getElementById('lsBody').innerHTML=html.join('')||`<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--tx3)">표시할 데이터가 없습니다</td></tr>`;
+  document.getElementById('lsBody').innerHTML=html.join('')||`<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--tx3)">표시할 데이터가 없습니다</td></tr>`;
   applyFilter('lsT');
 }
 function downloadLeaveStatusExcel(){
@@ -7772,10 +7788,11 @@ function downloadLeaveStatusExcel(){
     allocateLeaveUsage(accRows,getLeaveUsageRecords(e.사번));
     const 급여종=getMergedEmp(e).임금;
     const quitDate=getQuitDate(e.사번);
-    accRows.forEach(r=>rows.push([e.사번,e.이름,급여종,getJoinDate(e.사번)||'',quitDate||'',r.구분,r.cs,r.ce,r.발생,r.사용,r.잔여]));
+    const conEnd=getLatestConEnd(e.사번);
+    accRows.forEach(r=>rows.push([e.사번,e.이름,급여종,getJoinDate(e.사번)||'',conEnd||'',quitDate||'',r.구분,r.cs,r.ce,r.발생,r.사용,r.잔여]));
   });
   if(!rows.length){alert('다운로드할 데이터가 없습니다.');return;}
-  const hdr=['사번','이름','급여종','입사일','퇴사일','구분','사용시작일','사용종료일','발생일수','사용일수','잔여연차'];
+  const hdr=['사번','이름','급여종','입사일','계약종료일','퇴사일','구분','사용시작일','사용종료일','발생일수','사용일수','잔여연차'];
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.aoa_to_sheet([hdr,...rows]);
   ws['!cols']=hdr.map(()=>({wch:12}));
@@ -7821,7 +7838,7 @@ function renderLeaveUsage(){
   rows.sort((a,b)=>a.u.사용일<b.u.사용일?1:(a.u.사용일>b.u.사용일?-1:0));
   document.getElementById('luBody').innerHTML=rows.map(({emp,u})=>{
     const sojeong=getLeaveSojeong(emp.사번,u.사용일);
-    const 배율=u.구분==='반차'?0.5:1;
+    const 배율=getLeaveTypeFactor(u.구분);
     const 사용시간=Math.round(sojeong*배율*100)/100;
     const 급여종=getConWageType(emp.사번,u.사용일);
     const isAuto=u.source==='auto';
@@ -7829,7 +7846,7 @@ function renderLeaveUsage(){
       <td style="font-family:monospace;font-size:11px">${emp.사번}</td>
       <td><strong>${emp.이름}</strong></td>
       <td><span class="bdg ${급여종==='월급직'?'bb':'bt'}" style="font-size:10px">${급여종}</span></td>
-      <td><span class="bdg ${u.구분==='연차'?'bg':'ba'}" style="font-size:10px">${u.구분}</span></td>
+      <td><span class="bdg ${LU_GUBUN_BADGE[u.구분]||'bs'}" style="font-size:10px">${u.구분}</span></td>
       <td style="font-size:11px">${getJoinDate(emp.사번)||'-'}</td>
       <td style="font-size:11px">${u.사용일}</td>
       <td class="c">${sojeong||'-'}</td>
@@ -7852,7 +7869,7 @@ function addLeaveUsageRow(){
   tr.innerHTML=`
     <td colspan="2"><select class="con-sel" id="lu2-emp" style="min-width:140px">${empOpts}</select></td>
     <td style="color:var(--tx3);font-size:10px">-</td>
-    <td><select class="con-sel" id="lu2-type"><option>연차</option><option>반차</option></select></td>
+    <td><select class="con-sel" id="lu2-type">${LU_GUBUN_LIST.map(g=>`<option>${g}</option>`).join('')}</select></td>
     <td style="color:var(--tx3);font-size:10px">-</td>
     <td><input class="con-inp" id="lu2-date" type="date"></td>
     <td style="color:var(--tx3);font-size:10px">-</td>
@@ -7906,7 +7923,7 @@ function uploadLeaveUsageExcel(evt){
         const 사번=String(row[IDX.사번]||'').trim();
         const 구분=String(row[IDX.구분]||'').trim();
         const 사용일=toDate(row[IDX.사용일]);
-        if(!사번||!사용일||(구분!=='연차'&&구분!=='반차')||!employees.some(e=>e.사번===사번)){skipped++;return;}
+        if(!사번||!사용일||!LU_GUBUN_LIST.includes(구분)||!employees.some(e=>e.사번===사번)){skipped++;return;}
         if(getLeaveUsageRecords(사번).some(u=>u.사용일===사용일&&u.구분===구분)){skipped++;return;}
         maxNo++;
         leaveUsage.push({no:maxNo,사번,구분,사용일,updated:new Date().toISOString()});
@@ -7937,7 +7954,7 @@ function downloadLeaveUsageExcel(){
   const hdr=['사번','이름','급여종','구분','입사일','사용일','소정근로시간','사용시간','출처'];
   const wsData=[hdr,...rows.map(({emp,u})=>{
     const sojeong=getLeaveSojeong(emp.사번,u.사용일);
-    const 배율=u.구분==='반차'?0.5:1;
+    const 배율=getLeaveTypeFactor(u.구분);
     return[emp.사번,emp.이름,getConWageType(emp.사번,u.사용일),u.구분,getJoinDate(emp.사번)||'',u.사용일,sojeong,Math.round(sojeong*배율*100)/100,u.source==='auto'?'자동연동':'수동'];
   })];
   const wb=XLSX.utils.book_new();
@@ -7953,11 +7970,17 @@ function downloadLeaveUsageTemplate(){
   const hdr=['사번','구분','사용일'];
   const sample=[
     ['B2600601','연차','2026-06-15'],
-    ['B2600601','반차','2026-06-20']
+    ['B2600601','반차','2026-06-20'],
+    ['B2600601','반반차','2026-06-22'],
+    ['B2600601','결근','2026-06-23'],
+    ['B2600601','공가','2026-06-24']
   ];
   const note=[
     [],
-    ['※ 구분: 연차 또는 반차만 입력'],
+    ['※ 구분: 연차 / 반차 / 반반차 / 결근 / 공가 중 하나만 입력'],
+    ['※ 반반차는 해당일 소정근로시간의 1/4을 사용시간으로 처리합니다'],
+    ['※ 결근은 사용시간 0으로 처리되며 연차를 소진하지 않습니다'],
+    ['※ 공가는 유급이므로 사용시간 0으로 처리되며 연차를 소진하지 않습니다'],
     ['※ 사용일: YYYY-MM-DD 형식으로 입력'],
     ['※ 이미 등록된(사번+구분+사용일) 이력은 업로드 시 자동으로 건너뜁니다'],
   ];
