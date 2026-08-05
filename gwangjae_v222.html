@@ -2320,7 +2320,8 @@ function getLeaveUsageRecords(empId){
 }
 
 // 발생 회차 배열(시간 단위)에 사용 이력을 선입선출(FIFO)로 소진 — rows에 사용/잔여 필드 채움 (결근/공가는 연차를 소진하지 않음)
-// 사용 시간은 그날의 실제 소정근로시간이 아니라 getLeaveHourPerDay(표준 환산시간)×구분배율로 통일 계산
+// 사용 시간은 연차사용현황에 표시되는 값과 동일하게 그날의 실제 소정근로시간(getLeaveSojeong)×구분배율로 계산
+// (발생시간은 계속 getLeaveHourPerDay 표준환산시간 기준 — 발생과 사용의 산정 기준은 서로 다름)
 // ★ 실제 사용시간 합이 발생시간을 초과하면(과다사용) 그 초과분도 마지막 해당 회차에 그대로 반영해 잔여가 음수로 나오게 함
 //   (기존엔 avail 한도까지만 채워 넣어 초과분이 누락되면서 사용시간이 실제보다 적게, 잔여는 0으로 잘못 표시됐음)
 function allocateLeaveUsage(rows,usageRecords,empId){
@@ -2328,7 +2329,7 @@ function allocateLeaveUsage(rows,usageRecords,empId){
   usageRecords.forEach(u=>{
     const factor=getLeaveTypeFactor(u.구분);
     if(factor<=0)return;
-    let remain=Math.round(factor*getLeaveHourPerDay(empId,u.사용일)*100)/100;
+    let remain=Math.round(factor*getLeaveSojeong(empId,u.사용일)*100)/100;
     let lastEligible=null;
     for(const r of rows){
       if(u.사용일<r.cs)continue;
@@ -7831,12 +7832,12 @@ function toggleLsDetail(empId){
   _lsExpandedEmp=_lsExpandedEmp===empId?null:empId;
   renderLeaveStatus();
 }
-// 사용내역 박스 HTML — 연차/반차/반반차 사용 이력별 실제 소진시간(연차 1일 표준환산시간×구분배율) 및 합계
+// 사용내역 박스 HTML — 연차/반차/반반차 사용 이력별 사용시간(연차사용현황과 동일하게 그날 실제 소정근로시간×구분배율) 및 합계
 function buildLsUsageBoxHtml(e){
   const recs=getLeaveUsageRecords(e.사번).filter(u=>getLeaveTypeFactor(u.구분)>0).sort((a,b)=>a.사용일<b.사용일?-1:(a.사용일>b.사용일?1:0));
   let total=0;
   const rowsHtml=recs.map(u=>{
-    const hrs=Math.round(getLeaveTypeFactor(u.구분)*getLeaveHourPerDay(e.사번,u.사용일)*100)/100;
+    const hrs=Math.round(getLeaveTypeFactor(u.구분)*getLeaveSojeong(e.사번,u.사용일)*100)/100;
     total+=hrs;
     return`<tr>
       <td style="padding:5px 8px;font-size:11px">${u.사용일}</td>
