@@ -1219,6 +1219,29 @@ async function _sbReplace(table, rows) {
   return true;
 }
 
+/* meta 테이블에 통째로 저장되는 배열형 데이터(예: leaveUsage)를 저장 직전 서버 최신값과 병합
+   — saveAll()이 해당 데이터와 무관한 화면 작업으로 호출돼도, 메모리상 값이 최신이 아닌 상태로
+     서버의 정상 데이터를 덮어써 유실시키는 사고를 방지한다.
+   병합 규칙: 서버에만 있는 항목(다른 세션에서 추가)은 유지, 로컬 값이 있으면 로컬이 우선,
+             deletedKeys에 있는 키는 서버에 남아있어도 결과에서 제외(이번 세션에서 명시적으로 삭제한 항목).
+   조회 실패 시에는 병합을 건너뛰고 로컬 값을 그대로 반환(기존 동작 유지 — 저장 자체가 막히지 않도록). */
+async function _mergeMetaArrayByKey(metaKey, localArr, keyField, deletedKeys) {
+  try {
+    const rows = await _sbSelect('meta', `key=eq.${metaKey}`);
+    if (!rows || !rows.length || !rows[0].value) return localArr || [];
+    const serverArr = JSON.parse(rows[0].value);
+    if (!Array.isArray(serverArr)) return localArr || [];
+    const map = new Map();
+    serverArr.forEach(item => {
+      if (item && item[keyField] != null && !(deletedKeys && deletedKeys.has(item[keyField]))) map.set(item[keyField], item);
+    });
+    (localArr || []).forEach(item => { if (item && item[keyField] != null) map.set(item[keyField], item); });
+    return Array.from(map.values());
+  } catch (e) {
+    return localArr || [];
+  }
+}
+
 // ============================================================
 // DB 상태 UI
 // ============================================================
@@ -1756,6 +1779,13 @@ async function saveAll() {
     });
 
     // ⑥ meta upsert
+    // ★ leaveUsage는 저장 직전 서버 최신값과 병합 — saveAll()이 연차사용현황과 무관한 다른 화면 작업으로
+    //   호출될 때, 메모리상 leaveUsage가 (다른 탭/실시간 재조회 등으로) 최신이 아닌 상태에서 그대로 덮어써
+    //   서버에 정상 저장돼 있던 연차사용현황 데이터가 유실되는 사고를 방지한다.
+    //   병합 규칙: 서버에만 있는 항목(다른 세션에서 추가)은 유지, 로컬에서 추가/수정한 항목이 우선,
+    //             이번 세션에서 명시적으로 삭제한 항목(no)은 서버에 남아있어도 제외.
+    leaveUsage = await _mergeMetaArrayByKey('leaveUsage', leaveUsage, 'no', _deletedLeaveUsageNos);
+    _deletedLeaveUsageNos.clear();
     const metaRows = [
       { key: 'accounts',      value: JSON.stringify(getAccounts()),        updated: _now },
       { key: 'salExtra',      value: JSON.stringify(salExtra||{}),         updated: _now },
@@ -2180,6 +2210,9 @@ function rate(e){const m=getMergedEmp(e);return m.임금==='시급직'?m.시급:
 // 연차현황 / 연차사용현황 — 계산 헬퍼
 // ============================================================
 let leaveUsage=[]; // 수동/엑셀 업로드분만 저장: {no,사번,구분('연차'|'반차'),사용일,updated} — 월별근태현황 자동연동분은 저장하지 않고 매번 계산
+// saveAll()이 다른 화면 작업으로 호출될 때 메모리상 leaveUsage가 최신 상태가 아니어서(다른 탭/실시간 재조회 등)
+// 서버의 정상 데이터를 빈 배열 등으로 덮어써 유실시키는 사고를 막기 위한 삭제 추적(tombstone) — saveAll에서 서버값과 병합 시 사용
+let _deletedLeaveUsageNos=new Set();
 
 function addDaysStr(ds,n){const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return _localDate(d);}
 function addMonthsClamped(ds,n){const[y,m,d]=ds.split('-').map(Number);const t=(m-1)+n;const ny=y+Math.floor(t/12);const nm=(t%12+12)%12+1;return dStr(ny,nm,Math.min(d,dim(ny,nm)));}
@@ -7791,6 +7824,37 @@ function toggleLsDetail(empId){
   _lsExpandedEmp=_lsExpandedEmp===empId?null:empId;
   renderLeaveStatus();
 }
+// 사용내역 박스 HTML — 연차/반차/반반차 사용 이력별 실제 소진시간(연차 1일 표준환산시간×구분배율) 및 합계
+function buildLsUsageBoxHtml(e){
+  const recs=getLeaveUsageRecords(e.사번).filter(u=>getLeaveTypeFactor(u.구분)>0).sort((a,b)=>a.사용일<b.사용일?-1:(a.사용일>b.사용일?1:0));
+  let total=0;
+  const rowsHtml=recs.map(u=>{
+    const hrs=Math.round(getLeaveTypeFactor(u.구분)*getLeaveHourPerDay(e.사번,u.사용일)*100)/100;
+    total+=hrs;
+    return`<tr>
+      <td style="padding:5px 8px;font-size:11px">${u.사용일}</td>
+      <td style="padding:5px 8px;font-size:11px"><span class="bdg ${LU_GUBUN_BADGE[u.구분]||'bs'}" style="font-size:10px">${u.구분}</span></td>
+      <td style="padding:5px 8px;font-size:11px;text-align:center">${hrs}시간</td>
+    </tr>`;
+  }).join('');
+  total=Math.round(total*100)/100;
+  return`<div style="border:1px solid var(--bd2);border-radius:8px;padding:14px;max-width:340px;flex:1">
+    <div style="font-weight:700;margin-bottom:6px">${e.이름} — 사용내역</div>
+    <div style="font-size:11px;color:var(--tx3);margin-bottom:10px">사용시간 = 구분배율 × (주소정근로시간÷40)×8 (그날 실제 소정근로시간과 무관하게 표준환산)</div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:#F1F5F9">
+        <th style="padding:5px 8px;font-size:11px;text-align:left">사용일</th>
+        <th style="padding:5px 8px;font-size:11px;text-align:left">구분</th>
+        <th style="padding:5px 8px;font-size:11px;text-align:center">사용시간</th>
+      </tr></thead>
+      <tbody>${rowsHtml||'<tr><td colspan="3" style="padding:10px;text-align:center;color:var(--tx3);font-size:11px">사용 이력이 없습니다</td></tr>'}</tbody>
+      <tfoot><tr style="border-top:1px solid var(--bd2)">
+        <td colspan="2" style="padding:6px 8px;font-size:11px;font-weight:700">합계</td>
+        <td style="padding:6px 8px;font-size:11px;font-weight:700;text-align:center">${total}시간</td>
+      </tr></tfoot>
+    </table>
+  </div>`;
+}
 // 1년미만연차 월별 산정내역 상세 박스 HTML
 function buildLsDetailHtml(e,detail){
   const conEnd=getLatestConEnd(e.사번)||'-';
@@ -7806,22 +7870,25 @@ function buildLsDetailHtml(e,detail){
     </tr>`;
   }).join('');
   return`<tr class="ls-detail-row"><td colspan="12" style="padding:14px 18px;background:#F8FAFC">
-    <div style="border:1px solid var(--bd2);border-radius:8px;padding:14px;max-width:640px">
-      <div style="font-weight:700;margin-bottom:6px">${e.이름} — 1년미만연차 월별 산정내역</div>
-      <div style="font-size:11px;color:var(--tx3);margin-bottom:10px">입사일 ${getJoinDate(e.사번)||'-'} · 계약종료일 ${conEnd} · 발생시간은 산정종료일 다음날 기준 (주소정근로시간÷40)×8로 환산</div>
-      <table style="width:100%;border-collapse:collapse">
-        <thead><tr style="background:#F1F5F9">
-          <th style="padding:5px 8px;font-size:11px;text-align:left">산정시작일</th>
-          <th style="padding:5px 8px;font-size:11px;text-align:left">산정종료일</th>
-          <th style="padding:5px 8px;font-size:11px;text-align:left">결근일수</th>
-          <th style="padding:5px 8px;font-size:11px;text-align:center">발생시간</th>
-        </tr></thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-      <div style="font-size:10px;color:var(--tx3);margin-top:8px;line-height:1.6">
-        ※ 노란색 행: 산정종료일 다음날까지 재직해야 발생하는데, 그 전에 재직기간이 끝나 발생하지 않은 달입니다.<br>
-        ※ 산정기간(산정시작일~산정종료일) 중 결근이 1일 이상 있으면 해당 달의 연차는 발생하지 않습니다(근로기준법 제60조).
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
+      <div style="border:1px solid var(--bd2);border-radius:8px;padding:14px;max-width:640px;flex:1.6">
+        <div style="font-weight:700;margin-bottom:6px">${e.이름} — 1년미만연차 월별 산정내역</div>
+        <div style="font-size:11px;color:var(--tx3);margin-bottom:10px">입사일 ${getJoinDate(e.사번)||'-'} · 계약종료일 ${conEnd} · 발생시간은 산정종료일 다음날 기준 (주소정근로시간÷40)×8로 환산</div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:#F1F5F9">
+            <th style="padding:5px 8px;font-size:11px;text-align:left">산정시작일</th>
+            <th style="padding:5px 8px;font-size:11px;text-align:left">산정종료일</th>
+            <th style="padding:5px 8px;font-size:11px;text-align:left">결근일수</th>
+            <th style="padding:5px 8px;font-size:11px;text-align:center">발생시간</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+        <div style="font-size:10px;color:var(--tx3);margin-top:8px;line-height:1.6">
+          ※ 노란색 행: 산정종료일 다음날까지 재직해야 발생하는데, 그 전에 재직기간이 끝나 발생하지 않은 달입니다.<br>
+          ※ 산정기간(산정시작일~산정종료일) 중 결근이 1일 이상 있으면 해당 달의 연차는 발생하지 않습니다(근로기준법 제60조).
+        </div>
       </div>
+      ${buildLsUsageBoxHtml(e)}
     </div>
   </td></tr>`;
 }
@@ -8063,6 +8130,7 @@ function deleteLeaveUsageRow(no){
   const u=leaveUsage.find(x=>x.no===no);if(!u)return;
   if(!confirm(`${u.사번} / ${u.사용일} / ${u.구분} 사용 이력을 삭제하시겠습니까?`))return;
   leaveUsage=leaveUsage.filter(x=>x.no!==no);
+  _deletedLeaveUsageNos.add(no);
   renderLeaveUsage();saveAll();
 }
 function uploadLeaveUsageExcel(evt){
