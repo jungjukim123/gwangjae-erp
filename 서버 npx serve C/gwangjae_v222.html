@@ -1564,7 +1564,7 @@ function _applyData(data) {
           date: ds, d, dow: DAYS[new Date(ds).getDay()],
           gbn: _gbn, 소정: _sojeong,
           bigo: sd.bigo||'', 확인: sd.확인||'', 연장승인: sd.연장승인||'', 연장인사: sd.연장인사||'',
-          bigo_locked: sd.bigo_locked||false,
+          bigo_locked: sd.bigo_locked||false, 연장승인_locked: sd.연장승인_locked||false,
           주휴수기: sd.주휴수기 !== undefined ? sd.주휴수기 : '',
           소정수기: sd.소정수기 !== undefined ? sd.소정수기 : '',
           소정원본: sd.소정원본 !== undefined && sd.소정원본 !== '' ? sd.소정원본 : 소정,
@@ -1763,7 +1763,7 @@ async function saveAll() {
           days_json: JSON.stringify(r.days.map(d => ({
             date: d.date, bigo: d.bigo||'', 확인: d.확인||'',
             연장승인: d.연장승인||'', 연장인사: d.연장인사||'',
-            bigo_locked: d.bigo_locked||false,
+            bigo_locked: d.bigo_locked||false, 연장승인_locked: d.연장승인_locked||false,
             주휴수기: d.주휴수기 !== undefined ? d.주휴수기 : '',
             소정수기: d.소정수기 !== undefined ? (d.소정수기 === 0 ? '0' : d.소정수기) : '',
             소정원본: d.소정원본 !== undefined ? d.소정원본 : '',
@@ -3129,6 +3129,7 @@ async function syncOvertime(){
       if(!empRow){skipped++;return;}
       const day=empRow.days.find(d=>d.date===dateStr);
       if(!day){skipped++;return;}
+      if(day.연장승인_locked){skipped++;return;} // ★ HR이 "-"로 수기 정정(취소)한 건은 재연동해도 되살아나지 않게 건너뜀
       day.연장승인='승인';
       matched++;
     });
@@ -3277,18 +3278,26 @@ async function syncSomyungWorkflow(silent){
   const mo=parseInt(document.getElementById('somMonth').value);
   const btn=document.getElementById('btnSomyungSync');
   if(!silent&&btn){btn.disabled=true;btn.innerHTML='⏳ 연동 중...';}
+  // JSONP 1회 시도 — Apps Script 콜드스타트(첫 호출이 느리고 이후 호출은 빨라지는 현상) 대응을 위해 실패 시 아래에서 1회 자동 재시도
+  const _fetchOnce=()=>new Promise((resolve,reject)=>{
+    const cb='_som_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    const s=document.createElement('script');
+    const cleanup=()=>{delete window[cb];if(s.parentNode)document.body.removeChild(s);};
+    window[cb]=(data)=>{cleanup();resolve(data);};
+    s.onerror=()=>{cleanup();reject(new Error('연결 실패 (Apps Script가 근태소명 시트를 지원하는지 확인)'));};
+    s.src=APPS_SCRIPT_URL+'?sheet=근태소명&callback='+cb;
+    document.body.appendChild(s);
+    setTimeout(()=>{cleanup();reject(new Error('타임아웃'));},20000);
+  });
   try{
-    const json=await new Promise((resolve,reject)=>{
-      const cb='_som_'+Date.now();
-      const s=document.createElement('script');
-      const cleanup=()=>{delete window[cb];if(s.parentNode)document.body.removeChild(s);};
-      window[cb]=(data)=>{cleanup();resolve(data);};
-      s.onerror=()=>{cleanup();reject(new Error('연결 실패 (Apps Script가 근태소명 시트를 지원하는지 확인)'));};
-      s.src=APPS_SCRIPT_URL+'?sheet=근태소명&callback='+cb;
-      document.body.appendChild(s);
-      // ★ 같은 내부운영 GAS 백엔드(syncOvertime/syncVacation)와 동일하게 25초로 — 시트가 커질수록 응답이 느려짐
-      setTimeout(()=>{cleanup();reject(new Error('타임아웃 (25초 초과, Apps Script 응답 지연)'));},25000);
-    });
+    let json;
+    try{
+      json=await _fetchOnce();
+    }catch(e){
+      // ★ 첫 시도가 타임아웃/실패하면 한 번 더 자동 재시도(콜드스타트로 첫 호출만 느린 경우가 많음)
+      if(!silent&&btn)btn.innerHTML='⏳ 재시도 중...';
+      json=await _fetchOnce();
+    }
     const rows=json.data||json.rows||[];
     if(!rows.length){
       if(!silent)alert('⚠️ 근태소명 시트에서 데이터를 받지 못했습니다.\n\nApps Script가 ?sheet=근태소명 요청에 응답하도록 설정되어 있는지,\n시트에 제출된 데이터가 있는지 확인해주세요.');
@@ -3341,9 +3350,16 @@ async function syncSomyungWorkflow(silent){
     const ck=yr+'_'+String(mo).padStart(2,'0');
     if(!_somyungData[ck])_somyungData[ck]=[];
     let matched=0,skipped=0,already=0,notApproved=0,monthMismatch=0,noRequest=0;
+    const notApprovedDetail=[]; // 진단용: 승인처리 값이 정확히 무엇이었는지 확인할 수 있게 기록(최대 10건)
     rows.forEach(row=>{
       const 승인처리=String(pick(row,['승인처리'])||'').trim();
-      if(승인처리!=='승인'){notApproved++;return;} // 대기중·반려·빈값은 제외
+      // ★ syncOvertime/syncVacation과 동일하게 완전일치가 아닌 포함 여부로 판정
+      //   (시트 값이 "승인" 대신 "승인함"/"승인 완료" 등으로 들어오는 경우 완전일치(===)면 누락됨)
+      if(!승인처리.includes('승인')||승인처리.includes('반려')){
+        notApproved++;
+        if(notApprovedDetail.length<10)notApprovedDetail.push(`${pick(row,['이름'])||'?'} ${pick(row,['날짜','소명대상날짜'])||'?'} (승인처리="${승인처리||'(빈값)'}")`);
+        return;
+      }
       const 이름=cleanName(pick(row,['이름']));
       const dateStr=toDate(pick(row,['날짜','소명대상날짜']));
       const 소명사유=String(pick(row,['소명사유'])||'').trim();
@@ -3377,7 +3393,7 @@ async function syncSomyungWorkflow(silent){
     });
     renderSomyung();
     if(matched>0)await saveAll();
-    if(!silent)alert(`✅ 근태소명 연동 완료! (기준: ${yr}년 ${mo}월, 시트 수신 ${rows.length}건)\n반영: ${matched}건${already?`\n이미 연동됨(건너뜀): ${already}건`:''}${skipped?`\n매칭 실패(직원/날짜 불일치): ${skipped}건`:''}${notApproved?`\n승인 미완료(승인처리≠'승인'): ${notApproved}건`:''}${monthMismatch?`\n선택 월과 다른 날짜: ${monthMismatch}건`:''}${noRequest?`\n확인사항 미지정(연동 안 함): ${noRequest}건`:''}\n\n근태소명관리 목록에서 직원 작성 내용을 확인 후 소명내용·완료 처리해주세요.`);
+    if(!silent)alert(`✅ 근태소명 연동 완료! (기준: ${yr}년 ${mo}월, 시트 수신 ${rows.length}건)\n반영: ${matched}건${already?`\n이미 연동됨(건너뜀): ${already}건`:''}${skipped?`\n매칭 실패(직원/날짜 불일치): ${skipped}건`:''}${notApproved?`\n승인 미완료: ${notApproved}건`:''}${monthMismatch?`\n선택 월과 다른 날짜: ${monthMismatch}건`:''}${noRequest?`\n확인사항 미지정(연동 안 함): ${noRequest}건`:''}${notApprovedDetail.length?`\n\n[승인 미완료 상세(최대 10건)]\n${notApprovedDetail.join('\n')}`:''}\n\n근태소명관리 목록에서 직원 작성 내용을 확인 후 소명내용·완료 처리해주세요.`);
   }catch(e){
     if(!silent)alert(`❌ 근태소명 연동 실패: ${e.message}`);
   }finally{
@@ -5674,7 +5690,7 @@ function setBigoVal(eid,ds,v){
     const b1=document.createElement('button');
     b1.textContent='-';
     b1.style.cssText='font-size:10px;padding:3px 8px;border:1px solid var(--bd2);border-radius:4px;background:#fff;cursor:pointer;font-family:var(--fn);color:var(--tx2);width:100%;text-align:left';
-    b1.onclick=function(e){e.stopPropagation();if(_popEid&&_popDs)setOtInsaAndClose(null,_popEid,_popDs,'');};
+    b1.onclick=function(e){e.stopPropagation();if(_popEid&&_popDs)clearOtApprovalAndClose(_popEid,_popDs);};
     const b2=document.createElement('button');
     b2.textContent='승인(인사)';
     b2.style.cssText='font-size:10px;padding:3px 8px;border:1px solid #FED7AA;border-radius:4px;background:#FFF4EC;cursor:pointer;font-family:var(--fn);color:#E07B2A;font-weight:700;width:100%;text-align:left';
@@ -5815,6 +5831,17 @@ function setGbnAndClose(eid,ds,v){
 
 let _activeOtInsaCell=null;
 function setDayOtInsa(eid,ds,v){if(isMonthConfirmed())return;const row=hrAttRows.find(r=>r.emp.사번===eid);if(row){const d=row.days.find(x=>x.date===ds);if(d){d.연장인사=v;scheduleSave();}}}
+// "-" 선택: 연동(연장승인)·수기(연장인사) 승인을 모두 초기화하고, 재연동해도 되살아나지 않도록 잠금
+// (날짜를 잘못 올린 연동건을 HR이 정정하는 용도 — syncOvertime()이 연장승인_locked인 날은 건너뜀)
+function clearDayOtApproval(eid,ds){
+  if(isMonthConfirmed())return;
+  const row=hrAttRows.find(r=>r.emp.사번===eid);if(!row)return;
+  const d=row.days.find(x=>x.date===ds);if(!d)return;
+  d.연장승인='';
+  d.연장인사='';
+  d.연장승인_locked=true;
+  scheduleSave();
+}
 let _oCls=null;
 function toggleOtInsaMenu(el,eid,ds){
   if(isMonthConfirmed())return;
@@ -5829,6 +5856,13 @@ function toggleOtInsaMenu(el,eid,ds){
 function setOtInsaAndClose(btn,eid,ds,v){
   // btn은 전역팝업 버튼이므로 eid/ds는 인자로 받음
   setDayOtInsa(eid,ds,v);
+  window._closeFixedMenu();
+  _activeOtInsaCell=null;
+  if(_oCls){document.removeEventListener('mousedown',_oCls);_oCls=null;}
+  _patchHrAttRow(eid,ds);
+}
+function clearOtApprovalAndClose(eid,ds){
+  clearDayOtApproval(eid,ds);
   window._closeFixedMenu();
   _activeOtInsaCell=null;
   if(_oCls){document.removeEventListener('mousedown',_oCls);_oCls=null;}
