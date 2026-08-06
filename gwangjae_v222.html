@@ -2425,6 +2425,7 @@ function isFullAttendanceWeek(empId,ds){
     const hasIn=att.in&&att.in!=='';
     if(d.bigo==='연차')continue;   // 연차는 개근 인정
     if(d.bigo==='결근')return false;
+    if(d.gbn==='공휴일'&&!hasIn)continue; // 공휴일이라 쉬었어도(출근기록 없어도) 근로 처리로 보아 개근 인정 — 주휴수당 조건 충족
     if(!hasIn)return false;
   }
   return true;
