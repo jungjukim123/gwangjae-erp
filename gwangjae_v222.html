@@ -5320,7 +5320,7 @@ function _calcSalRow(row, yr, mo){
   let 연차자동=0;
   if(_isResignMonth){
     const _lsSummary=getLeaveSummaryForEmp(emp.사번);
-    연차자동=_lsSummary?Math.round(_lsSummary.총잔여*r):0;
+    연차자동=_lsSummary?Math.ceil(_lsSummary.총잔여*r):0; // 원단위 올림
   }
   const 연차기본=(extra.연차||0)!==0?extra.연차:연차자동;
   const 연차=_ovr('연차수당',연차기본);
