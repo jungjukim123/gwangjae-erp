@@ -3269,9 +3269,11 @@ async function syncVacation(){
 // 연장근무 연동과 동일한 Apps Script URL 재사용 (?sheet=근태소명)
 async function syncSomyungWorkflow(silent){
   const APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbx6kdSGPDtbNP9zyubcRtBim3O23dufP1OaPjT--B0Tzg7dvx3rswKDp96Y6SMgz4Mm/exec';
-  if(!hrAttRows.length){if(!silent)alert('먼저 "인원 불러오기"를 실행하세요');return;}
-  const yr=parseInt(document.getElementById('hrYear').value);
-  const mo=parseInt(document.getElementById('hrMonth').value);
+  // ★ 근태소명관리는 ③ 근태관리의 "인원 불러오기"(hrAttRows)와 무관하게 동작해야 하므로,
+  //   전체 직원 목록(employees, 로그인 시 항상 로드됨)으로 이름→사번 매칭하고, 연/월도 이 페이지 자체 선택값(somYear/somMonth)을 사용
+  if(!employees.length){if(!silent)alert('직원 데이터를 아직 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');return;}
+  const yr=parseInt(document.getElementById('somYear').value);
+  const mo=parseInt(document.getElementById('somMonth').value);
   const btn=document.getElementById('btnSomyungSync');
   if(!silent&&btn){btn.disabled=true;btn.innerHTML='⏳ 연동 중...';}
   try{
@@ -3348,12 +3350,14 @@ async function syncSomyungWorkflow(silent){
       if(!이름||!dateStr)return;
       const [y,m]=dateStr.split('-').map(Number);
       if(y!==yr||m!==mo){monthMismatch++;return;} // 현재 귀속월만
-      const empRow=hrAttRows.find(r=>{
-        const en=cleanName(r.emp.이름);
+      // 이름 매칭 후보 전체 수집 후 재직중(퇴사일 없음) 우선 — 동명이인 처리 (syncSlack과 동일 패턴)
+      const matched=employees.filter(e=>{
+        const en=cleanName(e.이름);
         return en===이름||en.includes(이름)||이름.includes(en);
       });
+      const empRow=matched.find(e=>!e.퇴사||e.퇴사==='')||matched[0];
       if(!empRow){skipped++;return;}
-      const eid=empRow.emp.사번;
+      const eid=empRow.사번;
       const items=_somyungData[ck].filter(x=>x.eid===eid&&x.date===dateStr);
       if(!items.length){noRequest++;return;} // ★ 확인사항은 근태관리에서 HR이 직접 지정한 항목만 사용 — 없으면 새로 만들지 않고 건너뜀
       // 이미 인사담당자가 근태관리에서 적재해둔 항목 → 직원 작성 내용만 채움 (status/memo는 인사담당자가 직접 확정)
@@ -3382,7 +3386,7 @@ async function syncSomyungWorkflow(silent){
 // 페이지 진입 시 1회 + 페이지를 보고 있는 동안 60초마다 조용히 재동기화
 setInterval(()=>{
   const pg=document.getElementById('page-hr5');
-  if(pg&&pg.classList.contains('on')&&typeof hrAttRows!=='undefined'&&hrAttRows.length){
+  if(pg&&pg.classList.contains('on')&&typeof employees!=='undefined'&&employees.length){
     syncSomyungWorkflow(true).catch(()=>{});
   }
 },60000);
@@ -8360,7 +8364,7 @@ function nav(pid,el){
   }
   if(pid==='hr5'){
     renderSomyung();
-    if(typeof hrAttRows!=='undefined'&&hrAttRows.length)syncSomyungWorkflow(true).then(()=>renderSomyung()).catch(()=>{});
+    if(typeof employees!=='undefined'&&employees.length)syncSomyungWorkflow(true).then(()=>renderSomyung()).catch(()=>{});
     const _st=localStorage.getItem('slk_token');
     const _stEl=document.getElementById('somSlkToken');
     if(_stEl&&_st)_stEl.value=_st;
