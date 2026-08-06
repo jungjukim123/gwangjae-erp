@@ -3349,15 +3349,19 @@ async function syncSomyungWorkflow(silent){
     const cleanName=v=>String(v||'').replace(/^@/,'').replace(/\([^)]*\)/g,'').replace(/\s/g,'').trim();
     const ck=yr+'_'+String(mo).padStart(2,'0');
     if(!_somyungData[ck])_somyungData[ck]=[];
-    let matched=0,skipped=0,already=0,notApproved=0,monthMismatch=0,noRequest=0;
-    const notApprovedDetail=[]; // 진단용: 승인처리 값이 정확히 무엇이었는지 확인할 수 있게 기록(최대 10건)
+    let matched=0,skipped=0,already=0,notApproved=0,monthMismatch=0,noRequest=0,noNameOrDate=0;
+    // 진단용: 각 스킵 사유별로 실제 행 내용을 최대 10건까지 기록 — 화면에서 원인을 바로 확인할 수 있게
+    const detail={notApproved:[],noNameOrDate:[],monthMismatch:[],skipped:[],noRequest:[],already:[]};
+    const pushDetail=(bucket,msg)=>{if(detail[bucket].length<10)detail[bucket].push(msg);};
     rows.forEach(row=>{
       const 승인처리=String(pick(row,['승인처리'])||'').trim();
+      const rawName=pick(row,['이름'])||'?';
+      const rawDate=pick(row,['날짜','소명대상날짜'])||'?';
       // ★ syncOvertime/syncVacation과 동일하게 완전일치가 아닌 포함 여부로 판정
       //   (시트 값이 "승인" 대신 "승인함"/"승인 완료" 등으로 들어오는 경우 완전일치(===)면 누락됨)
       if(!승인처리.includes('승인')||승인처리.includes('반려')){
         notApproved++;
-        if(notApprovedDetail.length<10)notApprovedDetail.push(`${pick(row,['이름'])||'?'} ${pick(row,['날짜','소명대상날짜'])||'?'} (승인처리="${승인처리||'(빈값)'}")`);
+        pushDetail('notApproved',`${rawName} ${rawDate} (승인처리="${승인처리||'(빈값)'}")`);
         return;
       }
       const 이름=cleanName(pick(row,['이름']));
@@ -3366,23 +3370,23 @@ async function syncSomyungWorkflow(silent){
       const 사유=String(pick(row,['사유'])||'').trim();
       const 출근시간=toTime(pick(row,['출근시간']));
       const 퇴근시간=toTime(pick(row,['퇴근시간']));
-      if(!이름||!dateStr)return;
+      if(!이름||!dateStr){noNameOrDate++;pushDetail('noNameOrDate',`이름="${rawName}" 날짜="${rawDate}" (이름 또는 날짜를 읽지 못함)`);return;}
       const [y,m]=dateStr.split('-').map(Number);
-      if(y!==yr||m!==mo){monthMismatch++;return;} // 현재 귀속월만
+      if(y!==yr||m!==mo){monthMismatch++;pushDetail('monthMismatch',`${이름} 원본="${rawDate}" 해석="${dateStr}" (선택된 ${yr}년 ${mo}월과 다름)`);return;} // 현재 귀속월만
       // 이름 매칭 후보 전체 수집 후 재직중(퇴사일 없음) 우선 — 동명이인 처리 (syncSlack과 동일 패턴)
       const nameMatched=employees.filter(e=>{
         const en=cleanName(e.이름);
         return en===이름||en.includes(이름)||이름.includes(en);
       });
       const empRow=nameMatched.find(e=>!e.퇴사||e.퇴사==='')||nameMatched[0];
-      if(!empRow){skipped++;return;}
+      if(!empRow){skipped++;pushDetail('skipped',`${이름} ${dateStr} (직원 목록에서 이름 매칭 실패)`);return;}
       const eid=empRow.사번;
       const items=_somyungData[ck].filter(x=>x.eid===eid&&x.date===dateStr);
-      if(!items.length){noRequest++;return;} // ★ 확인사항은 근태관리에서 HR이 직접 지정한 항목만 사용 — 없으면 새로 만들지 않고 건너뜀
+      if(!items.length){noRequest++;pushDetail('noRequest',`${이름}(${eid}) ${dateStr} (근태관리 확인사항에 해당 날짜 항목 없음)`);return;} // ★ 확인사항은 근태관리에서 HR이 직접 지정한 항목만 사용 — 없으면 새로 만들지 않고 건너뜀
       // 이미 인사담당자가 근태관리에서 적재해둔 항목 → 직원 작성 내용만 채움 (status/memo는 인사담당자가 직접 확정)
       // ★ 같은 날짜에 확인사항이 2건(출근 기록 없음/퇴근 기록 없음) 이상 있을 수 있으므로 매칭되는 항목 전체에 반영
       const toFill=items.filter(x=>!(x.workerNote&&x.workerType));
-      if(!toFill.length){already++;return;} // 이미 연동된 건은 재반영 skip
+      if(!toFill.length){already++;pushDetail('already',`${이름}(${eid}) ${dateStr} (이미 직원작성내용이 채워져 있어 건너뜀)`);return;} // 이미 연동된 건은 재반영 skip
       toFill.forEach(item=>{
         item.workerType=소명사유;
         item.workerNote=사유;
@@ -3393,7 +3397,13 @@ async function syncSomyungWorkflow(silent){
     });
     renderSomyung();
     if(matched>0)await saveAll();
-    if(!silent)alert(`✅ 근태소명 연동 완료! (기준: ${yr}년 ${mo}월, 시트 수신 ${rows.length}건)\n반영: ${matched}건${already?`\n이미 연동됨(건너뜀): ${already}건`:''}${skipped?`\n매칭 실패(직원/날짜 불일치): ${skipped}건`:''}${notApproved?`\n승인 미완료: ${notApproved}건`:''}${monthMismatch?`\n선택 월과 다른 날짜: ${monthMismatch}건`:''}${noRequest?`\n확인사항 미지정(연동 안 함): ${noRequest}건`:''}${notApprovedDetail.length?`\n\n[승인 미완료 상세(최대 10건)]\n${notApprovedDetail.join('\n')}`:''}\n\n근태소명관리 목록에서 직원 작성 내용을 확인 후 소명내용·완료 처리해주세요.`);
+    if(!silent){
+      const detailText=Object.entries(detail).filter(([,v])=>v.length).map(([k,v])=>{
+        const label={notApproved:'승인 미완료',noNameOrDate:'이름/날짜 인식 실패',monthMismatch:'선택 월과 다른 날짜',skipped:'직원 매칭 실패',noRequest:'확인사항 미지정',already:'이미 연동됨'}[k];
+        return`\n[${label}]\n${v.join('\n')}`;
+      }).join('\n');
+      alert(`✅ 근태소명 연동 완료! (기준: ${yr}년 ${mo}월, 시트 수신 ${rows.length}건)\n반영: ${matched}건${already?`\n이미 연동됨(건너뜀): ${already}건`:''}${skipped?`\n매칭 실패(직원/날짜 불일치): ${skipped}건`:''}${notApproved?`\n승인 미완료: ${notApproved}건`:''}${monthMismatch?`\n선택 월과 다른 날짜: ${monthMismatch}건`:''}${noRequest?`\n확인사항 미지정(연동 안 함): ${noRequest}건`:''}${noNameOrDate?`\n이름/날짜 인식 실패: ${noNameOrDate}건`:''}${detailText?`\n${detailText}`:''}\n\n근태소명관리 목록에서 직원 작성 내용을 확인 후 소명내용·완료 처리해주세요.`);
+    }
   }catch(e){
     if(!silent)alert(`❌ 근태소명 연동 실패: ${e.message}`);
   }finally{
@@ -3643,7 +3653,7 @@ function renderHrAtt(){
         ${skTd(`<span style="font-size:11px">${conTimes.st||'-'}</span>`,HR_SK_WIDTHS[12],getLeft(12))}
         ${skTd(`<span style="font-size:11px">${conTimes.et||'-'}</span>`,HR_SK_WIDTHS[13],getLeft(13))}
         ${(()=>{const _bigoContent=day.bigo?(day.bigo==='결근'?`<span class="bdg" style="font-size:9px;background:#F1F5F9;color:#475569;font-weight:700">${day.bigo}</span>`:`<span class="bdg" style="font-size:9px;background:#DCFCE7;color:#15803D;font-weight:700">${day.bigo}</span>`):'<span style="color:#ccc;font-size:11px">-</span>';const _bigoActions=!confirmed?`<div class="att-actions"><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','');">-</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','연차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">연차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','월차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">월차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','반차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">반차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','결근');" style="background:#FEE2E2;border-color:#FECACA;color:#991B1B;font-weight:700">결근</button></div>`:'';return`<td class="sk bigo-td${!confirmed?' att-cell':''}" style="left:${getLeft(14)}px;min-width:${HR_SK_WIDTHS[14]}px;max-width:${HR_SK_WIDTHS[14]}px;text-align:center;position:sticky"${!confirmed?` onclick="toggleCellMenu(this)"`:''}data-val="${day.bigo||''}">${_bigoContent}${_bigoActions}</td>`;})()}
-        <td class="sk att-cell" style="left:${getLeft(15)}px;min-width:${HR_SK_WIDTHS[15]}px;max-width:${HR_SK_WIDTHS[15]}px;text-align:center" ${!confirmed&&day.gbn!=='계약기간 없음'?`onclick="toggleCellMenu(this)"`:''}><span style="${day.소정수기!==undefined&&day.소정수기!==''?'color:var(--orange);font-weight:700;':''}">${day.gbn==='주휴일'||day.소정수기==='주휴'?'<span class="bdg" style="font-size:9px;background:#FCE7F3;color:#BE185D">주휴</span>':typeof day.소정==='number'&&day.소정>=1?day.소정:typeof day.소정==='number'?day.소정:'-'}</span>${!confirmed&&day.gbn!=='계약기간 없음'?`<div class="att-actions"><button onclick="setSojeongManual('${emp.사번}','${day.date}')">수기입력</button>${day.소정수기!==undefined&&day.소정수기!==''?`<button class="rev" onclick="revertSojeong('${emp.사번}','${day.date}')">↩ 되돌리기</button>`:''}</div>`:''}</td>
+        <td class="sk att-cell" style="left:${getLeft(15)}px;min-width:${HR_SK_WIDTHS[15]}px;max-width:${HR_SK_WIDTHS[15]}px;text-align:center" ${!confirmed&&day.gbn!=='계약기간 없음'?`onclick="toggleCellMenu(this)"`:''}data-val="${day.gbn==='주휴일'||day.소정수기==='주휴'?'주휴':(typeof day.소정==='number'?day.소정:'-')}"><span style="${day.소정수기!==undefined&&day.소정수기!==''?'color:var(--orange);font-weight:700;':''}">${day.gbn==='주휴일'||day.소정수기==='주휴'?'<span class="bdg" style="font-size:9px;background:#FCE7F3;color:#BE185D">주휴</span>':typeof day.소정==='number'&&day.소정>=1?day.소정:typeof day.소정==='number'?day.소정:'-'}</span>${!confirmed&&day.gbn!=='계약기간 없음'?`<div class="att-actions"><button onclick="setSojeongManual('${emp.사번}','${day.date}')">수기입력</button>${day.소정수기!==undefined&&day.소정수기!==''?`<button class="rev" onclick="revertSojeong('${emp.사번}','${day.date}')">↩ 되돌리기</button>`:''}</div>`:''}</td>
         <td class="att-cell att-drag-cell" tabindex="0" data-eid="${emp.사번}" data-ds="${day.date}" data-field="in" onmousedown="attDragStart(event,this)" onmouseover="attDragOver(event,this)" data-val="${att.in||''}" style="font-size:12px;font-weight:700;color:${isSom?'#2563EB':'#1C2035'};text-align:center;border-top:1.5px solid #CDD1D9;border-bottom:1.5px solid #CDD1D9;border-left:2px solid #6B7280;border-right:1px solid #EDF0F7;background:${isM?'#FFF4EC':'#fff'}">${att.in||(day.gbn==='평일'||day.gbn==='공휴일'?'<span style="color:#aaa">-</span>':'-')}<div class="att-actions" onmousedown="event.stopPropagation()"><button class="std" onclick="setAttFromSched('${emp.사번}','${day.date}','in')">기준시간 반영</button><button onclick="setAttManual('${emp.사번}','${day.date}','in')">수기입력</button><button class="rev" onclick="revertAtt('${emp.사번}','${day.date}')">↩ 되돌리기</button></div></td>
         <td class="att-cell att-drag-cell" tabindex="0" data-eid="${emp.사번}" data-ds="${day.date}" data-field="out" onmousedown="attDragStart(event,this)" onmouseover="attDragOver(event,this)" data-val="${att.out||''}" style="font-size:12px;font-weight:700;color:${isSom?'#2563EB':'#1C2035'};text-align:center;border-top:1.5px solid #CDD1D9;border-bottom:1.5px solid #CDD1D9;border-left:1px solid #EDF0F7;border-right:2px solid #6B7280;background:${isM?'#FFF4EC':'#fff'}">${att.out||(day.gbn==='평일'||day.gbn==='공휴일'?'<span style="color:#aaa">-</span>':'-')}<div class="att-actions" onmousedown="event.stopPropagation()"><button class="std" onclick="setAttFromSched('${emp.사번}','${day.date}','out')">기준시간 반영</button><button onclick="setAttManual('${emp.사번}','${day.date}','out')">수기입력</button><button class="rev" onclick="revertAtt('${emp.사번}','${day.date}')">↩ 되돌리기</button></div></td>
         ${(()=>{
@@ -3904,7 +3914,7 @@ function _patchHrAttRow(eid,ds){
     ${skTd(`<span style="font-size:11px">${conTimes.st||'-'}</span>`,HR_SK_WIDTHS[12],getLeft(12))}
     ${skTd(`<span style="font-size:11px">${conTimes.et||'-'}</span>`,HR_SK_WIDTHS[13],getLeft(13))}
     ${(()=>{const _bigoContent=day.bigo?(day.bigo==='결근'?`<span class="bdg" style="font-size:9px;background:#F1F5F9;color:#475569;font-weight:700">${day.bigo}</span>`:`<span class="bdg" style="font-size:9px;background:#DCFCE7;color:#15803D;font-weight:700">${day.bigo}</span>`):'<span style="color:#ccc;font-size:11px">-</span>';const _bigoActions=!confirmed?`<div class="att-actions"><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','');">-</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','연차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">연차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','월차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">월차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','반차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">반차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','결근');" style="background:#FEE2E2;border-color:#FECACA;color:#991B1B;font-weight:700">결근</button></div>`:'';return`<td class="sk bigo-td${!confirmed?' att-cell':''}" style="left:${getLeft(14)}px;min-width:${HR_SK_WIDTHS[14]}px;max-width:${HR_SK_WIDTHS[14]}px;text-align:center;position:sticky"${!confirmed?` onclick="toggleCellMenu(this)"`:''}data-val="${day.bigo||''}">${_bigoContent}${_bigoActions}</td>`;})()}
-    <td class="sk att-cell" style="left:${getLeft(15)}px;min-width:${HR_SK_WIDTHS[15]}px;max-width:${HR_SK_WIDTHS[15]}px;text-align:center" ${!confirmed&&day.gbn!=='계약기간 없음'?`onclick="toggleCellMenu(this)"`:''}><span style="${day.소정수기!==undefined&&day.소정수기!==''?'color:var(--orange);font-weight:700;':''}">${day.gbn==='주휴일'||day.소정수기==='주휴'?'<span class="bdg" style="font-size:9px;background:#FCE7F3;color:#BE185D">주휴</span>':typeof day.소정==='number'&&day.소정>=1?day.소정:typeof day.소정==='number'?day.소정:'-'}</span>${!confirmed&&day.gbn!=='계약기간 없음'?`<div class="att-actions"><button onclick="setSojeongManual('${emp.사번}','${day.date}')">수기입력</button>${day.소정수기!==undefined&&day.소정수기!==''?`<button class="rev" onclick="revertSojeong('${emp.사번}','${day.date}')">↩ 되돌리기</button>`:''}</div>`:''}</td>
+    <td class="sk att-cell" style="left:${getLeft(15)}px;min-width:${HR_SK_WIDTHS[15]}px;max-width:${HR_SK_WIDTHS[15]}px;text-align:center" ${!confirmed&&day.gbn!=='계약기간 없음'?`onclick="toggleCellMenu(this)"`:''}data-val="${day.gbn==='주휴일'||day.소정수기==='주휴'?'주휴':(typeof day.소정==='number'?day.소정:'-')}"><span style="${day.소정수기!==undefined&&day.소정수기!==''?'color:var(--orange);font-weight:700;':''}">${day.gbn==='주휴일'||day.소정수기==='주휴'?'<span class="bdg" style="font-size:9px;background:#FCE7F3;color:#BE185D">주휴</span>':typeof day.소정==='number'&&day.소정>=1?day.소정:typeof day.소정==='number'?day.소정:'-'}</span>${!confirmed&&day.gbn!=='계약기간 없음'?`<div class="att-actions"><button onclick="setSojeongManual('${emp.사번}','${day.date}')">수기입력</button>${day.소정수기!==undefined&&day.소정수기!==''?`<button class="rev" onclick="revertSojeong('${emp.사번}','${day.date}')">↩ 되돌리기</button>`:''}</div>`:''}</td>
     <td class="att-cell att-drag-cell" tabindex="0" data-eid="${emp.사번}" data-ds="${day.date}" data-field="in" onmousedown="attDragStart(event,this)" onmouseover="attDragOver(event,this)" data-val="${att.in||''}" style="font-size:12px;font-weight:700;color:${isSom?'#2563EB':'#1C2035'};text-align:center;border-top:1.5px solid #CDD1D9;border-bottom:1.5px solid #CDD1D9;border-left:2px solid #6B7280;border-right:1px solid #EDF0F7;background:${isM?'#FFF4EC':'#fff'}">${att.in||(day.gbn==='평일'||day.gbn==='공휴일'?'<span style="color:#aaa">-</span>':'-')}<div class="att-actions" onmousedown="event.stopPropagation()"><button class="std" onclick="setAttFromSched('${emp.사번}','${day.date}','in')">기준시간 반영</button><button onclick="setAttManual('${emp.사번}','${day.date}','in')">수기입력</button><button class="rev" onclick="revertAtt('${emp.사번}','${day.date}')">↩ 되돌리기</button></div></td>
     <td class="att-cell att-drag-cell" tabindex="0" data-eid="${emp.사번}" data-ds="${day.date}" data-field="out" onmousedown="attDragStart(event,this)" onmouseover="attDragOver(event,this)" data-val="${att.out||''}" style="font-size:12px;font-weight:700;color:${isSom?'#2563EB':'#1C2035'};text-align:center;border-top:1.5px solid #CDD1D9;border-bottom:1.5px solid #CDD1D9;border-left:1px solid #EDF0F7;border-right:2px solid #6B7280;background:${isM?'#FFF4EC':'#fff'}">${att.out||(day.gbn==='평일'||day.gbn==='공휴일'?'<span style="color:#aaa">-</span>':'-')}<div class="att-actions" onmousedown="event.stopPropagation()"><button class="std" onclick="setAttFromSched('${emp.사번}','${day.date}','out')">기준시간 반영</button><button onclick="setAttManual('${emp.사번}','${day.date}','out')">수기입력</button><button class="rev" onclick="revertAtt('${emp.사번}','${day.date}')">↩ 되돌리기</button></div></td>
     ${[calcInlineCell('U',Udisp,day.수기U,emp.사번,ds,confirmed),calcInlineCell('V',Vdisp,day.수기V,emp.사번,ds,confirmed),calcInlineCell('W',Wdisp,day.수기W,emp.사번,ds,confirmed)].join('')}
