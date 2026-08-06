@@ -3281,11 +3281,13 @@ async function syncSomyungWorkflow(silent){
     const json=await new Promise((resolve,reject)=>{
       const cb='_som_'+Date.now();
       const s=document.createElement('script');
-      window[cb]=(data)=>{delete window[cb];document.body.removeChild(s);resolve(data);};
-      s.onerror=()=>reject(new Error('연결 실패 (Apps Script가 근태소명 시트를 지원하는지 확인)'));
+      const cleanup=()=>{delete window[cb];if(s.parentNode)document.body.removeChild(s);};
+      window[cb]=(data)=>{cleanup();resolve(data);};
+      s.onerror=()=>{cleanup();reject(new Error('연결 실패 (Apps Script가 근태소명 시트를 지원하는지 확인)'));};
       s.src=APPS_SCRIPT_URL+'?sheet=근태소명&callback='+cb;
       document.body.appendChild(s);
-      setTimeout(()=>reject(new Error('타임아웃')),12000);
+      // ★ 같은 내부운영 GAS 백엔드(syncOvertime/syncVacation)와 동일하게 25초로 — 시트가 커질수록 응답이 느려짐
+      setTimeout(()=>{cleanup();reject(new Error('타임아웃 (25초 초과, Apps Script 응답 지연)'));},25000);
     });
     const rows=json.data||json.rows||[];
     if(!rows.length){
