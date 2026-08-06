@@ -3354,11 +3354,11 @@ async function syncSomyungWorkflow(silent){
       const [y,m]=dateStr.split('-').map(Number);
       if(y!==yr||m!==mo){monthMismatch++;return;} // 현재 귀속월만
       // 이름 매칭 후보 전체 수집 후 재직중(퇴사일 없음) 우선 — 동명이인 처리 (syncSlack과 동일 패턴)
-      const matched=employees.filter(e=>{
+      const nameMatched=employees.filter(e=>{
         const en=cleanName(e.이름);
         return en===이름||en.includes(이름)||이름.includes(en);
       });
-      const empRow=matched.find(e=>!e.퇴사||e.퇴사==='')||matched[0];
+      const empRow=nameMatched.find(e=>!e.퇴사||e.퇴사==='')||nameMatched[0];
       if(!empRow){skipped++;return;}
       const eid=empRow.사번;
       const items=_somyungData[ck].filter(x=>x.eid===eid&&x.date===dateStr);
