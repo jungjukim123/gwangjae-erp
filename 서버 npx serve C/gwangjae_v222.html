@@ -5475,7 +5475,7 @@ function renderSal(){
       ${salTd('연장수당','연장근로수당',d.연장수당,cFmt,false,20)}
       ${salTd('휴일수당','휴일근로수당',d.휴일수당,cFmt,false,21)}
       ${salTd('휴일연장','휴일연장근로수당',d.휴일연장,cFmt,false,22)}
-      ${salTd('연차수당','연차수당',d.연차,cFmt,false,23,manual=>manual?`<button onclick="event.stopPropagation();revertSalManual('${d.사번}',${yr},${mo},'연차수당')" title="자동계산값으로 되돌리기" style="width:15px;height:15px;border-radius:50%;border:1px solid var(--bd2);background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:8px;padding:0;color:var(--tx3);line-height:1;flex-shrink:0">↩</button>`:'',true)}
+      ${salTd('연차수당','연차수당',d.연차,taxFmt,false,23,manual=>manual?`<button onclick="event.stopPropagation();revertSalManual('${d.사번}',${yr},${mo},'연차수당')" title="자동계산값으로 되돌리기" style="width:15px;height:15px;border-radius:50%;border:1px solid var(--bd2);background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:8px;padding:0;color:var(--tx3);line-height:1;flex-shrink:0">↩</button>`:'',true)}
       <td class="r" data-col="24">
         <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
           <span style="color:var(--tx3);font-size:11px">${d.기타!==0?nFmt(d.기타):'-'}</span>
