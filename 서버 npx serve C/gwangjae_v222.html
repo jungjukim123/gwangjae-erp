@@ -2509,7 +2509,7 @@ function cSal(emp,ds,gbn,소정,W,X,Y,Z,AA,AB,bigo,yr,mo,juhyuOv){
   // (주휴일에 실제 근무했어도 주휴수당은 별도 발생)
   const juhyuH=gbn==='주휴일'?calcJuhyu(emp,ds,juhyuOv):0;
   const AH=emp.임금==='시급직'&&gbn==='주휴일'?juhyuH*r:0;
-  const AI=AA*r*1.5,AJ=AB*r*2;
+  const AI=AA*r*1.5,AJ=AB*r*0.5;
   return{AD,AE,AF,AG,AH,AI,AJ,AN:AD+AE+AF+AG+AH+AI+AJ};
 }
 
@@ -5307,8 +5307,8 @@ function _calcSalRow(row, yr, mo){
   const 연장수당=_ovr('연장수당',mY*r*1.5);
   // ── 휴일근로수당 (휴일시간합계 * 통상시급 * 1.5)
   const 휴일수당=_ovr('휴일수당',mAA*r*1.5);
-  // ── 휴일연장근로수당 (휴일연장시간합계 * 통상시급 * 2)
-  const 휴일연장=_ovr('휴일연장',mAB*r*2);
+  // ── 휴일연장근로수당 (8시간 초과분 가산 0.5배 — 8시간 이내분 1.5배는 휴일수당(mAA*r*1.5)에 이미 포함됨)
+  const 휴일연장=_ovr('휴일연장',mAB*r*0.5);
   // ── 기타수당·소급
   const extra=getSalExtra(emp.사번,yr,mo);
   const 기타=extra.기타||0;
