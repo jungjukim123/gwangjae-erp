@@ -6506,11 +6506,11 @@ function setAttManual(eid,ds,field){if(isMonthConfirmed()){alert("확정된 월�
   const cur=getAtt(eid,ds);
   const now=field==='in'?(cur.in||''):(cur.out||'');
   const label=field==='in'?'출근':'퇴근';
-  const v=prompt(`${ds} ${label} 시간 입력 (HH:MM)`,now||'');
+  const v=prompt(`${ds} ${label} 시간 입력 (HH:MM 또는 -)`,now||'');
   if(v===null)return; // 취소
   const t=v.trim();
   if(t===''){const rec=_ensureAtt(eid,ds,'manual');rec[field]='';_patchHrAttRow(eid,ds);saveAll();return;}
-  if(!/^([01]?\d|2[0-3]):[0-5]\d$/.test(t)){alert('시간 형식이 올바르지 않습니다.\n예) 09:00, 21:30');return;}
+  if(t!=='-'&&!/^([01]?\d|2[0-3]):[0-5]\d$/.test(t)){alert('시간 형식이 올바르지 않습니다.\n예) 09:00, 21:30, -');return;}
   const rec=_ensureAtt(eid,ds,'manual'); // 수기입력 = 주황
   rec[field]=t;
   _patchHrAttRow(eid,ds);saveAll();
@@ -6656,20 +6656,20 @@ function revertAtt(eid,ds){if(isMonthConfirmed()){alert("확정된 월은 수정
       let inVal=null, outVal=null;
       if(inCells.length>0){
         const v=prompt(`출근 시간 일괄 입력 (${inCells.length}개 셀)
-형식: HH:MM (예: 09:00)
+형식: HH:MM (예: 09:00) 또는 -
 빈칸 입력 시 삭제`,'');
         if(v===null){closeDragMenu();return;}
         const t=v.trim();
-        if(t!==''&&!/^([01]?\d|2[0-3]):[0-5]\d$/.test(t)){alert('시간 형식 오류 (예: 09:00)');closeDragMenu();return;}
+        if(t!==''&&t!=='-'&&!/^([01]?\d|2[0-3]):[0-5]\d$/.test(t)){alert('시간 형식 오류 (예: 09:00, -)');closeDragMenu();return;}
         inVal=t;
       }
       if(outCells.length>0){
         const v=prompt(`퇴근 시간 일괄 입력 (${outCells.length}개 셀)
-형식: HH:MM (예: 21:00)
+형식: HH:MM (예: 21:00) 또는 -
 빈칸 입력 시 삭제`,'');
         if(v===null){closeDragMenu();return;}
         const t=v.trim();
-        if(t!==''&&!/^([01]?\d|2[0-3]):[0-5]\d$/.test(t)){alert('시간 형식 오류 (예: 21:00)');closeDragMenu();return;}
+        if(t!==''&&t!=='-'&&!/^([01]?\d|2[0-3]):[0-5]\d$/.test(t)){alert('시간 형식 오류 (예: 21:00, -)');closeDragMenu();return;}
         outVal=t;
       }
       _cells.forEach(({eid,ds,field})=>{
