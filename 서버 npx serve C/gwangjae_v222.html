@@ -502,7 +502,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <select id="empFilter" style="padding:6px 10px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderEmp()">
         <option value="all">전체</option><option value="active">재직중</option><option value="quit">퇴직</option>
       </select>
-      <button class="btn bl" onclick="downloadEmpExcel()">⬇ 엑셀 다운로드</button>
+      <button class="btn p" onclick="downloadEmpExcel()">⬇ 엑셀 다운로드</button>
     </div>
   </div>
   <div class="sg" id="empStats"></div>
@@ -527,9 +527,9 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <button class="btn p" onclick="topEditSelectedCon()">✏ 수정</button>
       <button class="btn p" onclick="topSaveSelectedCon()">✓ 저장</button>
       <button class="btn p" onclick="sendContractDoc()">→ 계약서 전송</button>
-      <button class="btn bl" onclick="downloadConExcel()">⬇ 엑셀 다운로드</button>
-      <button class="btn bl" onclick="downloadConTemplate()">📋 엑셀 템플릿</button>
-      <label class="btn am" style="cursor:pointer">📂 엑셀 일괄 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="uploadConExcel(event)"></label>
+      <button class="btn p" onclick="downloadConExcel()">⬇ 엑셀 다운로드</button>
+      <button class="btn p" onclick="downloadConTemplate()">📋 엑셀 템플릿</button>
+      <label class="btn p" style="cursor:pointer">📂 엑셀 일괄 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="uploadConExcel(event)"></label>
     </div>
   </div>
   <div class="tw" id="conTW">
@@ -549,13 +549,13 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <select id="hrMonth" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="onHrMonthChange()"><option value="12">12월</option><option value="11">11월</option><option value="10">10월</option><option value="9">09월</option><option value="8">08월</option><option value="7">07월</option><option value="6">06월</option><option value="5">05월</option><option value="4">04월</option><option value="3">03월</option><option value="2">02월</option><option value="1">01월</option></select>
       <div class="swrap"><input type="text" class="sinp" id="hrQ" placeholder="이름·사번" oninput="renderHrAtt()" onkeydown="if(event.key==='Enter'){renderHrAtt();this.blur();}" style="width:120px"></div>
       <button class="btn p" onclick="loadEmpIntoAtt()">👥 인원 불러오기</button>
-      <button class="btn slk" id="btnSlkSync" onclick="syncSlack()">🔗 근태 연동</button>
-      <button class="btn am" id="btnOtSync" onclick="syncOvertime()" title="내부운영 시트의 추가근무 승인건을 연장승인으로 연동">⏱ 연장근무연동</button>
-      <button class="btn bl" id="btnVacSync" onclick="syncVacation()" title="휴가 시트의 월차/반차 승인건을 비고(P)란에 연동">🌴 휴가연동</button>
-      <button class="btn gr" id="btnSlkDown" onclick="slackDownload()">⬇ 근태 다운로드</button>
-      <label class="btn am" style="cursor:pointer">📂 수기파일 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="uploadManual(event)"></label>
-      <button class="btn bl" onclick="exportExcel()">📊 급여 Excel 다운로드</button>
-      <button class="btn" onclick="clearSaved()" style="border-color:#FECACA;color:var(--red);font-size:11px" title="근태 데이터만 초기화 (계약 데이터 보존)">🗑 근태초기화</button>
+      <button class="btn p" id="btnSlkSync" onclick="syncSlack()">🔗 근태 연동</button>
+      <button class="btn p" id="btnOtSync" onclick="syncOvertime()" title="내부운영 시트의 추가근무 승인건을 연장승인으로 연동">⏱ 연장근무연동</button>
+      <button class="btn p" id="btnVacSync" onclick="syncVacation()" title="휴가 시트의 월차/반차 승인건을 비고(P)란에 연동">🌴 휴가연동</button>
+      <button class="btn p" id="btnSlkDown" onclick="slackDownload()">⬇ 근태 다운로드</button>
+      <label class="btn p" style="cursor:pointer">📂 수기파일 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="uploadManual(event)"></label>
+      <button class="btn p" onclick="exportExcel()">📊 급여 Excel 다운로드</button>
+      <button class="btn p" onclick="clearSaved()" style="font-size:11px" title="근태 데이터만 초기화 (계약 데이터 보존)">🗑 근태초기화</button>
       <button id="btnConfirm" onclick="doConfirm()">🔒 근태 확정</button>
       <button id="btnRelease" onclick="doRelease()" style="display:none;background:#D93644;color:#fff;border:1px solid #D93644;padding:6px 12px;border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--fn)">🔓 확정해제</button>
     </div>
@@ -619,7 +619,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
         <option value="all">급여종 전체</option><option value="월급직">월급직</option><option value="시급직">시급직</option>
       </select>
       <button class="btn p" onclick="syncSalFromAtt()" style="margin-right:4px">💰 급여계산</button>
-      <button class="btn bl" onclick="exportSalExcel()">📊 급여 Excel 다운로드</button>
+      <button class="btn p" onclick="exportSalExcel()">📊 급여 Excel 다운로드</button>
       <button id="btnSalConfirm" onclick="doSalConfirm()">🔒 급여확정</button>
       <button id="btnSalRelease" onclick="doSalRelease()" style="display:none;background:#D93644;color:#fff;border:1px solid #D93644;padding:6px 12px;border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--fn)">🔓 확정해제</button>
     </div>
@@ -641,11 +641,11 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <select id="somYear" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="localStorage.setItem('gwangjae_som_yr',this.value);renderSomyung()"><option value="2026">2026년</option></select>
       <select id="somMonth" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="localStorage.setItem('gwangjae_som_mo',this.value);renderSomyung()"><option value="12">12월</option><option value="11">11월</option><option value="10">10월</option><option value="9">09월</option><option value="8">08월</option><option value="7">07월</option><option value="6">06월</option><option value="5">05월</option><option value="4">04월</option><option value="3">03월</option><option value="2">02월</option><option value="1">01월</option></select>
       <div class="swrap"><input type="text" class="sinp" id="somQ" placeholder="이름·사번" oninput="renderSomyung()" onkeydown="if(event.key==='Enter'){renderSomyung();this.blur();}" style="width:120px"></div>
-      <button class="btn bl" id="btnSomyungSync" onclick="syncSomyungWorkflow(false)">📝 근태소명연동</button>
-      <button class="btn slk" onclick="sendAllSomyungToSlack()">💬 Slack 전체발송</button>
+      <button class="btn p" id="btnSomyungSync" onclick="syncSomyungWorkflow(false)">📝 근태소명연동</button>
+      <button class="btn p" onclick="sendAllSomyungToSlack()">💬 Slack 전체발송</button>
       <span style="font-size:11px;color:var(--tx3);font-weight:700;margin-left:8px">🔑 발신 토큰</span>
       <input type="password" id="somSlkToken" placeholder="xoxc-..." style="padding:5px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:11px;font-family:monospace;width:160px;outline:none;color:var(--tx)" oninput="localStorage.setItem('slk_token',this.value)" onfocus="this.type='text'" onblur="this.type='password'">
-      <button class="btn sm" onclick="localStorage.removeItem('slk_som_channel');alert('채널 초기화됨')" style="font-size:10px">채널초기화</button>
+      <button class="btn p sm" onclick="localStorage.removeItem('slk_som_channel');alert('채널 초기화됨')" style="font-size:10px">채널초기화</button>
       <span style="font-size:11px;color:var(--tx3);margin-left:4px">※ 근태관리 확인사항(J)열에서 자동 적재</span>
     </div>
   </div>
@@ -680,8 +680,8 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
     <div class="ph-l"><div class="pt">연차현황</div><div class="psub">입사일 기준 연차 발생·사용·잔여 자동 계산 · 계약기간관리처럼 회차 누적 표시</div></div>
     <div class="bg-row">
       <div class="swrap"><input type="text" class="sinp" id="lsQ" placeholder="이름·사번" oninput="renderLeaveStatus()" onkeydown="if(event.key==='Enter'){renderLeaveStatus();this.blur();}" style="width:150px"></div>
-      <button class="btn slk" onclick="sendAllLeaveSummary()">💬 전체 잔여연차 알림 발송</button>
-      <button class="btn bl" onclick="downloadLeaveStatusExcel()">⬇ 엑셀 다운로드</button>
+      <button class="btn p" onclick="sendAllLeaveSummary()">💬 전체 잔여연차 알림 발송</button>
+      <button class="btn p" onclick="downloadLeaveStatusExcel()">⬇ 엑셀 다운로드</button>
     </div>
   </div>
   <div class="tw" id="lsTW">
@@ -706,9 +706,9 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <div class="swrap"><input type="text" class="sinp" id="luQ" placeholder="이름·사번" oninput="renderLeaveUsage()" onkeydown="if(event.key==='Enter'){renderLeaveUsage();this.blur();}" style="width:150px"></div>
       <button class="btn p" onclick="addLeaveUsageRow()">+ 사용 추가</button>
       <button class="btn p" onclick="saveAllLuPendRows()">✓ 전체 저장</button>
-      <label class="btn am" style="cursor:pointer">📂 엑셀 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="uploadLeaveUsageExcel(event)"></label>
-      <button class="btn bl" onclick="downloadLeaveUsageExcel()">⬇ 엑셀 다운로드</button>
-      <button class="btn bl" onclick="downloadLeaveUsageTemplate()">📋 엑셀 템플릿</button>
+      <label class="btn p" style="cursor:pointer">📂 엑셀 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="uploadLeaveUsageExcel(event)"></label>
+      <button class="btn p" onclick="downloadLeaveUsageExcel()">⬇ 엑셀 다운로드</button>
+      <button class="btn p" onclick="downloadLeaveUsageTemplate()">📋 엑셀 템플릿</button>
     </div>
   </div>
   <div style="font-size:11px;color:var(--tx3);margin:-6px 0 8px">※ "+ 사용 추가"로 행을 여러 개 만든 뒤, 사번 칸에 엑셀·노션에서 복사한 여러 줄을 붙여넣으면 그 줄 수만큼 행이 자동으로 채워집니다. 구분·사용일 칸도 각각 세로로 복사한 값을 붙여넣으면 해당 행부터 아래로 한 줄씩 채워집니다.</div>
@@ -740,7 +740,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
         <option value="6">06월</option><option value="5">05월</option><option value="4">04월</option>
         <option value="3">03월</option><option value="2">02월</option><option value="1">01월</option>
       </select>
-      <button class="btn bl" onclick="salCfgCopyFromPrev()" title="이전 월 설정 복사">📋 이전월 복사</button>
+      <button class="btn p" onclick="salCfgCopyFromPrev()" title="이전 월 설정 복사">📋 이전월 복사</button>
     </div>
   </div>
   <div class="section" id="salCfgFileSection" style="margin-bottom:14px">
