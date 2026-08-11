@@ -6284,6 +6284,25 @@ function deleteSomyungItem(eid,ds,ck){
 //   }
 const SLK_POST_GAS_URL='https://script.google.com/macros/s/AKfycbwhXhu8jaFHg4OTIdSHFV-jcWDwbTJpA3V-eAheXXCl1Gee0XRMm4bxSDM3gLZpopyTBA/exec';
 
+// ★ 근태소명 개인 DM 발송 시, 관리자에게도 동일 내용을 사본으로 발송 (아래 ID 목록)
+const SOM_ADMIN_SLACK_IDS=['UM33CBKR8','U03PLHYF126'];
+
+// 관리자 사본 발송 (실패해도 원 발송 결과에는 영향 없음, 별도 알림 없음)
+function _ccSomyungToAdmins(token, text, primaryChannel){
+  SOM_ADMIN_SLACK_IDS.forEach(adminId=>{
+    if(adminId===primaryChannel)return; // 본인에게 보낸 경우 중복 방지
+    const cb='_slkPostCC_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    const s=document.createElement('script');
+    s.src=SLK_POST_GAS_URL+'?action=slack_post&callback='+cb
+      +'&token='+encodeURIComponent(token)
+      +'&channel='+encodeURIComponent(adminId)
+      +'&text='+encodeURIComponent(text);
+    window[cb]=()=>{ delete window[cb]; if(s.parentNode)s.parentNode.removeChild(s); };
+    s.onerror=()=>{ delete window[cb]; if(s.parentNode)s.parentNode.removeChild(s); };
+    document.body.appendChild(s);
+  });
+}
+
 function _sendSlackMsg(text, overrideChannel){
   const token=localStorage.getItem('slk_token')||'';
   if(!token){
@@ -6307,7 +6326,10 @@ function _sendSlackMsg(text, overrideChannel){
     window[cb]=(json)=>{
       delete window[cb];
       if(s.parentNode)s.parentNode.removeChild(s);
-      if(json&&json.ok){resolve(true);}
+      if(json&&json.ok){
+        if(overrideChannel&&overrideChannel.charAt(0)==='U')_ccSomyungToAdmins(token,text,overrideChannel);
+        resolve(true);
+      }
       else{
         const err=(json&&json.error)||'알 수 없는 오류';
         if(err==='not_in_channel'||err==='channel_not_found'){
