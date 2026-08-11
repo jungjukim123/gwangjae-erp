@@ -6371,10 +6371,9 @@ async function sendSomyungItemToSlack(eid,ds,ck){
     alert(item.name+'님의 SlackID가 등록되어 있지 않습니다.\n② 계약기간관리에서 해당 직원의 SlackID(U로 시작)를 입력해주세요.');
     return;
   }
-  const greeting=`📌 *[근태소명 안내]* ${yr}년 ${mo}월\n안녕하세요, 피플팀입니다.\n아래 근태 내역에 대한 확인 및 조치가 필요합니다.\n\n`;
   const memoLine=memo?` → *${memo}*`:'';
-  const routeInfo=`\n\n📍처리 경로\n• 출근·퇴근 기록 누락 / 결근 / 연차 상신 누락\n  → [부산CX - 근태관리] → [근태소명요청서]\n• 연장근무 / 휴일근무 미상신\n  → [부산CX - 근태관리] → [승인요청서] → [추가근무요청]\n\n추가문의사항은 담당자(@${item.name})에게 연락 부탁드립니다.`;
-  const text=greeting+`👤 *${item.name}*\n• ${item.date} | ${item.type}${memoLine}`+routeInfo;
+  const DIV='────────────────────────────';
+  const text=`안녕하세요, 피플팀입니다 😊\n\n*${item.name}*님,\n근태 확인이 필요한 내역이 있어 안내드립니다.\n아래 내용을 확인하시고 조치 부탁드립니다.\n\n${DIV}\n📌 *[근태소명 안내]* ${yr}년 ${mo}월\n\n👤 *${item.name}*\n• ${item.date} | ${item.type}${memoLine}\n\n📍 처리 경로\n• 출근·퇴근 기록 누락 / 결근 / 연차 상신 누락\n  → [부산CX - 근태관리] → [근태소명요청서]\n• 연장근무 / 휴일근무 미상신\n  → [부산CX - 근태관리] → [승인요청서] → [추가근무요청]\n${DIV}\n\n바쁘시더라도 빠른 확인 부탁드리며, 궁금하신 점은 담당자(@김정주)에게 편하게 연락 주세요!\n\n감사합니다.\n피플팀 드림`;
   const ok=await _sendSlackMsg(text, slackId);
   if(ok) _toast('✅ '+item.name+'님께 DM 발송 완료','ok');
 }
@@ -6398,9 +6397,8 @@ async function sendSomyungToSlack(eid,ck){
     const memoStr=memo?` → *${memo}*`:'';
     return`• ${item.date} | ${item.type}${memoStr} ${statusIcon}`;
   }).join('\n');
-  const greeting=`📌 *[근태소명 안내]* ${yr}년 ${mo}월\n안녕하세요, 피플팀입니다.\n아래 근태 내역에 대한 확인 및 조치가 필요합니다.\n\n`;
-  const routeInfo=`\n\n📍처리 경로\n• 출근·퇴근 기록 누락 / 결근 / 연차 상신 누락\n  → [부산CX - 근태관리] → [근태소명요청서]\n• 연장근무 / 휴일근무 미상신\n  → [부산CX - 근태관리] → [승인요청서] → [추가근무요청]\n\n추가문의사항은 담당자(@${grpName})에게 연락 부탁드립니다.`;
-  const text=greeting+`👤 *${grpName}* (${items.length}건)\n${lines}`+routeInfo;
+  const DIV='────────────────────────────';
+  const text=`안녕하세요, 피플팀입니다 😊\n\n*${grpName}*님,\n근태 확인이 필요한 내역이 있어 안내드립니다.\n아래 내용을 확인하시고 조치 부탁드립니다.\n\n${DIV}\n📌 *[근태소명 안내]* ${yr}년 ${mo}월\n\n👤 *${grpName}* (${items.length}건)\n${lines}\n\n📍 처리 경로\n• 출근·퇴근 기록 누락 / 결근 / 연차 상신 누락\n  → [부산CX - 근태관리] → [근태소명요청서]\n• 연장근무 / 휴일근무 미상신\n  → [부산CX - 근태관리] → [승인요청서] → [추가근무요청]\n${DIV}\n\n바쁘시더라도 빠른 확인 부탁드리며, 궁금하신 점은 담당자(@김정주)에게 편하게 연락 주세요!\n\n감사합니다.\n피플팀 드림`;
   const ok=await _sendSlackMsg(text, slackId);
   if(ok) _toast('✅ '+grpName+'님께 DM 발송 완료','ok');
 }
@@ -6428,9 +6426,8 @@ async function sendAllSomyungToSlack(){
     }).join('\n');
     return`👤 *${grp.name}* (${grp.items.length}건)\n${sub}`;
   }).join('\n\n');
-  const greeting=`📌 *[근태소명 안내]* ${yr}년 ${mo}월 전체\n안녕하세요, 피플팀입니다.\n아래 근태 내역에 대한 확인 및 조치가 필요합니다.\n\n`;
-  const routeInfo=`\n\n📍처리 경로\n• 출근·퇴근 기록 누락 / 결근 / 연차 상신 누락\n  → [부산CX - 근태관리] → [근태소명요청서]\n• 연장근무 / 휴일근무 미상신\n  → [부산CX - 근태관리] → [승인요청서] → [추가근무요청]\n\n추가문의사항은 각 담당자에게 연락 부탁드립니다.`;
-  const text=greeting+`총 ${list.length}건\n\n${lines}`+routeInfo;
+  const DIV='────────────────────────────';
+  const text=`안녕하세요, 피플팀입니다 😊\n\n아래 근태 내역에 대한 확인 및 조치가 필요한 인원 목록을 안내드립니다.\n\n${DIV}\n📌 *[근태소명 안내]* ${yr}년 ${mo}월 전체 (총 ${list.length}건)\n\n${lines}\n\n📍 처리 경로\n• 출근·퇴근 기록 누락 / 결근 / 연차 상신 누락\n  → [부산CX - 근태관리] → [근태소명요청서]\n• 연장근무 / 휴일근무 미상신\n  → [부산CX - 근태관리] → [승인요청서] → [추가근무요청]\n${DIV}\n\n바쁘시더라도 빠른 확인 부탁드리며, 궁금하신 점은 담당자(@김정주)에게 편하게 연락 주세요!\n\n감사합니다.\n피플팀 드림`;
   const ok=await _sendSlackMsg(text);
   if(ok) _toast('✅ Slack 전체 발송 완료','ok');
 }
