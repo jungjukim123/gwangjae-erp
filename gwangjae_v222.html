@@ -8084,10 +8084,49 @@ function getLeaveSummaryForEmp(empId){
   const 총잔여=Math.round((총발생-총사용)*100)/100;
   return{총발생,총사용,총잔여};
 }
-function buildLeaveSummaryText(emp,summary){
+// 사번의 발생 회차별(1년미만/1년이상) rows + 사용내역을 함께 계산 — DM 상세 안내용
+// ★ getLeaveSummaryForEmp(급여 계산용, 회차 합산 요약만)와는 별도 — 회차별 상세가 필요해 신설
+function getLeaveDetailForEmp(empId){
+  const rows=buildLeaveAccrualRows(empId);
+  if(!rows.length)return null;
+  const usageRecords=getLeaveUsageRecords(empId);
+  allocateLeaveUsage(rows,usageRecords,empId);
+  return{rows,usageRecords};
+}
+// 근태소명 DM의 "잔여연차 확인" 버튼(GAS handleViewLeave)과 동일한 형식의 상세 안내 텍스트
+function buildLeaveSummaryText(emp,detail){
+  const{rows,usageRecords}=detail;
   const now=new Date();
   const yyyymm=`${now.getFullYear()}년 ${String(now.getMonth()+1).padStart(2,'0')}월`;
-  return`📌 *[연차현황 안내]* ${yyyymm}\n안녕하세요, 피플팀입니다.\n\n👤 *${emp.이름}*\n• 발생: ${summary.총발생}시간\n• 사용: ${summary.총사용}시간\n• 잔여: ${summary.총잔여}시간\n\n※ 자세한 내역은 관제센터 프로그램 > 연차현황에서 확인하실 수 있습니다.`;
+  const bucket0=rows.find(r=>r.구분==='1년미만연차');
+  const over1Rows=rows.filter(r=>r.구분==='1년이상연차');
+  const under1Text=bucket0
+    ?('• 발생: '+bucket0.발생+'시간\n• 사용: '+bucket0.사용+'시간\n• 잔여: '+bucket0.잔여+'시간')
+    :'없음';
+  let over1Text='없음';
+  if(over1Rows.length){
+    const 발생1=Math.round(over1Rows.reduce((a,r)=>a+r.발생,0)*100)/100;
+    const 사용1=Math.round(over1Rows.reduce((a,r)=>a+r.사용,0)*100)/100;
+    const 잔여1=Math.round((발생1-사용1)*100)/100;
+    over1Text='• 발생: '+발생1+'시간\n• 사용: '+사용1+'시간\n• 잔여: '+잔여1+'시간';
+  }
+  const usageLines=usageRecords
+    .filter(u=>getLeaveTypeFactor(u.구분)>0)
+    .sort((a,b)=>a.사용일.localeCompare(b.사용일))
+    .map(u=>{
+      const hrs=Math.round(getLeaveTypeFactor(u.구분)*getLeaveSojeong(emp.사번,u.사용일)*100)/100;
+      return '• '+u.사용일.replace(/-/g,'.')+'  '+hrs+'시간';
+    }).join('\n')||'사용 내역 없음';
+  const DIV='────────────────────────────';
+  return '안녕하세요, 피플팀입니다 😊\n\n'
+    +'*'+emp.이름+'*님의 잔여연차 현황을 안내드립니다.\n\n'
+    +DIV+'\n📌 *[잔여연차 안내]* '+yyyymm+' 기준\n\n'
+    +'🔹 *1년이상연차*\n'+over1Text+'\n\n'
+    +'🔹 *1년미만연차* (사용기간: 입사일로부터 1년)\n'+under1Text+'\n\n'
+    +'📋 사용내역\n'+usageLines+'\n\n'
+    +'※ 아직 승인되지 않은 연차의 경우 사용내역에 반영되지 않을 수 있습니다.\n'
+    +DIV+'\n\n궁금하신 점은 담당자(@김정주)에게 편하게 연락 주세요!\n\n'
+    +'감사합니다.\n피플팀 드림';
 }
 // 특정 직원 1명에게 연차현황 DM 발송
 async function sendLeaveSummaryToEmp(empId){
@@ -8096,9 +8135,11 @@ async function sendLeaveSummaryToEmp(empId){
   const con=contracts.filter(c=>c.사번===empId&&c.구분!=='퇴사').sort((a,b)=>new Date(b.cs)-new Date(a.cs))[0];
   const slackId=con?.slackId||'';
   if(!slackId){alert(emp.이름+'님의 SlackID가 등록되어 있지 않습니다.\n② 계약기간관리에서 해당 직원의 SlackID(U로 시작)를 입력해주세요.');return;}
-  const summary=getLeaveSummaryForEmp(empId);
-  if(!summary){alert('연차 정보를 계산할 수 없습니다(입사일을 확인해주세요).');return;}
-  const ok=await _sendSlackMsg(buildLeaveSummaryText(emp,summary), slackId);
+  const detail=getLeaveDetailForEmp(empId);
+  if(!detail){alert('연차 정보를 계산할 수 없습니다(입사일을 확인해주세요).');return;}
+  const text=buildLeaveSummaryText(emp,detail);
+  const blocks=_somyungActionBlocks(empId,text);
+  const ok=await _sendSlackMsg(text, slackId, blocks);
   if(ok)_toast('✅ '+emp.이름+'님께 연차현황 발송 완료','ok');
 }
 // 전체 재직자(SlackID 등록자)에게 순차적으로 연차현황 DM 발송
@@ -8114,9 +8155,11 @@ async function sendAllLeaveSummary(){
     const con=contracts.filter(c=>c.사번===e.사번&&c.구분!=='퇴사').sort((a,b)=>new Date(b.cs)-new Date(a.cs))[0];
     const slackId=con?.slackId||'';
     if(!slackId){skipped++;continue;}
-    const summary=getLeaveSummaryForEmp(e.사번);
-    if(!summary){skipped++;continue;}
-    const ok=await _sendSlackMsg(buildLeaveSummaryText(e,summary), slackId);
+    const detail=getLeaveDetailForEmp(e.사번);
+    if(!detail){skipped++;continue;}
+    const text=buildLeaveSummaryText(e,detail);
+    const blocks=_somyungActionBlocks(e.사번,text);
+    const ok=await _sendSlackMsg(text, slackId, blocks);
     if(ok)sent++;else skipped++;
   }
   _toast(`✅ 연차현황 전체 발송 완료 — 발송 ${sent}건 / 스킵 ${skipped}건`,'ok');
