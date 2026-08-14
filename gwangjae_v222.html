@@ -6374,7 +6374,8 @@ function _somyungActionBlocks(eid, text){
     {type:'section', text:{type:'mrkdwn', text:text}},
     {type:'actions', elements:[
       {type:'button', text:{type:'plain_text', text:'📊 내 근태현황 보기', emoji:true}, url:MY_ATT_URL},
-      {type:'button', text:{type:'plain_text', text:'🌴 잔여연차 확인', emoji:true}, action_id:'somyung_view_leave', value:eid}
+      {type:'button', text:{type:'plain_text', text:'🌴 잔여연차 확인', emoji:true}, action_id:'somyung_view_leave', value:eid},
+      {type:'button', text:{type:'plain_text', text:'🔢 사번 확인', emoji:true}, action_id:'somyung_view_eid', value:eid}
     ]}
   ];
 }
