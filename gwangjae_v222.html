@@ -6286,6 +6286,11 @@ function deleteSomyungItem(eid,ds,ck){
 //     return ContentService.createTextOutput(cb+'('+res.getContentText()+')').setMimeType(ContentService.MimeType.JAVASCRIPT);
 //   }
 const SLK_POST_GAS_URL='https://script.google.com/macros/s/AKfycbwhXhu8jaFHg4OTIdSHFV-jcWDwbTJpA3V-eAheXXCl1Gee0XRMm4bxSDM3gLZpopyTBA/exec';
+// "내 근태현황 보기" 버튼이 여는 읽기전용 웹페이지 (사번+휴대폰 뒷자리 로그인)
+// ★ GAS exec URL을 직접 열면 브라우저의 서드파티 쿠키 차단으로 콘텐츠 iframe이 안 뜨는 문제가 있어,
+//   별도 배포한 정적 페이지(GitHub Pages)로 분리했습니다. 데이터는 그 페이지가 GAS의
+//   handleMyAttApi(JSONP, action=my_att_api)를 호출해서 받아옵니다 — gas_근태소명_슬랙버튼.js 참고.
+const MY_ATT_URL='https://jungjukim123.github.io/gwangjae-my-attendance/';
 
 // ★ 근태소명 개인 DM 발송 시, 관리자에게도 동일 내용을 사본으로 발송 (아래 ID 목록)
 const SOM_ADMIN_SLACK_IDS=['UM33CBKR8','U03PLHYF126'];
@@ -6363,11 +6368,12 @@ function _sendSlackMsg(text, overrideChannel, blocks){
 }
 
 // 근태소명 개인 DM에 붙는 "내 근태현황 보기 / 잔여연차 확인" 버튼
-function _somyungActionBlocks(eid, ck, text){
+// ★ "내 근태현황 보기"는 url 버튼 — 클릭 시 doPost 없이 바로 MY_ATT_URL(사번+휴대폰 뒷자리 로그인)로 이동
+function _somyungActionBlocks(eid, text){
   return [
     {type:'section', text:{type:'mrkdwn', text:text}},
     {type:'actions', elements:[
-      {type:'button', text:{type:'plain_text', text:'📊 내 근태현황 보기', emoji:true}, action_id:'somyung_view_att', value:eid+'|'+ck},
+      {type:'button', text:{type:'plain_text', text:'📊 내 근태현황 보기', emoji:true}, url:MY_ATT_URL},
       {type:'button', text:{type:'plain_text', text:'🌴 잔여연차 확인', emoji:true}, action_id:'somyung_view_leave', value:eid}
     ]}
   ];
@@ -6389,7 +6395,7 @@ async function sendSomyungItemToSlack(eid,ds,ck){
   const memoLine=memo?` → *${memo}*`:'';
   const DIV='────────────────────────────';
   const text=`안녕하세요, 피플팀입니다 😊\n\n*${item.name}*님,\n근태 확인이 필요한 내역이 있어 안내드립니다.\n아래 내용을 확인하시고 조치 부탁드립니다.\n\n${DIV}\n📌 *[근태소명 안내]* ${yr}년 ${mo}월\n\n👤 *${item.name}*\n• ${item.date} | ${item.type}${memoLine}\n\n📍 처리 경로\n• 출근·퇴근 기록 누락 / 결근 / 연차 상신 누락\n  → [부산CX - 근태관리] → [근태소명요청서]\n• 연장근무 / 휴일근무 미상신\n  → [부산CX - 근태관리] → [승인요청서] → [추가근무요청]\n${DIV}\n\n바쁘시더라도 빠른 확인 부탁드리며, 궁금하신 점은 담당자(@김정주)에게 편하게 연락 주세요!\n\n감사합니다.\n피플팀 드림`;
-  const blocks=_somyungActionBlocks(eid, ck, text);
+  const blocks=_somyungActionBlocks(eid, text);
   const ok=await _sendSlackMsg(text, slackId, blocks);
   if(ok) _toast('✅ '+item.name+'님께 DM 발송 완료','ok');
 }
@@ -6415,7 +6421,7 @@ async function sendSomyungToSlack(eid,ck){
   }).join('\n');
   const DIV='────────────────────────────';
   const text=`안녕하세요, 피플팀입니다 😊\n\n*${grpName}*님,\n근태 확인이 필요한 내역이 있어 안내드립니다.\n아래 내용을 확인하시고 조치 부탁드립니다.\n\n${DIV}\n📌 *[근태소명 안내]* ${yr}년 ${mo}월\n\n👤 *${grpName}* (${items.length}건)\n${lines}\n\n📍 처리 경로\n• 출근·퇴근 기록 누락 / 결근 / 연차 상신 누락\n  → [부산CX - 근태관리] → [근태소명요청서]\n• 연장근무 / 휴일근무 미상신\n  → [부산CX - 근태관리] → [승인요청서] → [추가근무요청]\n${DIV}\n\n바쁘시더라도 빠른 확인 부탁드리며, 궁금하신 점은 담당자(@김정주)에게 편하게 연락 주세요!\n\n감사합니다.\n피플팀 드림`;
-  const blocks=_somyungActionBlocks(eid, ck, text);
+  const blocks=_somyungActionBlocks(eid, text);
   const ok=await _sendSlackMsg(text, slackId, blocks);
   if(ok) _toast('✅ '+grpName+'님께 DM 발송 완료','ok');
 }
