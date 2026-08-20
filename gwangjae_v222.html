@@ -7229,16 +7229,13 @@ function downloadConExcel(){
 // ============================================================
 // 바로사인(Baro-Sign) 연동 — 계약서 전송
 // ============================================================
-// 계약 구분(type)별로 쓸 바로사인 템플릿 ID. 아직 템플릿이 없는 유형은 null로 두면
-// 발송 시 안내 문구가 뜨고 막힌다 — 템플릿 만들고 여기 ID만 채우면 바로 열림.
+// 어떤 e-sign 전자문서(템플릿)를 쓸지는 여기서 미리 정하지 않는다 — template_id 없이 prepare를
+// 호출하면, 바로사인 쪽 검토 화면(review_url) 맨 위에 "전자문서 선택" 화면이 먼저 뜨고, 발송하는
+// 사람이 그때그때 바로사인에 실제로 존재하는 템플릿 목록에서 직접 고른다. 예전처럼 여기 코드에
+// 템플릿 id를 하드코딩해두면, 바로사인에서 그 템플릿을 지우거나 새로 만들 때마다 이 파일을 고쳐서
+// 다시 배포해야 하는 문제가 있었다.
 const BARO_SIGN_API_URL = 'https://esign-app-muhu.onrender.com/api/documents/prepare';
 const BARO_SIGN_API_KEY = '688c649673b617e2dc148c73acddef789fd91ef62d0c90f74d58c2abf8587481';
-const BARO_SIGN_TEMPLATE_BY_TYPE = {
-  '파트타이머': '3461c0c9-7a47-460a-bbc2-1304fe807ce8',
-  '풀타임': null,
-  '파견직': null,
-  '계약직': null,
-};
 
 // 계약기간관리 데이터만으로는 채울 수 없는 값(예: 근로장려수당처럼 입사자마다 다른 값)이 있을 수 있어,
 // 바로 발송하지 않고 바로사인에서 "검토 화면"을 하나 만들어 그 안에서 채우고 최종 발송하게 한다.
@@ -7290,11 +7287,6 @@ async function sendContractToEsign(no){
   const c=contracts.find(x=>x.no===no);
   if(!c){alert('선택한 계약 정보를 찾을 수 없습니다.');return;}
 
-  const templateId=BARO_SIGN_TEMPLATE_BY_TYPE[c.type];
-  if(!templateId){
-    alert(`'${c.type}' 유형의 계약서 템플릿이 아직 바로사인에 설정되지 않았습니다.\n관리자에게 문의해주세요.`);
-    return;
-  }
   if(!c.email && !c.phone){
     alert('이메일 또는 전화번호가 없어 발송할 수 없습니다.');
     return;
@@ -7315,7 +7307,6 @@ async function sendContractToEsign(no){
       method:'POST',
       headers:{'Content-Type':'application/json','X-API-Key':BARO_SIGN_API_KEY},
       body:JSON.stringify({
-        template_id:templateId,
         signer:{name:c.이름, employee_id:c.사번, email:c.email||null, phone:c.phone||null},
         data,
         created_by:'관제센터 ERP',
