@@ -1622,12 +1622,12 @@ function _applyData(data) {
     try { if (_v('salConfirmed'))  _salConfirmed = JSON.parse(_v('salConfirmed'));    } catch(e) {}
     try { if (_v('salSnapshot'))   _salSnapshot  = JSON.parse(_v('salSnapshot'));     } catch(e) {}
     try { if (_v('leaveUsage'))    leaveUsage    = JSON.parse(_v('leaveUsage'));      } catch(e) {}
-    // 계약기간관리 "서명상태" 열용 e-sign 문서 연결 정보 복원(contracts는 이미 위에서 구성됨)
+    // 계약기간관리 "서명상태"·"사직원" 열용 e-sign 문서 연결 정보 복원(contracts는 이미 위에서 구성됨)
     try {
       const docLinks = JSON.parse(_v('docLinks') || '{}');
       contracts.forEach(c => {
         const link = docLinks[c.no];
-        if (link) { c.문서ID = link.문서ID || ''; c.서명상태 = link.서명상태 || ''; }
+        if (link) { c.문서ID = link.문서ID || ''; c.서명상태 = link.서명상태 || ''; c.문서제목 = link.문서제목 || ''; }
       });
     } catch(e) {}
     // 계정 목록 복원
@@ -1803,7 +1803,7 @@ async function saveAll() {
     // 계약기간관리 "서명상태" 열이 참조하는 e-sign 문서 연결 정보 — contracts 테이블 자체에는
     // 컬럼을 추가하지 않고(스키마 변경 없이) meta의 자유 형식 key/value로 저장한다.
     const docLinks = {};
-    contracts.forEach(c => { if (c.문서ID) docLinks[c.no] = { 문서ID: c.문서ID, 서명상태: c.서명상태 || '' }; });
+    contracts.forEach(c => { if (c.문서ID) docLinks[c.no] = { 문서ID: c.문서ID, 서명상태: c.서명상태 || '', 문서제목: c.문서제목 || '' }; });
     const metaRows = [
       { key: 'accounts',      value: JSON.stringify(getAccounts()),        updated: _now },
       { key: 'docLinks',      value: JSON.stringify(docLinks),             updated: _now },
@@ -2881,7 +2881,7 @@ function buildEmpHead(){
   document.getElementById('empHead').innerHTML=EMP_COLS.map((t,i)=>th(t,'empT',i,t==='월소정'?'c':'')).join('');
 }
 // CONTRACT TABLE HEADERS (②) — 맨 앞 빈 열은 선택 체크박스용
-const CON_COLS=['','NO','구분','서명상태','발송여부','구분2','이름','사번','소속','입사일','퇴사일','임금구분','시급','기본급','식대','직책수당','야간근로수당','계약시작','계약종료','시업','종료','소정','휴게','월','화','수','목','금','토','일','이메일','전화','SlackID'];
+const CON_COLS=['','NO','구분','서명상태','발송여부','사직원','구분2','이름','사번','소속','입사일','퇴사일','임금구분','시급','기본급','식대','직책수당','야간근로수당','계약시작','계약종료','시업','종료','소정','휴게','월','화','수','목','금','토','일','이메일','전화','SlackID'];
 function buildConHead(){
   document.getElementById('conHead').innerHTML=CON_COLS.map((t,i)=>i===0?thPlain(t):th(t,'conT',i)).join('');
 }
@@ -7257,9 +7257,11 @@ window.addEventListener('message', e => {
   if (!e.data || e.data.type !== 'baro-sign-document-sent') return;
   if (_baroSignSendingNo !== null) {
     const c = contracts.find(x => x.no === _baroSignSendingNo);
-    // 문서ID를 기억해두면, 서명상태 열이 이 문서가 실제로 서명 완료됐는지(pollDocStatuses 참고)
-    // 계속 물어봐서 실시간으로 갱신할 수 있다. 방금 막 발송했을 뿐 아직 서명 전이므로 서명상태는 초기화.
-    if (c) { c.발송 = '완료'; c.문서ID = _baroSignSendingDocId || ''; c.서명상태 = ''; renderCon(); saveAll(); }
+    // 문서ID·문서제목을 기억해두면, 서명상태 열이 이 문서가 실제로 서명 완료됐는지(pollDocStatuses
+    // 참고) 계속 물어봐서 실시간으로 갱신할 수 있다. 방금 막 발송했을 뿐 아직 서명 전이므로 서명상태는
+    // 초기화. 문서제목은 어떤 전자문서(템플릿)를 보냈는지 바로사인 검토 화면에서 골라야 알 수 있어서
+    // ERP는 이 시점 전까지 알 방법이 없다 — "사직원" 열은 제목에 "사직원"이 들어있는지로 판단한다.
+    if (c) { c.발송 = '완료'; c.문서ID = _baroSignSendingDocId || ''; c.서명상태 = ''; c.문서제목 = e.data.title || ''; renderCon(); saveAll(); }
     _baroSignSendingNo = null;
     _baroSignSendingDocId = null;
   }
@@ -7572,12 +7574,19 @@ function renderCon(){
   document.getElementById('conBody').innerHTML=sortedList.map((c,idx)=>{
     const isExit=c.구분==='퇴사';
     const trCls=[isExit?'retd':'',_selectedConNo===c.no?'con-selected':''].filter(Boolean).join(' ');
+    // "사직원" 열 — 어떤 전자문서를 보냈는지는 바로사인 검토 화면에서 고르므로, 그 결과로 받은
+    // 문서제목(c.문서제목)에 "사직원"이 들어있는지로 판단한다. 서명상태(c.서명상태)는 가장 최근에
+    // 보낸 전자서명 건 하나만 추적하므로, 사직원을 보낸 뒤 같은 건에 다시 계약서를 보내는 등
+    // 순서가 꼬이면 정확하지 않을 수 있다(실제 운영에서는 사직원이 마지막에 한 번만 발송되는
+    // 흐름이라 문제되지 않는다).
+    const resignDone=(c.문서제목||'').includes('사직원') && c.서명상태==='완료';
     return`<tr${trCls?` class="${trCls}"`:''} data-con-no="${c.no}" style="cursor:pointer" onclick="if(!event.target.closest('button,input'))toggleConSelect(${c.no})">
       <td class="c"><input type="checkbox" ${_selectedConNo===c.no?'checked':''} onclick="event.stopPropagation();toggleConSelect(${c.no})" style="cursor:pointer;width:14px;height:14px"></td>
       <td>${idx+1}</td>
       <td><span class="bdg ${tm[c.구분]||'bs'}">${c.구분}</span></td>
       <td><span class="bdg ${c.서명상태==='완료'?'bg':'bs'}" style="font-size:10px">${c.서명상태||'-'}</span></td>
       <td><span class="bdg ${c.발송==='완료'?'bg':'ba'}" style="font-size:10px">${c.발송||'미발송'}</span></td>
+      <td><span class="bdg ${resignDone?'bg':'bs'}" style="font-size:10px">${resignDone?'완료':'-'}</span></td>
       <td style="font-size:11px">${c.type}</td>
       <td><strong>${c.이름}</strong></td>
       <td style="font-family:monospace;font-size:11px">${c.사번?c.사번:'<span style="color:var(--tx3);font-size:10px">미부여</span>'}&nbsp;<button class="btn sm" style="padding:2px 5px;font-size:10px" onclick="editConId(${c.no})">✏</button></td>
@@ -7958,6 +7967,7 @@ function startEditCon(no){
     <td>${sel(c.구분,['신규','계약연장','계약조건변경','퇴사'])}</td>
     <td style="text-align:center;font-size:10px;color:var(--tx3)">${c.서명상태||'-'}</td>
     <td style="text-align:center;font-size:10px;color:var(--tx3)">${c.발송||'-'}</td>
+    <td style="text-align:center;font-size:10px;color:var(--tx3)">${(c.문서제목||'').includes('사직원')&&c.서명상태==='완료'?'완료':'-'}</td>
     <td>${sel(c.type||'파트타이머',['파트타이머','풀타임','파견직','계약직'])}</td>
     <td><input class="con-inp" type="text" value="${c.이름||''}" style="min-width:80px"></td>
     <td><input class="con-inp" type="text" value="${c.사번||''}" placeholder="미부여" style="min-width:80px;font-family:monospace;font-size:10px"></td>
