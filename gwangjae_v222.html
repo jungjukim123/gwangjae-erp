@@ -527,6 +527,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <button class="btn p" onclick="topEditSelectedCon()">✏ 수정</button>
       <button class="btn p" onclick="topSaveSelectedCon()">✓ 저장</button>
       <button class="btn p" onclick="sendContractDoc()">→ 계약서 전송</button>
+      <button class="btn p" onclick="sendResignationDoc()">→ 사직원 전송</button>
       <button class="btn p" onclick="downloadConExcel()">⬇ 엑셀 다운로드</button>
       <button class="btn p" onclick="downloadConTemplate()">📋 엑셀 템플릿</button>
       <label class="btn p" style="cursor:pointer">📂 엑셀 일괄 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="uploadConExcel(event)"></label>
@@ -1622,6 +1623,14 @@ function _applyData(data) {
     try { if (_v('salConfirmed'))  _salConfirmed = JSON.parse(_v('salConfirmed'));    } catch(e) {}
     try { if (_v('salSnapshot'))   _salSnapshot  = JSON.parse(_v('salSnapshot'));     } catch(e) {}
     try { if (_v('leaveUsage'))    leaveUsage    = JSON.parse(_v('leaveUsage'));      } catch(e) {}
+    // 계약기간관리 "서명상태" 열용 e-sign 문서 연결 정보 복원(contracts는 이미 위에서 구성됨)
+    try {
+      const docLinks = JSON.parse(_v('docLinks') || '{}');
+      contracts.forEach(c => {
+        const link = docLinks[c.no];
+        if (link) { c.문서ID = link.문서ID || ''; c.서명상태 = link.서명상태 || ''; }
+      });
+    } catch(e) {}
     // 계정 목록 복원
     try {
       const raw = _v('accounts');
@@ -1792,8 +1801,13 @@ async function saveAll() {
     //             이번 세션에서 명시적으로 삭제한 항목(no)은 서버에 남아있어도 제외.
     leaveUsage = await _mergeMetaArrayByKey('leaveUsage', leaveUsage, 'no', _deletedLeaveUsageNos);
     _deletedLeaveUsageNos.clear();
+    // 계약기간관리 "서명상태" 열이 참조하는 e-sign 문서 연결 정보 — contracts 테이블 자체에는
+    // 컬럼을 추가하지 않고(스키마 변경 없이) meta의 자유 형식 key/value로 저장한다.
+    const docLinks = {};
+    contracts.forEach(c => { if (c.문서ID) docLinks[c.no] = { 문서ID: c.문서ID, 서명상태: c.서명상태 || '' }; });
     const metaRows = [
       { key: 'accounts',      value: JSON.stringify(getAccounts()),        updated: _now },
+      { key: 'docLinks',      value: JSON.stringify(docLinks),             updated: _now },
       { key: 'salExtra',      value: JSON.stringify(salExtra||{}),         updated: _now },
       { key: 'salSyncedYrMo',value: JSON.stringify(salSyncedYrMo||null),  updated: _now },
       { key: 'otRequests',    value: JSON.stringify(otRequests||[]),       updated: _now },
@@ -2868,9 +2882,9 @@ function buildEmpHead(){
   document.getElementById('empHead').innerHTML=EMP_COLS.map((t,i)=>th(t,'empT',i,t==='월소정'?'c':'')).join('');
 }
 // CONTRACT TABLE HEADERS (②) — 맨 앞 빈 열은 선택 체크박스용
-const CON_COLS=['','NO','구분','발송여부','구분2','이름','사번','소속','입사일','퇴사일','임금구분','시급','기본급','식대','직책수당','야간근로수당','계약시작','계약종료','시업','종료','소정','휴게','월','화','수','목','금','토','일','이메일','전화','SlackID','발송'];
+const CON_COLS=['','NO','구분','서명상태','발송여부','구분2','이름','사번','소속','입사일','퇴사일','임금구분','시급','기본급','식대','직책수당','야간근로수당','계약시작','계약종료','시업','종료','소정','휴게','월','화','수','목','금','토','일','이메일','전화','SlackID'];
 function buildConHead(){
-  document.getElementById('conHead').innerHTML=CON_COLS.map((t,i)=>(i===0||i===CON_COLS.length-1)?thPlain(t):th(t,'conT',i)).join('');
+  document.getElementById('conHead').innerHTML=CON_COLS.map((t,i)=>i===0?thPlain(t):th(t,'conT',i)).join('');
 }
 // MY ATT HEADERS
 function buildMyAttHead(){
@@ -7244,13 +7258,17 @@ window.addEventListener('message', e => {
   if (!e.data || e.data.type !== 'baro-sign-document-sent') return;
   if (_baroSignSendingNo !== null) {
     const c = contracts.find(x => x.no === _baroSignSendingNo);
-    if (c) { c.발송 = '완료'; renderCon(); saveAll(); }
+    // 문서ID를 기억해두면, 서명상태 열이 이 문서가 실제로 서명 완료됐는지(pollDocStatuses 참고)
+    // 계속 물어봐서 실시간으로 갱신할 수 있다. 방금 막 발송했을 뿐 아직 서명 전이므로 서명상태는 초기화.
+    if (c) { c.발송 = '완료'; c.문서ID = _baroSignSendingDocId || ''; c.서명상태 = ''; renderCon(); saveAll(); }
     _baroSignSendingNo = null;
+    _baroSignSendingDocId = null;
   }
   closeBaroSignReviewModal();
 });
 
 let _baroSignSendingNo = null;
+let _baroSignSendingDocId = null;
 
 function openBaroSignReviewModal(url) {
   closeBaroSignReviewModal();
@@ -7280,10 +7298,13 @@ function closeBaroSignReviewModal() {
   document.getElementById('baroSignModalOverlay')?.remove();
 }
 
-// 계약 건(no) 하나를 바로사인으로 발송 준비한다 — 상단 툴바 버튼, 행별 "📧 계약서" 버튼 둘 다 여기로 온다.
+// 계약 건(no) 하나를 바로사인으로 발송 준비한다 — 상단 툴바의 "계약서 전송"/"사직원 전송" 버튼
+// 둘 다 여기로 온다(docLabel로 확인 문구·오류 메시지만 구분, 나머지 로직은 완전히 동일).
 // 어떤 계약 컬럼이 어떤 문서 필드에 들어가는지는 여기서 정하지 않는다 — 바로사인 템플릿 편집 화면에서
 // 각 필드에 설정해둔 "데이터 키"와, 아래에서 보내는 data 객체의 키 이름이 같으면 자동으로 매칭된다.
-async function sendContractToEsign(no){
+// 사직원처럼 계약서와는 다른 데이터 키가 필요하거나 값이 아예 없는 필드는, 바로사인 검토 화면에서
+// 발송하는 사람이 직접 입력하는 미니 팝업으로 채우게 된다 — 계약서 전송과 동일한 흐름.
+async function sendContractToEsign(no, docLabel='계약서'){
   const c=contracts.find(x=>x.no===no);
   if(!c){alert('선택한 계약 정보를 찾을 수 없습니다.');return;}
 
@@ -7291,7 +7312,7 @@ async function sendContractToEsign(no){
     alert('이메일 또는 전화번호가 없어 발송할 수 없습니다.');
     return;
   }
-  if(!confirm(`${c.이름}님께 보낼 계약서를 준비할까요?\n다음 화면에서 내용을 확인하고 최종 발송하시면 됩니다.`))return;
+  if(!confirm(`${c.이름}님께 보낼 ${docLabel}을 준비할까요?\n다음 화면에서 내용을 확인하고 최종 발송하시면 됩니다.`))return;
 
   const v=x=>(x===''||x===undefined||x===null)?'':String(x);
   const data={
@@ -7299,6 +7320,7 @@ async function sendContractToEsign(no){
     계약시작:c.cs, 계약종료:c.ce, 시업:c.st, 종료:c.et,
     소정:v(c.소정), 휴게:v(c.휴게), 시급:v(c.시급), 기본급:v(c.기본),
     월:v(c.mon), 화:v(c.tue), 수:v(c.wed), 목:v(c.thu), 금:v(c.fri), 토:v(c.sat), 일:v(c.sun),
+    퇴사일:v(c.퇴사),
     이메일:c.email, 전화:c.phone,
   };
 
@@ -7313,11 +7335,12 @@ async function sendContractToEsign(no){
       }),
     });
     const result=await res.json();
-    if(!result.ok){alert('계약서 준비 실패: '+result.message);return;}
+    if(!result.ok){alert(`${docLabel} 준비 실패: `+result.message);return;}
     _baroSignSendingNo = no;
+    _baroSignSendingDocId = result.document_id || null;
     openBaroSignReviewModal(result.review_url);
   }catch(e){
-    alert('계약서 준비 중 오류가 발생했습니다: '+e.message);
+    alert(`${docLabel} 준비 중 오류가 발생했습니다: `+e.message);
   }
 }
 
@@ -7326,6 +7349,40 @@ function sendContractDoc(){
   if(_selectedConNo===null){alert('먼저 전송할 계약 건의 체크박스를 선택해주세요.');return;}
   sendContractToEsign(_selectedConNo);
 }
+
+// 선택된 계약 건의 사직원 전송(상단 툴바 버튼) — 계약서 전송과 완전히 동일한 흐름, 문서 종류만 다르다.
+function sendResignationDoc(){
+  if(_selectedConNo===null){alert('먼저 전송할 계약 건의 체크박스를 선택해주세요.');return;}
+  sendContractToEsign(_selectedConNo, '사직원');
+}
+
+// ── "서명상태" 열 실시간 갱신 — 문서ID가 있는(=발송된) 계약 건들의 실제 서명 완료 여부를 주기적으로 조회 ──
+// 발송 시점(postMessage)에는 "발송은 됐지만 아직 서명 전"이라, 근로자가 실제로 서명 완료했는지는
+// 별도로 물어봐야 알 수 있다. 계약기간관리 화면을 보고 있는 동안만 30초마다 조용히 확인한다
+// (근태소명연동 자동 동기화와 같은 패턴, page-hr5 대신 page-hr2 기준).
+const BARO_SIGN_STATUS_URL = 'https://esign-app-muhu.onrender.com/api/documents/status';
+async function pollDocStatuses(){
+  const ids=[...new Set(contracts.filter(c=>c.문서ID && c.서명상태!=='완료').map(c=>c.문서ID))];
+  if(!ids.length)return;
+  try{
+    const res=await fetch(`${BARO_SIGN_STATUS_URL}?ids=${encodeURIComponent(ids.join(','))}`,{
+      headers:{'X-API-Key':BARO_SIGN_API_KEY},
+    });
+    const result=await res.json();
+    if(!result.ok)return;
+    let changed=false;
+    contracts.forEach(c=>{
+      if(c.문서ID && result.statuses[c.문서ID]==='completed' && c.서명상태!=='완료'){
+        c.서명상태='완료';changed=true;
+      }
+    });
+    if(changed){renderCon();saveAll();}
+  }catch(e){/* 다음 주기에 다시 시도 */}
+}
+setInterval(()=>{
+  const pg=document.getElementById('page-hr2');
+  if(pg&&pg.classList.contains('on')&&typeof contracts!=='undefined'&&contracts.length)pollDocStatuses();
+},30000);
 
 function downloadConTemplate(){
   const wb=XLSX.utils.book_new();
@@ -7519,15 +7576,12 @@ function renderCon(){
   const dc=v=>v==='주휴'?'<span class="bdg bg" style="font-size:9px">주휴</span>':v===0||v==='0'?'<span style="color:var(--tx3)">0</span>':`<strong>${v}</strong>`;
   document.getElementById('conBody').innerHTML=sortedList.map((c,idx)=>{
     const isExit=c.구분==='퇴사';
-    const sb=isExit
-      ?`<button class="btn sm d" onclick="sendDoc(${c.no},'사직원')">📧 사직원</button>`
-      :c.발송==='완료'?`<span class="bdg bg" style="font-size:10px">✓ 발송완료</span>`
-      :`<button class="btn sm bl" onclick="sendDoc(${c.no},'계약서')">📧 계약서</button>`;
     const trCls=[isExit?'retd':'',_selectedConNo===c.no?'con-selected':''].filter(Boolean).join(' ');
     return`<tr${trCls?` class="${trCls}"`:''} data-con-no="${c.no}" style="cursor:pointer" onclick="if(!event.target.closest('button,input'))toggleConSelect(${c.no})">
       <td class="c"><input type="checkbox" ${_selectedConNo===c.no?'checked':''} onclick="event.stopPropagation();toggleConSelect(${c.no})" style="cursor:pointer;width:14px;height:14px"></td>
       <td>${idx+1}</td>
       <td><span class="bdg ${tm[c.구분]||'bs'}">${c.구분}</span></td>
+      <td><span class="bdg ${c.서명상태==='완료'?'bg':'bs'}" style="font-size:10px">${c.서명상태||'-'}</span></td>
       <td><span class="bdg ${c.발송==='완료'?'bg':'ba'}" style="font-size:10px">${c.발송||'미발송'}</span></td>
       <td style="font-size:11px">${c.type}</td>
       <td><strong>${c.이름}</strong></td>
@@ -7552,7 +7606,6 @@ function renderCon(){
       <td style="font-size:11px;max-width:130px;overflow:hidden;text-overflow:ellipsis">${c.email||'-'}</td>
       <td style="font-size:11px">${c.phone||'-'}</td>
       <td style="font-size:11px;color:var(--purple);font-weight:${c.slackId?700:400}">${c.slackId||'-'}</td>
-      <td>${sb}</td>
     </tr>`;
   }).join('');
   applyFilter('conT');
@@ -7898,8 +7951,17 @@ function startEditCon(no){
 
   tr.innerHTML=`
     <td></td>
-    <td style="text-align:center;color:var(--orange);font-weight:700;font-size:10px">EDIT</td>
+    <td style="text-align:center;color:var(--orange);font-weight:700;font-size:10px">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+        <span>EDIT</span>
+        <div style="display:flex;gap:2px">
+          <button class="btn sm p" onclick="saveEditCon(${no})" style="padding:2px 6px;font-size:10px;white-space:nowrap">✓</button>
+          <button class="btn sm" onclick="cancelEditCon()" style="padding:2px 6px;font-size:10px;white-space:nowrap">✕</button>
+        </div>
+      </div>
+    </td>
     <td>${sel(c.구분,['신규','계약연장','계약조건변경','퇴사'])}</td>
+    <td style="text-align:center;font-size:10px;color:var(--tx3)">${c.서명상태||'-'}</td>
     <td style="text-align:center;font-size:10px;color:var(--tx3)">${c.발송||'-'}</td>
     <td>${sel(c.type||'파트타이머',['파트타이머','풀타임','파견직','계약직'])}</td>
     <td><input class="con-inp" type="text" value="${c.이름||''}" style="min-width:80px"></td>
@@ -7922,13 +7984,7 @@ function startEditCon(no){
     ${dayKeys.map(k=>`<td><input class="con-inp" type="text" value="${c[k]!==undefined?c[k]:'-'}" style="width:38px;text-align:center"></td>`).join('')}
     <td><input class="con-inp" type="email" value="${c.email||''}" placeholder="이메일" style="width:120px"></td>
     <td><input class="con-inp" type="tel" value="${c.phone||''}" placeholder="010-0000-0000" style="width:110px"></td>
-    <td><input class="con-inp" type="text" value="${c.slackId||''}" placeholder="U0XXXXXXXXX" style="width:100px"></td>
-    <td>
-      <div style="display:flex;gap:3px;flex-wrap:nowrap">
-        <button class="btn sm p" onclick="saveEditCon(${no})" style="white-space:nowrap">✓ 저장</button>
-        <button class="btn sm" onclick="cancelEditCon()" style="white-space:nowrap">✕</button>
-      </div>
-    </td>`;
+    <td><input class="con-inp" type="text" value="${c.slackId||''}" placeholder="U0XXXXXXXXX" style="width:100px"></td>`;
 
   tr.scrollIntoView({behavior:'smooth',block:'center'});
 }
