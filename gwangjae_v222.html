@@ -526,7 +526,8 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <button class="btn p" id="btnAddConRow" onclick="addConRow()">+ 계약 추가</button>
       <button class="btn p" onclick="topEditSelectedCon()">✏ 수정</button>
       <button class="btn p" onclick="topSaveSelectedCon()">✓ 저장</button>
-      <button class="btn p" onclick="sendContractDoc()">→ 계약서 전송</button>
+      <button class="btn d" onclick="topDeleteSelectedCon()">🗑 삭제</button>
+      <button class="btn p" onclick="sendContractDoc()">→ 전자서명</button>
       <button class="btn p" onclick="downloadConExcel()">⬇ 엑셀 다운로드</button>
       <button class="btn p" onclick="downloadConTemplate()">📋 엑셀 템플릿</button>
       <label class="btn p" style="cursor:pointer">📂 엑셀 일괄 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="uploadConExcel(event)"></label>
@@ -1142,6 +1143,8 @@ const KR_HOLIDAYS=new Set([
   // 양력 고정
   '2026-01-01','2026-03-01','2026-05-05','2026-06-06',
   '2026-08-15','2026-10-03','2026-10-09','2026-12-25',
+  // 2026 광복절 대체공휴일 (8/15가 토요일이라 8/17 월요일 대체)
+  '2026-08-17',
   // 2026 설날 (1/28~1/30, 대체 1/27)
   '2026-01-27','2026-01-28','2026-01-29','2026-01-30',
   // 2026 어린이날 대체 (5/5 평일)
@@ -1620,6 +1623,19 @@ function _applyData(data) {
     try { if (_v('salConfirmed'))  _salConfirmed = JSON.parse(_v('salConfirmed'));    } catch(e) {}
     try { if (_v('salSnapshot'))   _salSnapshot  = JSON.parse(_v('salSnapshot'));     } catch(e) {}
     try { if (_v('leaveUsage'))    leaveUsage    = JSON.parse(_v('leaveUsage'));      } catch(e) {}
+    // 계약기간관리 "서명상태"·"사직원" 열용 e-sign 문서 연결 정보 복원(contracts는 이미 위에서 구성됨)
+    try {
+      const docLinks = JSON.parse(_v('docLinks') || '{}');
+      contracts.forEach(c => {
+        const link = docLinks[c.no];
+        if (link) { c.문서ID = link.문서ID || ''; c.서명상태 = link.서명상태 || ''; c.문서제목 = link.문서제목 || ''; }
+      });
+    } catch(e) {}
+    // 계약기간관리 "퇴사사유" 열 복원(contracts 테이블에 컬럼이 없어 meta에 별도 저장 — saveAll 참고)
+    try {
+      const quitReasons = JSON.parse(_v('quitReasons') || '{}');
+      contracts.forEach(c => { if (quitReasons[c.no]) c.퇴사사유 = quitReasons[c.no]; });
+    } catch(e) {}
     // 계정 목록 복원
     try {
       const raw = _v('accounts');
@@ -1790,8 +1806,17 @@ async function saveAll() {
     //             이번 세션에서 명시적으로 삭제한 항목(no)은 서버에 남아있어도 제외.
     leaveUsage = await _mergeMetaArrayByKey('leaveUsage', leaveUsage, 'no', _deletedLeaveUsageNos);
     _deletedLeaveUsageNos.clear();
+    // 계약기간관리 "서명상태" 열이 참조하는 e-sign 문서 연결 정보 — contracts 테이블 자체에는
+    // 컬럼을 추가하지 않고(스키마 변경 없이) meta의 자유 형식 key/value로 저장한다.
+    const docLinks = {};
+    contracts.forEach(c => { if (c.문서ID) docLinks[c.no] = { 문서ID: c.문서ID, 서명상태: c.서명상태 || '', 문서제목: c.문서제목 || '' }; });
+    // 퇴사사유도 contracts 테이블에 컬럼이 없어 같은 방식(meta 자유 형식 key/value)으로 저장한다.
+    const quitReasons = {};
+    contracts.forEach(c => { if (c.퇴사사유) quitReasons[c.no] = c.퇴사사유; });
     const metaRows = [
       { key: 'accounts',      value: JSON.stringify(getAccounts()),        updated: _now },
+      { key: 'docLinks',      value: JSON.stringify(docLinks),             updated: _now },
+      { key: 'quitReasons',   value: JSON.stringify(quitReasons),          updated: _now },
       { key: 'salExtra',      value: JSON.stringify(salExtra||{}),         updated: _now },
       { key: 'salSyncedYrMo',value: JSON.stringify(salSyncedYrMo||null),  updated: _now },
       { key: 'otRequests',    value: JSON.stringify(otRequests||[]),       updated: _now },
@@ -2878,9 +2903,9 @@ function buildEmpHead(){
   document.getElementById('empHead').innerHTML=EMP_COLS.map((t,i)=>th(t,'empT',i,t==='월소정'?'c':'')).join('');
 }
 // CONTRACT TABLE HEADERS (②) — 맨 앞 빈 열은 선택 체크박스용
-const CON_COLS=['','NO','구분','발송여부','구분2','이름','사번','소속','입사일','퇴사일','임금구분','시급','기본급','식대','직책수당','야간근로수당','계약시작','계약종료','시업','종료','소정','휴게','월','화','수','목','금','토','일','이메일','전화','SlackID','발송'];
+const CON_COLS=['','NO','구분','서명상태','발송여부','사직원','구분2','이름','사번','소속','입사일','퇴사일','퇴사사유','임금구분','시급','기본급','식대','직책수당','야간근로수당','계약시작','계약종료','시업','종료','소정','휴게','월','화','수','목','금','토','일','이메일','전화','SlackID'];
 function buildConHead(){
-  document.getElementById('conHead').innerHTML=CON_COLS.map((t,i)=>(i===0||i===CON_COLS.length-1)?thPlain(t):th(t,'conT',i)).join('');
+  document.getElementById('conHead').innerHTML=CON_COLS.map((t,i)=>i===0?thPlain(t):th(t,'conT',i)).join('');
 }
 // MY ATT HEADERS
 function buildMyAttHead(){
@@ -6301,19 +6326,46 @@ function deleteSomyungItem(eid,ds,ck){
 // ── Slack 소명 발송: GAS JSONP 프록시 경유 (CORS 우회)
 // 아래 GAS에 chat.postMessage 발송 기능을 추가해야 합니다.
 // 기존 근태연동 GAS(AKfycbwhXhu8...) doGet() 에 아래 분기를 추가하세요:
+// ★ blocks 파라미터(버튼 등 Block Kit) 지원 포함 — gas_근태소명_슬랙버튼.js 설치 시 필요
 //   if(e.parameter.action==='slack_post'){
 //     const token=e.parameter.token, channel=e.parameter.channel, text=decodeURIComponent(e.parameter.text);
+//     const payload={channel,text,mrkdwn:true};
+//     if(e.parameter.blocks) payload.blocks=JSON.parse(decodeURIComponent(e.parameter.blocks));
 //     const res=UrlFetchApp.fetch('https://slack.com/api/chat.postMessage',{
 //       method:'post',contentType:'application/json',
 //       headers:{Authorization:'Bearer '+token},
-//       payload:JSON.stringify({channel,text,mrkdwn:true})
+//       payload:JSON.stringify(payload)
 //     });
 //     const cb=e.parameter.callback;
 //     return ContentService.createTextOutput(cb+'('+res.getContentText()+')').setMimeType(ContentService.MimeType.JAVASCRIPT);
 //   }
 const SLK_POST_GAS_URL='https://script.google.com/macros/s/AKfycbwhXhu8jaFHg4OTIdSHFV-jcWDwbTJpA3V-eAheXXCl1Gee0XRMm4bxSDM3gLZpopyTBA/exec';
+// "내 근태현황 보기" 버튼이 여는 읽기전용 웹페이지 (사번+휴대폰 뒷자리 로그인)
+// ★ GAS exec URL을 직접 열면 브라우저의 서드파티 쿠키 차단으로 콘텐츠 iframe이 안 뜨는 문제가 있어,
+//   별도 배포한 정적 페이지(GitHub Pages)로 분리했습니다. 데이터는 그 페이지가 GAS의
+//   handleMyAttApi(JSONP, action=my_att_api)를 호출해서 받아옵니다 — gas_근태소명_슬랙버튼.js 참고.
+const MY_ATT_URL='https://jungjukim123.github.io/gwangjae-my-attendance/';
 
-function _sendSlackMsg(text, overrideChannel){
+// ★ 근태소명 개인 DM 발송 시, 관리자에게도 동일 내용을 사본으로 발송 (아래 ID 목록)
+const SOM_ADMIN_SLACK_IDS=['UM33CBKR8','U03PLHYF126'];
+
+// 관리자 사본 발송 (실패해도 원 발송 결과에는 영향 없음, 별도 알림 없음)
+function _ccSomyungToAdmins(token, text, primaryChannel){
+  SOM_ADMIN_SLACK_IDS.forEach(adminId=>{
+    if(adminId===primaryChannel)return; // 본인에게 보낸 경우 중복 방지
+    const cb='_slkPostCC_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    const s=document.createElement('script');
+    s.src=SLK_POST_GAS_URL+'?action=slack_post&callback='+cb
+      +'&token='+encodeURIComponent(token)
+      +'&channel='+encodeURIComponent(adminId)
+      +'&text='+encodeURIComponent(text);
+    window[cb]=()=>{ delete window[cb]; if(s.parentNode)s.parentNode.removeChild(s); };
+    s.onerror=()=>{ delete window[cb]; if(s.parentNode)s.parentNode.removeChild(s); };
+    document.body.appendChild(s);
+  });
+}
+
+function _sendSlackMsg(text, overrideChannel, blocks){
   const token=localStorage.getItem('slk_token')||'';
   if(!token){
     alert('Slack 토큰이 없습니다.\n⑤ 근태소명관리 페이지 상단 토큰 입력란에 입력해주세요.');
@@ -6332,11 +6384,15 @@ function _sendSlackMsg(text, overrideChannel){
     s.src=SLK_POST_GAS_URL+'?action=slack_post&callback='+cb
       +'&token='+encodeURIComponent(token)
       +'&channel='+encodeURIComponent(channel)
-      +'&text='+encodeURIComponent(text);
+      +'&text='+encodeURIComponent(text)
+      +(blocks?('&blocks='+encodeURIComponent(JSON.stringify(blocks))):'');
     window[cb]=(json)=>{
       delete window[cb];
       if(s.parentNode)s.parentNode.removeChild(s);
-      if(json&&json.ok){resolve(true);}
+      if(json&&json.ok){
+        if(overrideChannel&&overrideChannel.charAt(0)==='U')_ccSomyungToAdmins(token,text,overrideChannel);
+        resolve(true);
+      }
       else{
         const err=(json&&json.error)||'알 수 없는 오류';
         if(err==='not_in_channel'||err==='channel_not_found'){
@@ -6365,6 +6421,19 @@ function _sendSlackMsg(text, overrideChannel){
   });
 }
 
+// 근태소명 개인 DM에 붙는 "내 근태현황 보기 / 잔여연차 확인" 버튼
+// ★ "내 근태현황 보기"는 url 버튼 — 클릭 시 doPost 없이 바로 MY_ATT_URL(사번+휴대폰 뒷자리 로그인)로 이동
+function _somyungActionBlocks(eid, text){
+  return [
+    {type:'section', text:{type:'mrkdwn', text:text}},
+    {type:'actions', elements:[
+      {type:'button', text:{type:'plain_text', text:'📊 내 근태현황 보기', emoji:true}, url:MY_ATT_URL},
+      {type:'button', text:{type:'plain_text', text:'🌴 잔여연차 확인', emoji:true}, action_id:'somyung_view_leave', value:eid},
+      {type:'button', text:{type:'plain_text', text:'🔢 사번 확인', emoji:true}, action_id:'somyung_view_eid', value:eid}
+    ]}
+  ];
+}
+
 // 단일 항목 Slack 발송 (직원 SlackID로 DM)
 async function sendSomyungItemToSlack(eid,ds,ck){
   if(!_somyungData[ck])return;
@@ -6378,11 +6447,11 @@ async function sendSomyungItemToSlack(eid,ds,ck){
     alert(item.name+'님의 SlackID가 등록되어 있지 않습니다.\n② 계약기간관리에서 해당 직원의 SlackID(U로 시작)를 입력해주세요.');
     return;
   }
-  const greeting=`📌 *[근태소명 안내]* ${yr}년 ${mo}월\n안녕하세요, 피플팀입니다.\n아래 근태 내역에 대한 확인 및 조치가 필요합니다.\n\n`;
   const memoLine=memo?` → *${memo}*`:'';
-  const routeInfo=`\n\n📍처리 경로\n• 출근·퇴근 기록 누락 / 결근 / 연차 상신 누락\n  → [부산CX - 근태관리] → [근태소명요청서]\n• 연장근무 / 휴일근무 미상신\n  → [부산CX - 근태관리] → [승인요청서] → [추가근무요청]\n\n추가문의사항은 담당자(@${item.name})에게 연락 부탁드립니다.`;
-  const text=greeting+`👤 *${item.name}*\n• ${item.date} | ${item.type}${memoLine}`+routeInfo;
-  const ok=await _sendSlackMsg(text, slackId);
+  const DIV='────────────────────────────';
+  const text=`안녕하세요, 피플팀입니다 😊\n\n*${item.name}*님,\n근태 확인이 필요한 내역이 있어 안내드립니다.\n아래 내용을 확인하시고 조치 부탁드립니다.\n\n${DIV}\n📌 *[근태소명 안내]* ${yr}년 ${mo}월\n\n👤 *${item.name}*\n• ${item.date} | ${item.type}${memoLine}\n\n📍 처리 경로\n• 출근·퇴근 기록 누락 / 결근 / 연차 상신 누락\n  → [부산CX - 근태관리] → [근태소명요청서]\n• 연장근무 / 휴일근무 미상신\n  → [부산CX - 근태관리] → [승인요청서] → [추가근무요청]\n${DIV}\n\n바쁘시더라도 빠른 확인 부탁드리며, 궁금하신 점은 담당자(@김정주)에게 편하게 연락 주세요!\n\n감사합니다.\n피플팀 드림`;
+  const blocks=_somyungActionBlocks(eid, text);
+  const ok=await _sendSlackMsg(text, slackId, blocks);
   if(ok) _toast('✅ '+item.name+'님께 DM 발송 완료','ok');
 }
 
@@ -6405,10 +6474,10 @@ async function sendSomyungToSlack(eid,ck){
     const memoStr=memo?` → *${memo}*`:'';
     return`• ${item.date} | ${item.type}${memoStr} ${statusIcon}`;
   }).join('\n');
-  const greeting=`📌 *[근태소명 안내]* ${yr}년 ${mo}월\n안녕하세요, 피플팀입니다.\n아래 근태 내역에 대한 확인 및 조치가 필요합니다.\n\n`;
-  const routeInfo=`\n\n📍처리 경로\n• 출근·퇴근 기록 누락 / 결근 / 연차 상신 누락\n  → [부산CX - 근태관리] → [근태소명요청서]\n• 연장근무 / 휴일근무 미상신\n  → [부산CX - 근태관리] → [승인요청서] → [추가근무요청]\n\n추가문의사항은 담당자(@${grpName})에게 연락 부탁드립니다.`;
-  const text=greeting+`👤 *${grpName}* (${items.length}건)\n${lines}`+routeInfo;
-  const ok=await _sendSlackMsg(text, slackId);
+  const DIV='────────────────────────────';
+  const text=`안녕하세요, 피플팀입니다 😊\n\n*${grpName}*님,\n근태 확인이 필요한 내역이 있어 안내드립니다.\n아래 내용을 확인하시고 조치 부탁드립니다.\n\n${DIV}\n📌 *[근태소명 안내]* ${yr}년 ${mo}월\n\n👤 *${grpName}* (${items.length}건)\n${lines}\n\n📍 처리 경로\n• 출근·퇴근 기록 누락 / 결근 / 연차 상신 누락\n  → [부산CX - 근태관리] → [근태소명요청서]\n• 연장근무 / 휴일근무 미상신\n  → [부산CX - 근태관리] → [승인요청서] → [추가근무요청]\n${DIV}\n\n바쁘시더라도 빠른 확인 부탁드리며, 궁금하신 점은 담당자(@김정주)에게 편하게 연락 주세요!\n\n감사합니다.\n피플팀 드림`;
+  const blocks=_somyungActionBlocks(eid, text);
+  const ok=await _sendSlackMsg(text, slackId, blocks);
   if(ok) _toast('✅ '+grpName+'님께 DM 발송 완료','ok');
 }
 
@@ -6435,9 +6504,8 @@ async function sendAllSomyungToSlack(){
     }).join('\n');
     return`👤 *${grp.name}* (${grp.items.length}건)\n${sub}`;
   }).join('\n\n');
-  const greeting=`📌 *[근태소명 안내]* ${yr}년 ${mo}월 전체\n안녕하세요, 피플팀입니다.\n아래 근태 내역에 대한 확인 및 조치가 필요합니다.\n\n`;
-  const routeInfo=`\n\n📍처리 경로\n• 출근·퇴근 기록 누락 / 결근 / 연차 상신 누락\n  → [부산CX - 근태관리] → [근태소명요청서]\n• 연장근무 / 휴일근무 미상신\n  → [부산CX - 근태관리] → [승인요청서] → [추가근무요청]\n\n추가문의사항은 각 담당자에게 연락 부탁드립니다.`;
-  const text=greeting+`총 ${list.length}건\n\n${lines}`+routeInfo;
+  const DIV='────────────────────────────';
+  const text=`안녕하세요, 피플팀입니다 😊\n\n아래 근태 내역에 대한 확인 및 조치가 필요한 인원 목록을 안내드립니다.\n\n${DIV}\n📌 *[근태소명 안내]* ${yr}년 ${mo}월 전체 (총 ${list.length}건)\n\n${lines}\n\n📍 처리 경로\n• 출근·퇴근 기록 누락 / 결근 / 연차 상신 누락\n  → [부산CX - 근태관리] → [근태소명요청서]\n• 연장근무 / 휴일근무 미상신\n  → [부산CX - 근태관리] → [승인요청서] → [추가근무요청]\n${DIV}\n\n바쁘시더라도 빠른 확인 부탁드리며, 궁금하신 점은 담당자(@김정주)에게 편하게 연락 주세요!\n\n감사합니다.\n피플팀 드림`;
   const ok=await _sendSlackMsg(text);
   if(ok) _toast('✅ Slack 전체 발송 완료','ok');
 }
@@ -7210,13 +7278,147 @@ function downloadConExcel(){
   XLSX.writeFile(wb,`계약기간관리_${now.getFullYear()}${p(now.getMonth()+1)}${p(now.getDate())}.xlsx`);
 }
 
-// 선택된 계약 건의 계약서 전송 — 추후 별도 외부 연동 프로그램과 연결 예정
+// ============================================================
+// 바로사인(Baro-Sign) 연동 — 계약서 전송
+// ============================================================
+// 어떤 e-sign 전자문서(템플릿)를 쓸지는 여기서 미리 정하지 않는다 — template_id 없이 prepare를
+// 호출하면, 바로사인 쪽 검토 화면(review_url) 맨 위에 "전자문서 선택" 화면이 먼저 뜨고, 발송하는
+// 사람이 그때그때 바로사인에 실제로 존재하는 템플릿 목록에서 직접 고른다. 예전처럼 여기 코드에
+// 템플릿 id를 하드코딩해두면, 바로사인에서 그 템플릿을 지우거나 새로 만들 때마다 이 파일을 고쳐서
+// 다시 배포해야 하는 문제가 있었다.
+const BARO_SIGN_API_URL = 'https://esign-app-muhu.onrender.com/api/documents/prepare';
+const BARO_SIGN_API_KEY = '688c649673b617e2dc148c73acddef789fd91ef62d0c90f74d58c2abf8587481';
+
+// 계약기간관리 데이터만으로는 채울 수 없는 값(예: 근로장려수당처럼 입사자마다 다른 값)이 있을 수 있어,
+// 바로 발송하지 않고 바로사인에서 "검토 화면"을 하나 만들어 그 안에서 채우고 최종 발송하게 한다.
+// 검토 화면은 다른 도메인(esign-app)이라 iframe 안에서 발송이 끝나면 postMessage로 알려준다.
+window.addEventListener('message', e => {
+  if (!e.data || e.data.type !== 'baro-sign-document-sent') return;
+  if (_baroSignSendingNo !== null) {
+    const c = contracts.find(x => x.no === _baroSignSendingNo);
+    // 문서ID·문서제목을 기억해두면, 서명상태 열이 이 문서가 실제로 서명 완료됐는지(pollDocStatuses
+    // 참고) 계속 물어봐서 실시간으로 갱신할 수 있다. 방금 막 발송했을 뿐 아직 서명 전이므로 서명상태는
+    // 초기화. 문서제목은 어떤 전자문서(템플릿)를 보냈는지 바로사인 검토 화면에서 골라야 알 수 있어서
+    // ERP는 이 시점 전까지 알 방법이 없다 — "사직원" 열은 제목에 "사직원"이 들어있는지로 판단한다.
+    if (c) { c.발송 = '완료'; c.문서ID = _baroSignSendingDocId || ''; c.서명상태 = ''; c.문서제목 = e.data.title || ''; renderCon(); saveAll(); }
+    _baroSignSendingNo = null;
+    _baroSignSendingDocId = null;
+  }
+  closeBaroSignReviewModal();
+});
+
+let _baroSignSendingNo = null;
+let _baroSignSendingDocId = null;
+
+function openBaroSignReviewModal(url) {
+  closeBaroSignReviewModal();
+  const overlay = document.createElement('div');
+  overlay.id = 'baroSignModalOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:99999;display:flex;align-items:center;justify-content:center;';
+  overlay.onclick = e => { if (e.target === overlay) closeBaroSignReviewModal(); };
+
+  const box = document.createElement('div');
+  box.style.cssText = 'width:92vw;max-width:900px;height:88vh;background:#fff;border-radius:12px;overflow:hidden;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.35);';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕';
+  closeBtn.style.cssText = 'position:absolute;top:8px;right:8px;z-index:2;width:32px;height:32px;border:none;background:#fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.2);cursor:pointer;font-size:16px;';
+  closeBtn.onclick = closeBaroSignReviewModal;
+
+  const iframe = document.createElement('iframe');
+  iframe.src = url;
+  iframe.style.cssText = 'width:100%;height:100%;border:none;';
+
+  box.appendChild(closeBtn);
+  box.appendChild(iframe);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+function closeBaroSignReviewModal() {
+  document.getElementById('baroSignModalOverlay')?.remove();
+}
+
+// 계약 건(no) 하나를 바로사인으로 발송 준비한다 — 상단 툴바 "전자서명" 버튼이 여기로 온다.
+// 어떤 문서(계약서/사직원 등)를 보낼지는 여기서 정하지 않는다 — template_id 없이 prepare를 호출하면
+// 바로사인 검토 화면에 "전자문서 선택" 단계가 먼저 뜨고, 발송하는 사람이 그때그때 바로사인에 실제
+// 등록된 문서 목록에서 직접 고른다. 어떤 계약 컬럼이 어떤 문서 필드에 들어가는지도 여기서 정하지
+// 않는다 — 바로사인 템플릿 편집 화면에 설정해둔 "데이터 키"와, 아래에서 보내는 data 객체의 키
+// 이름이 같으면 자동으로 매칭된다. 데이터 키가 없거나 값이 아예 없는 필드는, 검토 화면에서 발송하는
+// 사람이 직접 입력하는 미니 팝업으로 채우게 된다.
+async function sendContractToEsign(no){
+  const c=contracts.find(x=>x.no===no);
+  if(!c){alert('선택한 계약 정보를 찾을 수 없습니다.');return;}
+
+  if(!c.email && !c.phone){
+    alert('이메일 또는 전화번호가 없어 발송할 수 없습니다.');
+    return;
+  }
+  if(!confirm(`${c.이름}님께 보낼 문서를 준비할까요?\n다음 화면에서 어떤 문서인지 고르고, 내용을 확인한 뒤 최종 발송하시면 됩니다.`))return;
+
+  const v=x=>(x===''||x===undefined||x===null)?'':String(x);
+  const data={
+    이름:c.이름, 사번:c.사번, 소속:c.소속,
+    계약시작:c.cs, 계약종료:c.ce, 시업:c.st, 종료:c.et,
+    소정:v(c.소정), 휴게:v(c.휴게), 시급:v(c.시급), 기본급:v(c.기본),
+    월:v(c.mon), 화:v(c.tue), 수:v(c.wed), 목:v(c.thu), 금:v(c.fri), 토:v(c.sat), 일:v(c.sun),
+    퇴사일:v(c.퇴사),
+    이메일:c.email, 전화:c.phone,
+  };
+
+  try{
+    const res=await fetch(BARO_SIGN_API_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-API-Key':BARO_SIGN_API_KEY},
+      body:JSON.stringify({
+        signer:{name:c.이름, employee_id:c.사번, email:c.email||null, phone:c.phone||null},
+        data,
+        created_by:'관제센터 ERP',
+      }),
+    });
+    const result=await res.json();
+    if(!result.ok){alert('문서 준비 실패: '+result.message);return;}
+    _baroSignSendingNo = no;
+    _baroSignSendingDocId = result.document_id || null;
+    openBaroSignReviewModal(result.review_url);
+  }catch(e){
+    alert('문서 준비 중 오류가 발생했습니다: '+e.message);
+  }
+}
+
+// 선택된 계약 건의 전자서명 발송(상단 툴바 버튼) — 어떤 문서(계약서/사직원 등)를 보낼지는
+// 다음 화면(바로사인 검토 화면)에서 고른다.
 function sendContractDoc(){
   if(_selectedConNo===null){alert('먼저 전송할 계약 건의 체크박스를 선택해주세요.');return;}
-  const c=contracts.find(x=>x.no===_selectedConNo);
-  if(!c){alert('선택한 계약 정보를 찾을 수 없습니다.');return;}
-  alert(`계약서 전송 기능은 준비 중입니다.\n(${c.이름} / ${c.사번})\n\n추후 외부 연동 프로그램과 연결될 예정입니다.`);
+  sendContractToEsign(_selectedConNo);
 }
+
+// ── "서명상태" 열 실시간 갱신 — 문서ID가 있는(=발송된) 계약 건들의 실제 서명 완료 여부를 주기적으로 조회 ──
+// 발송 시점(postMessage)에는 "발송은 됐지만 아직 서명 전"이라, 근로자가 실제로 서명 완료했는지는
+// 별도로 물어봐야 알 수 있다. 계약기간관리 화면을 보고 있는 동안만 30초마다 조용히 확인한다
+// (근태소명연동 자동 동기화와 같은 패턴, page-hr5 대신 page-hr2 기준).
+const BARO_SIGN_STATUS_URL = 'https://esign-app-muhu.onrender.com/api/documents/status';
+async function pollDocStatuses(){
+  const ids=[...new Set(contracts.filter(c=>c.문서ID && c.서명상태!=='완료').map(c=>c.문서ID))];
+  if(!ids.length)return;
+  try{
+    const res=await fetch(`${BARO_SIGN_STATUS_URL}?ids=${encodeURIComponent(ids.join(','))}`,{
+      headers:{'X-API-Key':BARO_SIGN_API_KEY},
+    });
+    const result=await res.json();
+    if(!result.ok)return;
+    let changed=false;
+    contracts.forEach(c=>{
+      if(c.문서ID && result.statuses[c.문서ID]==='completed' && c.서명상태!=='완료'){
+        c.서명상태='완료';changed=true;
+      }
+    });
+    if(changed){renderCon();saveAll();}
+  }catch(e){/* 다음 주기에 다시 시도 */}
+}
+setInterval(()=>{
+  const pg=document.getElementById('page-hr2');
+  if(pg&&pg.classList.contains('on')&&typeof contracts!=='undefined'&&contracts.length)pollDocStatuses();
+},30000);
 
 function downloadConTemplate(){
   const wb=XLSX.utils.book_new();
@@ -7383,6 +7585,10 @@ function topSaveSelectedCon(){
   if(_editingConNo===null){alert('먼저 ✏ 수정 버튼으로 편집을 시작해주세요.');return;}
   saveEditCon(_editingConNo);
 }
+function topDeleteSelectedCon(){
+  if(_selectedConNo===null){alert('먼저 삭제할 계약 건의 체크박스를 선택해주세요.');return;}
+  deleteCon(_selectedConNo);
+}
 function renderCon(){
   const q=(document.getElementById('conQ')||{}).value||'',tf=(document.getElementById('conTypeQ')||{}).value||'all';
   // 인라인 입력/편집 행이 열려있으면 닫기
@@ -7410,22 +7616,27 @@ function renderCon(){
   const dc=v=>v==='주휴'?'<span class="bdg bg" style="font-size:9px">주휴</span>':v===0||v==='0'?'<span style="color:var(--tx3)">0</span>':`<strong>${v}</strong>`;
   document.getElementById('conBody').innerHTML=sortedList.map((c,idx)=>{
     const isExit=c.구분==='퇴사';
-    const sb=isExit
-      ?`<button class="btn sm d" onclick="sendDoc(${c.no},'사직원')">📧 사직원</button>`
-      :c.발송==='완료'?`<span class="bdg bg" style="font-size:10px">✓ 발송완료</span>`
-      :`<button class="btn sm bl" onclick="sendDoc(${c.no},'계약서')">📧 계약서</button>`;
     const trCls=[isExit?'retd':'',_selectedConNo===c.no?'con-selected':''].filter(Boolean).join(' ');
+    // "사직원" 열 — 어떤 전자문서를 보냈는지는 바로사인 검토 화면에서 고르므로, 그 결과로 받은
+    // 문서제목(c.문서제목)에 "사직원"이 들어있는지로 판단한다. 서명상태(c.서명상태)는 가장 최근에
+    // 보낸 전자서명 건 하나만 추적하므로, 사직원을 보낸 뒤 같은 건에 다시 계약서를 보내는 등
+    // 순서가 꼬이면 정확하지 않을 수 있다(실제 운영에서는 사직원이 마지막에 한 번만 발송되는
+    // 흐름이라 문제되지 않는다).
+    const resignDone=(c.문서제목||'').includes('사직원') && c.서명상태==='완료';
     return`<tr${trCls?` class="${trCls}"`:''} data-con-no="${c.no}" style="cursor:pointer" onclick="if(!event.target.closest('button,input'))toggleConSelect(${c.no})">
       <td class="c"><input type="checkbox" ${_selectedConNo===c.no?'checked':''} onclick="event.stopPropagation();toggleConSelect(${c.no})" style="cursor:pointer;width:14px;height:14px"></td>
       <td>${idx+1}</td>
       <td><span class="bdg ${tm[c.구분]||'bs'}">${c.구분}</span></td>
+      <td><span class="bdg ${c.서명상태==='완료'?'bg':'bs'}" style="font-size:10px">${c.서명상태||'-'}</span></td>
       <td><span class="bdg ${c.발송==='완료'?'bg':'ba'}" style="font-size:10px">${c.발송||'미발송'}</span></td>
+      <td><span class="bdg ${resignDone?'bg':'bs'}" style="font-size:10px">${resignDone?'완료':'-'}</span></td>
       <td style="font-size:11px">${c.type}</td>
       <td><strong>${c.이름}</strong></td>
       <td style="font-family:monospace;font-size:11px">${c.사번?c.사번:'<span style="color:var(--tx3);font-size:10px">미부여</span>'}&nbsp;<button class="btn sm" style="padding:2px 5px;font-size:10px" onclick="editConId(${c.no})">✏</button></td>
       <td>${c.소속}</td>
       <td style="font-size:11px">${c.입사}</td>
       <td style="font-size:11px;color:${c.퇴사?'var(--red)':'var(--tx3)'}">${c.퇴사||'-'}</td>
+      <td style="font-size:11px">${c.퇴사사유||'-'}</td>
       <td><span class="bdg ${c.임금==='월급직'?'bb':'bt'}" style="font-size:10px">${c.임금}</span></td>
       <td>${c.임금==='시급직'?(c.시급||'-'):'-'}</td>
       <td style="text-align:right">${c.기본?nFmt(c.기본):'-'}</td>
@@ -7443,7 +7654,6 @@ function renderCon(){
       <td style="font-size:11px;max-width:130px;overflow:hidden;text-overflow:ellipsis">${c.email||'-'}</td>
       <td style="font-size:11px">${c.phone||'-'}</td>
       <td style="font-size:11px;color:var(--purple);font-weight:${c.slackId?700:400}">${c.slackId||'-'}</td>
-      <td>${sb}</td>
     </tr>`;
   }).join('');
   applyFilter('conT');
@@ -7552,8 +7762,18 @@ function _insertConRow(){
   tr.className='con-new-row';
   tr.innerHTML=`
     <td></td>
-    <td style="text-align:center;color:var(--blue);font-weight:700;font-size:11px">NEW</td>
+    <td style="text-align:center;color:var(--blue);font-weight:700;font-size:11px">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+        <span>NEW</span>
+        <div style="display:flex;gap:2px">
+          <button class="btn sm p" onclick="saveConRow()" style="padding:2px 6px;font-size:10px;white-space:nowrap">✓</button>
+          <button class="btn sm" onclick="cancelConRow()" style="padding:2px 6px;font-size:10px;white-space:nowrap">✕</button>
+        </div>
+      </div>
+    </td>
     <td><select class="con-sel" id="cn2-type"><option>신규</option><option>계약연장</option><option>계약조건변경</option><option>퇴사</option></select></td>
+    <td style="text-align:center;color:var(--tx3);font-size:10px">-</td>
+    <td style="text-align:center;color:var(--tx3);font-size:10px">-</td>
     <td style="text-align:center;color:var(--tx3);font-size:10px">-</td>
     <td><select class="con-sel" id="cn2-subtype"><option>파트타이머</option><option>풀타임</option><option>파견직</option><option>계약직</option></select></td>
     <td>
@@ -7564,6 +7784,7 @@ function _insertConRow(){
     <td><input class="con-inp" id="cn2-soct" placeholder="딜버" value="딜버" style="min-width:55px"></td>
     <td><input class="con-inp" id="cn2-join" type="date"></td>
     <td><input class="con-inp" id="cn2-quit" type="date"></td>
+    <td><select class="con-sel" id="cn2-quitreason"><option value=""></option><option>개인사유</option><option>계약만료</option></select></td>
     <td><select class="con-sel" id="cn2-stype"><option>월급직</option><option>시급직</option></select></td>
     <td><input class="con-inp" id="cn2-rate" type="number" placeholder="0" style="width:70px"></td>
     <td><input class="con-inp" id="cn2-base" type="number" placeholder="0" style="width:80px"></td>
@@ -7585,13 +7806,7 @@ function _insertConRow(){
     <td><input class="con-inp" id="cn2-sun" value="주휴" style="width:38px;text-align:center"></td>
     <td><input class="con-inp" id="cn2-email" type="email" placeholder="이메일" style="width:120px"></td>
     <td><input class="con-inp" id="cn2-phone" placeholder="010-0000-0000" style="width:110px"></td>
-    <td><input class="con-inp" id="cn2-slackid" placeholder="U0XXXXXXXXX" style="width:100px"></td>
-    <td>
-      <div style="display:flex;gap:3px">
-        <button class="btn sm p" onclick="saveConRow()" style="white-space:nowrap">✓ 저장</button>
-        <button class="btn sm" onclick="cancelConRow()" style="white-space:nowrap">✕</button>
-      </div>
-    </td>`;
+    <td><input class="con-inp" id="cn2-slackid" placeholder="U0XXXXXXXXX" style="width:100px"></td>`;
 
   tbody.insertBefore(tr, tbody.firstChild);
   tr.scrollIntoView({behavior:'smooth', block:'center'});
@@ -7645,6 +7860,57 @@ function fillConRowFromEmp(){
   set('cn2-br',e.휴게||1);
 }
 
+// ── 입사자/퇴사자 발생 시 Slack 자동 공유 ────────────────────────
+// 계약기간관리에서 "+ 계약 추가"로 구분=신규 계약을 저장하면(saveConRow) 입사자 정보를,
+// 기존 행을 수정해 퇴사일을 처음 채워 저장하면(saveEditCon) 퇴사자 정보를 지정된 채널로
+// 자동 발송한다. 발송 자체는 근태소명 발송과 동일한 _sendSlackMsg(GAS JSONP 프록시) 경로를
+// 그대로 재사용한다 — 이 브라우저에 Slack 토큰(③ 근태관리에서 입력, localStorage slk_token)이
+// 저장돼 있어야 실제로 전송된다.
+const HR_SHARE_SLACK_CHANNEL='C0BRRKFD43U';
+function buildNewHireSlackText(c){
+  const dayKeyLabel=[['mon','월'],['tue','화'],['wed','수'],['thu','목'],['fri','금'],['sat','토'],['sun','일']];
+  const workDays=[], offDays=[];
+  dayKeyLabel.forEach(([k,label])=>{
+    const v=c[k];
+    if(v===''||v==null||v===0||v==='0'||v==='주휴') offDays.push(label);
+    else workDays.push(label);
+  });
+  const wageLabel=c.임금==='시급직' ? `시급직 (${nFmt(c.시급)}원)` : `월급직 (${nFmt(c.기본)}원)`;
+  const joinDate=c.입사 ? `${c.입사} (${DAYS[new Date(c.입사).getDay()]})` : '';
+  // 근로시간(일별) — 근무일 중 첫 근무일의 시간을 대표값으로 쓴다(보통 근무일마다 시간이 동일).
+  const firstWorkKey=(dayKeyLabel.find(([k,label])=>workDays.includes(label))||[])[0];
+  const dailyHours=firstWorkKey ? (Number(c[firstWorkKey])||0) : 0;
+  // 채용경로는 계약기간관리 자체에는 없는 항목이라, 같은 사번의 인원현황(employees)에 등록돼
+  // 있으면 그 값을 가져온다 — 없으면 빈 칸으로 둔다.
+  const emp=c.사번 ? employees.find(e=>e.사번===c.사번) : null;
+
+  return [
+    '✅ [입사안내]',
+    `- 채용경로 : ${emp?.경로||''}`,
+    `- 임금구분 : ${wageLabel}`,
+    `- 성명 : ${c.이름||''}`,
+    `- 입사일자 : ${joinDate}`,
+    `- 근무요일 : ${workDays.join(',')} (휴무일 ${offDays.join(',')})`,
+    `- 근무시간 : ${c.st||''} ~ ${c.et||''} / 주 ${c.소정||0}시간`,
+    `- 근로시간 : ${dailyHours.toFixed(1)}H, 휴게시간 : ${Number(c.휴게||0).toFixed(1)}H`,
+    `- 연락처 : ${c.phone||''}`,
+    `- 이메일 : ${c.email||''}`,
+  ].join('\n');
+}
+
+// 퇴사 공유 메시지(saveEditCon 참고) — 사용자가 지정한 형식 그대로(날짜는 점(.) 구분).
+// 각 줄 앞의 "- "는 Slack mrkdwn이 자동으로 원형 불릿(●)으로 그려준다.
+function buildQuitShareText(c){
+  const dot=d=>(d||'').replace(/-/g,'.');
+  return [
+    '✅ [퇴사안내]',
+    `- 이름 : ${c.이름||''}`,
+    `- 입사일 : ${dot(c.입사)}`,
+    `- 퇴사일 : ${dot(c.퇴사)}`,
+    `- 퇴사사유 : ${c.퇴사사유||''}`,
+  ].join('\n');
+}
+
 function saveConRow(){
   const empSel=document.getElementById('cn2-emp');
   const val=empSel?.value;
@@ -7677,7 +7943,7 @@ function saveConRow(){
   const 휴게입력값=document.getElementById('cn2-br').value;
   const 휴게입력=휴게입력값===''?1:Number(휴게입력값);
 
-  contracts.unshift({
+  const newCon={
     no: contracts.reduce((a,b)=>Math.max(a,b.no),0)+1,
     구분: document.getElementById('cn2-type').value,
     발송: '',
@@ -7686,6 +7952,7 @@ function saveConRow(){
     소속: 소속입력,
     입사: 입사입력,
     퇴사: document.getElementById('cn2-quit').value||'',
+    퇴사사유: document.getElementById('cn2-quitreason')?.value||'',
     임금: 임금입력,
     시급: 시급입력,
     기본: 기본입력,
@@ -7707,7 +7974,8 @@ function saveConRow(){
     email: document.getElementById('cn2-email').value,
     phone: document.getElementById('cn2-phone').value,
     slackId: document.getElementById('cn2-slackid')?.value||'',
-  });
+  };
+  contracts.unshift(newCon);
   _pendingConRow=null;
   // 신규 직접입력인 경우 employees에도 추가 (syncContractsToEmployees 대신 직접 처리하여 중복 방지)
   if(val==='__NEW__'){
@@ -7732,6 +8000,9 @@ function saveConRow(){
   }
   renderCon();
   saveAll();
+  if(newCon.구분==='신규'){
+    _sendSlackMsg(buildNewHireSlackText(newCon), HR_SHARE_SLACK_CHANNEL);
+  }
 }
 
 function cancelConRow(){
@@ -7789,15 +8060,26 @@ function startEditCon(no){
 
   tr.innerHTML=`
     <td></td>
-    <td style="text-align:center;color:var(--orange);font-weight:700;font-size:10px">EDIT</td>
+    <td style="text-align:center;color:var(--orange);font-weight:700;font-size:10px">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+        <span>EDIT</span>
+        <div style="display:flex;gap:2px">
+          <button class="btn sm p" onclick="saveEditCon(${no})" style="padding:2px 6px;font-size:10px;white-space:nowrap">✓</button>
+          <button class="btn sm" onclick="cancelEditCon()" style="padding:2px 6px;font-size:10px;white-space:nowrap">✕</button>
+        </div>
+      </div>
+    </td>
     <td>${sel(c.구분,['신규','계약연장','계약조건변경','퇴사'])}</td>
+    <td style="text-align:center;font-size:10px;color:var(--tx3)">${c.서명상태||'-'}</td>
     <td style="text-align:center;font-size:10px;color:var(--tx3)">${c.발송||'-'}</td>
+    <td style="text-align:center;font-size:10px;color:var(--tx3)">${(c.문서제목||'').includes('사직원')&&c.서명상태==='완료'?'완료':'-'}</td>
     <td>${sel(c.type||'파트타이머',['파트타이머','풀타임','파견직','계약직'])}</td>
     <td><input class="con-inp" type="text" value="${c.이름||''}" style="min-width:80px"></td>
     <td><input class="con-inp" type="text" value="${c.사번||''}" placeholder="미부여" style="min-width:80px;font-family:monospace;font-size:10px"></td>
     <td><input class="con-inp" type="text" value="${c.소속||'딜버'}" style="min-width:50px"></td>
     <td><input class="con-inp" type="date" value="${c.입사||''}"></td>
     <td><input class="con-inp" type="date" value="${c.퇴사||''}"></td>
+    <td>${sel(c.퇴사사유||'',['','개인사유','계약만료'])}</td>
     <td>${sel(c.임금||'월급직',['월급직','시급직'])}</td>
     <td>${numInp(c.시급||0,'65px')}</td>
     <td>${numInp(c.기본||0,'80px')}</td>
@@ -7813,13 +8095,7 @@ function startEditCon(no){
     ${dayKeys.map(k=>`<td><input class="con-inp" type="text" value="${c[k]!==undefined?c[k]:'-'}" style="width:38px;text-align:center"></td>`).join('')}
     <td><input class="con-inp" type="email" value="${c.email||''}" placeholder="이메일" style="width:120px"></td>
     <td><input class="con-inp" type="tel" value="${c.phone||''}" placeholder="010-0000-0000" style="width:110px"></td>
-    <td><input class="con-inp" type="text" value="${c.slackId||''}" placeholder="U0XXXXXXXXX" style="width:100px"></td>
-    <td>
-      <div style="display:flex;gap:3px;flex-wrap:nowrap">
-        <button class="btn sm p" onclick="saveEditCon(${no})" style="white-space:nowrap">✓ 저장</button>
-        <button class="btn sm" onclick="cancelEditCon()" style="white-space:nowrap">✕</button>
-      </div>
-    </td>`;
+    <td><input class="con-inp" type="text" value="${c.slackId||''}" placeholder="U0XXXXXXXXX" style="width:100px"></td>`;
 
   tr.scrollIntoView({behavior:'smooth',block:'center'});
 }
@@ -7832,11 +8108,13 @@ function saveEditCon(no){
 
   const inputs=tr.querySelectorAll('input,select');
   const vals=[...inputs].map(el=>el.value);
-  // 순서: 구분(sel0), type(sel1), 이름, 사번, 소속, 입사, 퇴사, 임금(sel2), 시급, 기본, 식대, 직책, 야간, cs, ce, st, et, 소정, 휴게, mon,tue,wed,thu,fri,sat,sun, email, phone, slackId
+  // 순서: 구분(sel0), type(sel1), 이름, 사번, 소속, 입사, 퇴사, 퇴사사유(sel2), 임금(sel3), 시급, 기본, 식대, 직책, 야간, cs, ce, st, et, 소정, 휴게, mon,tue,wed,thu,fri,sat,sun, email, phone, slackId
   const sels=tr.querySelectorAll('select');
   const inps=tr.querySelectorAll('input:not(.aux-date)');
   const sv=i=>sels[i]?.value||'';
   const iv=i=>inps[i]?.value||'';
+
+  const prevQuit=(c.퇴사||'').trim();
 
   c.구분=sv(0);
   c.type=sv(1);
@@ -7845,7 +8123,8 @@ function saveEditCon(no){
   c.소속=iv(2)||'딜버';
   c.입사=iv(3);
   c.퇴사=iv(4);
-  c.임금=sv(2);
+  c.퇴사사유=sv(2);
+  c.임금=sv(3);
   c.시급=c.임금==='시급직'?(Number(iv(5))||0):0;
   c.기본=Number(iv(6))||0;
   c.식대=Number(iv(7))||0;
@@ -7868,6 +8147,11 @@ function saveEditCon(no){
   syncContractsToEmployees();
   renderCon();
   saveAll();
+  // 퇴사일이 이번 저장으로 처음 채워진 경우에만 퇴사 공유를 보낸다(이미 퇴사일이 있는 행을
+  // 다른 항목 수정으로 다시 저장해도 중복 발송되지 않도록 "비어있음 → 채워짐" 전환만 감지).
+  if(!prevQuit && (c.퇴사||'').trim()){
+    _sendSlackMsg(buildQuitShareText(c), HR_SHARE_SLACK_CHANNEL);
+  }
 }
 
 function cancelEditCon(){
@@ -7883,9 +8167,24 @@ function deleteCon(no){
   const sbKey=keyPrefix+'_'+(c.cs||'');
   fetch(`${SB_URL}/rest/v1/contracts?key=eq.${encodeURIComponent(sbKey)}`,{method:'DELETE',headers:SB_HDR}).catch(()=>{});
   contracts=contracts.filter(x=>x.no!==no);
+
+  // 방금 지운 계약의 사번을 참조하는 다른 계약·근태저장 기록이 더 이상 없으면 인원현황에서도
+  // 즉시 제거한다(화면 + DB 둘 다). saveAll()의 비동기 저장에만 맡기면, 그 정리 로직이
+  // employees 배열이 그대로 남아있다는 전제로 동작해서 새로고침 전까지 화면에 그대로 남아있었다.
+  if(c.사번){
+    const stillReferenced=contracts.some(x=>x.사번===c.사번)
+      || Object.values(_hrRowsCache).flat().some(r=>r.emp&&r.emp.사번===c.사번);
+    if(!stillReferenced){
+      employees=employees.filter(e=>e.사번!==c.사번);
+      fetch(`${SB_URL}/rest/v1/employees?사번=eq.${encodeURIComponent(c.사번)}`,{method:'DELETE',headers:SB_HDR}).catch(()=>{});
+    }
+  }
+
   renderCon();saveAll();
 }
 function sendDoc(no,type){
+  // 계약서는 바로사인 연동으로 실제 발송, 사직원은 아직 연동 템플릿이 없어 기존 방식(표시만) 유지.
+  if(type==='계약서'){ sendContractToEsign(no); return; }
   const c=contracts.find(x=>x.no===no);if(!c)return;
   if(!confirm(`${c.이름}님께 ${type}을 발송하시겠습니까?`))return;
   c.발송='완료';renderCon();saveAll();alert(`✓ ${c.이름}님께 ${type}이 발송되었습니다`);
@@ -8071,10 +8370,49 @@ function getLeaveSummaryForEmp(empId){
   const 총잔여=Math.round((총발생-총사용)*100)/100;
   return{총발생,총사용,총잔여};
 }
-function buildLeaveSummaryText(emp,summary){
+// 사번의 발생 회차별(1년미만/1년이상) rows + 사용내역을 함께 계산 — DM 상세 안내용
+// ★ getLeaveSummaryForEmp(급여 계산용, 회차 합산 요약만)와는 별도 — 회차별 상세가 필요해 신설
+function getLeaveDetailForEmp(empId){
+  const rows=buildLeaveAccrualRows(empId);
+  if(!rows.length)return null;
+  const usageRecords=getLeaveUsageRecords(empId);
+  allocateLeaveUsage(rows,usageRecords,empId);
+  return{rows,usageRecords};
+}
+// 근태소명 DM의 "잔여연차 확인" 버튼(GAS handleViewLeave)과 동일한 형식의 상세 안내 텍스트
+function buildLeaveSummaryText(emp,detail){
+  const{rows,usageRecords}=detail;
   const now=new Date();
   const yyyymm=`${now.getFullYear()}년 ${String(now.getMonth()+1).padStart(2,'0')}월`;
-  return`📌 *[연차현황 안내]* ${yyyymm}\n안녕하세요, 피플팀입니다.\n\n👤 *${emp.이름}*\n• 발생: ${summary.총발생}시간\n• 사용: ${summary.총사용}시간\n• 잔여: ${summary.총잔여}시간\n\n※ 자세한 내역은 관제센터 프로그램 > 연차현황에서 확인하실 수 있습니다.`;
+  const bucket0=rows.find(r=>r.구분==='1년미만연차');
+  const over1Rows=rows.filter(r=>r.구분==='1년이상연차');
+  const under1Text=bucket0
+    ?('• 발생: '+bucket0.발생+'시간\n• 사용: '+bucket0.사용+'시간\n• 잔여: '+bucket0.잔여+'시간')
+    :'없음';
+  let over1Text='없음';
+  if(over1Rows.length){
+    const 발생1=Math.round(over1Rows.reduce((a,r)=>a+r.발생,0)*100)/100;
+    const 사용1=Math.round(over1Rows.reduce((a,r)=>a+r.사용,0)*100)/100;
+    const 잔여1=Math.round((발생1-사용1)*100)/100;
+    over1Text='• 발생: '+발생1+'시간\n• 사용: '+사용1+'시간\n• 잔여: '+잔여1+'시간';
+  }
+  const usageLines=usageRecords
+    .filter(u=>getLeaveTypeFactor(u.구분)>0)
+    .sort((a,b)=>a.사용일.localeCompare(b.사용일))
+    .map(u=>{
+      const hrs=Math.round(getLeaveTypeFactor(u.구분)*getLeaveSojeong(emp.사번,u.사용일)*100)/100;
+      return '• '+u.사용일.replace(/-/g,'.')+'  '+hrs+'시간';
+    }).join('\n')||'사용 내역 없음';
+  const DIV='────────────────────────────';
+  return '안녕하세요, 피플팀입니다 😊\n\n'
+    +'*'+emp.이름+'*님의 잔여연차 현황을 안내드립니다.\n\n'
+    +DIV+'\n📌 *[잔여연차 안내]* '+yyyymm+' 기준\n\n'
+    +'🔹 *1년이상연차*\n'+over1Text+'\n\n'
+    +'🔹 *1년미만연차* (사용기간: 입사일로부터 1년)\n'+under1Text+'\n\n'
+    +'📋 사용내역\n'+usageLines+'\n\n'
+    +'※ 아직 승인되지 않은 연차의 경우 사용내역에 반영되지 않을 수 있습니다.\n'
+    +DIV+'\n\n궁금하신 점은 담당자(@김정주)에게 편하게 연락 주세요!\n\n'
+    +'감사합니다.\n피플팀 드림';
 }
 // 특정 직원 1명에게 연차현황 DM 발송
 async function sendLeaveSummaryToEmp(empId){
@@ -8083,9 +8421,11 @@ async function sendLeaveSummaryToEmp(empId){
   const con=contracts.filter(c=>c.사번===empId&&c.구분!=='퇴사').sort((a,b)=>new Date(b.cs)-new Date(a.cs))[0];
   const slackId=con?.slackId||'';
   if(!slackId){alert(emp.이름+'님의 SlackID가 등록되어 있지 않습니다.\n② 계약기간관리에서 해당 직원의 SlackID(U로 시작)를 입력해주세요.');return;}
-  const summary=getLeaveSummaryForEmp(empId);
-  if(!summary){alert('연차 정보를 계산할 수 없습니다(입사일을 확인해주세요).');return;}
-  const ok=await _sendSlackMsg(buildLeaveSummaryText(emp,summary), slackId);
+  const detail=getLeaveDetailForEmp(empId);
+  if(!detail){alert('연차 정보를 계산할 수 없습니다(입사일을 확인해주세요).');return;}
+  const text=buildLeaveSummaryText(emp,detail);
+  const blocks=_somyungActionBlocks(empId,text);
+  const ok=await _sendSlackMsg(text, slackId, blocks);
   if(ok)_toast('✅ '+emp.이름+'님께 연차현황 발송 완료','ok');
 }
 // 전체 재직자(SlackID 등록자)에게 순차적으로 연차현황 DM 발송
@@ -8101,9 +8441,11 @@ async function sendAllLeaveSummary(){
     const con=contracts.filter(c=>c.사번===e.사번&&c.구분!=='퇴사').sort((a,b)=>new Date(b.cs)-new Date(a.cs))[0];
     const slackId=con?.slackId||'';
     if(!slackId){skipped++;continue;}
-    const summary=getLeaveSummaryForEmp(e.사번);
-    if(!summary){skipped++;continue;}
-    const ok=await _sendSlackMsg(buildLeaveSummaryText(e,summary), slackId);
+    const detail=getLeaveDetailForEmp(e.사번);
+    if(!detail){skipped++;continue;}
+    const text=buildLeaveSummaryText(e,detail);
+    const blocks=_somyungActionBlocks(e.사번,text);
+    const ok=await _sendSlackMsg(text, slackId, blocks);
     if(ok)sent++;else skipped++;
   }
   _toast(`✅ 연차현황 전체 발송 완료 — 발송 ${sent}건 / 스킵 ${skipped}건`,'ok');
