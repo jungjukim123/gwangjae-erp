@@ -7867,14 +7867,14 @@ function buildNewHireSlackText(c){
   ].join('\n');
 }
 
-// 퇴사 공유 메시지(saveEditCon 참고) — 사용자가 지정한 형식 그대로.
+// 퇴사 공유 메시지(saveEditCon 참고) — 사용자가 지정한 형식 그대로(날짜는 점(.) 구분).
 function buildQuitShareText(c){
+  const dot=d=>(d||'').replace(/-/g,'.');
   return [
-    `- 이름 : ${c.이름||''}`,
-    `- 입사일 : ${c.입사||''}`,
-    `- 퇴사일 : ${c.퇴사||''}`,
-    `- 퇴사사유 : ${c.퇴사사유||''}`,
-    '-',
+    '[퇴사안내]',
+    `입사일 : ${dot(c.입사)}`,
+    `퇴사일 : ${dot(c.퇴사)}`,
+    `퇴사사유 : ${c.퇴사사유||''}`,
   ].join('\n');
 }
 
