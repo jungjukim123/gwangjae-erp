@@ -7811,6 +7811,44 @@ function fillConRowFromEmp(){
   set('cn2-br',e.휴게||1);
 }
 
+// ── 입사자 발생 시 Slack 자동 공유 ──────────────────────────────
+// 계약기간관리에서 "+ 계약 추가"로 구분=신규 계약을 저장하면 지정된 채널로 입사자 정보를
+// 자동 발송한다(saveConRow 참고). 발송 자체는 근태소명 발송과 동일한 _sendSlackMsg(GAS JSONP
+// 프록시) 경로를 그대로 재사용한다 — 이 브라우저에 Slack 토큰(③ 근태관리에서 입력, localStorage
+// slk_token)이 저장돼 있어야 실제로 전송된다.
+const NEW_HIRE_SLACK_CHANNEL='C09HM3PDL90';
+function buildNewHireSlackText(c){
+  const dayKeyLabel=[['mon','월'],['tue','화'],['wed','수'],['thu','목'],['fri','금'],['sat','토'],['sun','일']];
+  const workDays=[], offDays=[];
+  dayKeyLabel.forEach(([k,label])=>{
+    const v=c[k];
+    if(v===''||v==null||v===0||v==='0'||v==='주휴') offDays.push(label);
+    else workDays.push(label);
+  });
+  const wageLabel=c.임금==='시급직' ? `시급직 (${nFmt(c.시급)}원)` : `월급직 (${nFmt(c.기본)}원)`;
+  const joinDate=c.입사 ? `${c.입사} (${DAYS[new Date(c.입사).getDay()]})` : '';
+  // 근로시간(일별) — 근무일 중 첫 근무일의 시간을 대표값으로 쓴다(보통 근무일마다 시간이 동일).
+  const firstWorkKey=(dayKeyLabel.find(([k,label])=>workDays.includes(label))||[])[0];
+  const dailyHours=firstWorkKey ? (Number(c[firstWorkKey])||0) : 0;
+  // 채용경로는 계약기간관리 자체에는 없는 항목이라, 같은 사번의 인원현황(employees)에 등록돼
+  // 있으면 그 값을 가져온다 — 없으면 빈 칸으로 둔다.
+  const emp=c.사번 ? employees.find(e=>e.사번===c.사번) : null;
+
+  return [
+    '[입사자]',
+    '',
+    `채용경로 : ${emp?.경로||''}`,
+    `임금구분 : ${wageLabel}`,
+    `성명 : ${c.이름||''}`,
+    `입사일자 : ${joinDate}`,
+    `근무요일 : ${workDays.join(',')} (휴무일 ${offDays.join(',')})`,
+    `근무시간 : ${c.st||''} ~ ${c.et||''} / 주 ${c.소정||0}시간`,
+    `근로시간 : ${dailyHours.toFixed(1)}H, 휴게시간 : ${Number(c.휴게||0).toFixed(1)}H`,
+    `연락처 : ${c.phone||''}`,
+    `이메일 : ${c.email||''}`,
+  ].join('\n');
+}
+
 function saveConRow(){
   const empSel=document.getElementById('cn2-emp');
   const val=empSel?.value;
@@ -7843,7 +7881,7 @@ function saveConRow(){
   const 휴게입력값=document.getElementById('cn2-br').value;
   const 휴게입력=휴게입력값===''?1:Number(휴게입력값);
 
-  contracts.unshift({
+  const newCon={
     no: contracts.reduce((a,b)=>Math.max(a,b.no),0)+1,
     구분: document.getElementById('cn2-type').value,
     발송: '',
@@ -7873,7 +7911,8 @@ function saveConRow(){
     email: document.getElementById('cn2-email').value,
     phone: document.getElementById('cn2-phone').value,
     slackId: document.getElementById('cn2-slackid')?.value||'',
-  });
+  };
+  contracts.unshift(newCon);
   _pendingConRow=null;
   // 신규 직접입력인 경우 employees에도 추가 (syncContractsToEmployees 대신 직접 처리하여 중복 방지)
   if(val==='__NEW__'){
@@ -7898,6 +7937,9 @@ function saveConRow(){
   }
   renderCon();
   saveAll();
+  if(newCon.구분==='신규'){
+    _sendSlackMsg(buildNewHireSlackText(newCon), NEW_HIRE_SLACK_CHANNEL);
+  }
 }
 
 function cancelConRow(){
