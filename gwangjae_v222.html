@@ -526,8 +526,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <button class="btn p" id="btnAddConRow" onclick="addConRow()">+ 계약 추가</button>
       <button class="btn p" onclick="topEditSelectedCon()">✏ 수정</button>
       <button class="btn p" onclick="topSaveSelectedCon()">✓ 저장</button>
-      <button class="btn p" onclick="sendContractDoc()">→ 계약서 전송</button>
-      <button class="btn p" onclick="sendResignationDoc()">→ 사직원 전송</button>
+      <button class="btn p" onclick="sendContractDoc()">→ 전자서명</button>
       <button class="btn p" onclick="downloadConExcel()">⬇ 엑셀 다운로드</button>
       <button class="btn p" onclick="downloadConTemplate()">📋 엑셀 템플릿</button>
       <label class="btn p" style="cursor:pointer">📂 엑셀 일괄 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="uploadConExcel(event)"></label>
@@ -7298,13 +7297,14 @@ function closeBaroSignReviewModal() {
   document.getElementById('baroSignModalOverlay')?.remove();
 }
 
-// 계약 건(no) 하나를 바로사인으로 발송 준비한다 — 상단 툴바의 "계약서 전송"/"사직원 전송" 버튼
-// 둘 다 여기로 온다(docLabel로 확인 문구·오류 메시지만 구분, 나머지 로직은 완전히 동일).
-// 어떤 계약 컬럼이 어떤 문서 필드에 들어가는지는 여기서 정하지 않는다 — 바로사인 템플릿 편집 화면에서
-// 각 필드에 설정해둔 "데이터 키"와, 아래에서 보내는 data 객체의 키 이름이 같으면 자동으로 매칭된다.
-// 사직원처럼 계약서와는 다른 데이터 키가 필요하거나 값이 아예 없는 필드는, 바로사인 검토 화면에서
-// 발송하는 사람이 직접 입력하는 미니 팝업으로 채우게 된다 — 계약서 전송과 동일한 흐름.
-async function sendContractToEsign(no, docLabel='계약서'){
+// 계약 건(no) 하나를 바로사인으로 발송 준비한다 — 상단 툴바 "전자서명" 버튼이 여기로 온다.
+// 어떤 문서(계약서/사직원 등)를 보낼지는 여기서 정하지 않는다 — template_id 없이 prepare를 호출하면
+// 바로사인 검토 화면에 "전자문서 선택" 단계가 먼저 뜨고, 발송하는 사람이 그때그때 바로사인에 실제
+// 등록된 문서 목록에서 직접 고른다. 어떤 계약 컬럼이 어떤 문서 필드에 들어가는지도 여기서 정하지
+// 않는다 — 바로사인 템플릿 편집 화면에 설정해둔 "데이터 키"와, 아래에서 보내는 data 객체의 키
+// 이름이 같으면 자동으로 매칭된다. 데이터 키가 없거나 값이 아예 없는 필드는, 검토 화면에서 발송하는
+// 사람이 직접 입력하는 미니 팝업으로 채우게 된다.
+async function sendContractToEsign(no){
   const c=contracts.find(x=>x.no===no);
   if(!c){alert('선택한 계약 정보를 찾을 수 없습니다.');return;}
 
@@ -7312,7 +7312,7 @@ async function sendContractToEsign(no, docLabel='계약서'){
     alert('이메일 또는 전화번호가 없어 발송할 수 없습니다.');
     return;
   }
-  if(!confirm(`${c.이름}님께 보낼 ${docLabel}을 준비할까요?\n다음 화면에서 내용을 확인하고 최종 발송하시면 됩니다.`))return;
+  if(!confirm(`${c.이름}님께 보낼 문서를 준비할까요?\n다음 화면에서 어떤 문서인지 고르고, 내용을 확인한 뒤 최종 발송하시면 됩니다.`))return;
 
   const v=x=>(x===''||x===undefined||x===null)?'':String(x);
   const data={
@@ -7335,25 +7335,20 @@ async function sendContractToEsign(no, docLabel='계약서'){
       }),
     });
     const result=await res.json();
-    if(!result.ok){alert(`${docLabel} 준비 실패: `+result.message);return;}
+    if(!result.ok){alert('문서 준비 실패: '+result.message);return;}
     _baroSignSendingNo = no;
     _baroSignSendingDocId = result.document_id || null;
     openBaroSignReviewModal(result.review_url);
   }catch(e){
-    alert(`${docLabel} 준비 중 오류가 발생했습니다: `+e.message);
+    alert('문서 준비 중 오류가 발생했습니다: '+e.message);
   }
 }
 
-// 선택된 계약 건의 계약서 전송(상단 툴바 버튼)
+// 선택된 계약 건의 전자서명 발송(상단 툴바 버튼) — 어떤 문서(계약서/사직원 등)를 보낼지는
+// 다음 화면(바로사인 검토 화면)에서 고른다.
 function sendContractDoc(){
   if(_selectedConNo===null){alert('먼저 전송할 계약 건의 체크박스를 선택해주세요.');return;}
   sendContractToEsign(_selectedConNo);
-}
-
-// 선택된 계약 건의 사직원 전송(상단 툴바 버튼) — 계약서 전송과 완전히 동일한 흐름, 문서 종류만 다르다.
-function sendResignationDoc(){
-  if(_selectedConNo===null){alert('먼저 전송할 계약 건의 체크박스를 선택해주세요.');return;}
-  sendContractToEsign(_selectedConNo, '사직원');
 }
 
 // ── "서명상태" 열 실시간 갱신 — 문서ID가 있는(=발송된) 계약 건들의 실제 서명 완료 여부를 주기적으로 조회 ──
