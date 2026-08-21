@@ -7853,28 +7853,29 @@ function buildNewHireSlackText(c){
   const emp=c.사번 ? employees.find(e=>e.사번===c.사번) : null;
 
   return [
-    '🟢 [ 입사 안내 ]',
-    '',
-    `채용경로 : ${emp?.경로||''}`,
-    `임금구분 : ${wageLabel}`,
-    `성명 : ${c.이름||''}`,
-    `입사일자 : ${joinDate}`,
-    `근무요일 : ${workDays.join(',')} (휴무일 ${offDays.join(',')})`,
-    `근무시간 : ${c.st||''} ~ ${c.et||''} / 주 ${c.소정||0}시간`,
-    `근로시간 : ${dailyHours.toFixed(1)}H, 휴게시간 : ${Number(c.휴게||0).toFixed(1)}H`,
-    `연락처 : ${c.phone||''}`,
-    `이메일 : ${c.email||''}`,
+    '✅ [입사안내]',
+    `- 채용경로 : ${emp?.경로||''}`,
+    `- 임금구분 : ${wageLabel}`,
+    `- 성명 : ${c.이름||''}`,
+    `- 입사일자 : ${joinDate}`,
+    `- 근무요일 : ${workDays.join(',')} (휴무일 ${offDays.join(',')})`,
+    `- 근무시간 : ${c.st||''} ~ ${c.et||''} / 주 ${c.소정||0}시간`,
+    `- 근로시간 : ${dailyHours.toFixed(1)}H, 휴게시간 : ${Number(c.휴게||0).toFixed(1)}H`,
+    `- 연락처 : ${c.phone||''}`,
+    `- 이메일 : ${c.email||''}`,
   ].join('\n');
 }
 
 // 퇴사 공유 메시지(saveEditCon 참고) — 사용자가 지정한 형식 그대로(날짜는 점(.) 구분).
+// 각 줄 앞의 "- "는 Slack mrkdwn이 자동으로 원형 불릿(●)으로 그려준다.
 function buildQuitShareText(c){
   const dot=d=>(d||'').replace(/-/g,'.');
   return [
-    '🔴 [ 퇴사 안내 ]',
-    `입사일 : ${dot(c.입사)}`,
-    `퇴사일 : ${dot(c.퇴사)}`,
-    `퇴사사유 : ${c.퇴사사유||''}`,
+    '✅ [퇴사안내]',
+    `- 이름 : ${c.이름||''}`,
+    `- 입사일 : ${dot(c.입사)}`,
+    `- 퇴사일 : ${dot(c.퇴사)}`,
+    `- 퇴사사유 : ${c.퇴사사유||''}`,
   ].join('\n');
 }
 
