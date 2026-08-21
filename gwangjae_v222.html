@@ -526,6 +526,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <button class="btn p" id="btnAddConRow" onclick="addConRow()">+ 계약 추가</button>
       <button class="btn p" onclick="topEditSelectedCon()">✏ 수정</button>
       <button class="btn p" onclick="topSaveSelectedCon()">✓ 저장</button>
+      <button class="btn d" onclick="topDeleteSelectedCon()">🗑 삭제</button>
       <button class="btn p" onclick="sendContractDoc()">→ 전자서명</button>
       <button class="btn p" onclick="downloadConExcel()">⬇ 엑셀 다운로드</button>
       <button class="btn p" onclick="downloadConTemplate()">📋 엑셀 템플릿</button>
@@ -7555,6 +7556,10 @@ function topSaveSelectedCon(){
   if(_editingConNo===null){alert('먼저 ✏ 수정 버튼으로 편집을 시작해주세요.');return;}
   saveEditCon(_editingConNo);
 }
+function topDeleteSelectedCon(){
+  if(_selectedConNo===null){alert('먼저 삭제할 계약 건의 체크박스를 선택해주세요.');return;}
+  deleteCon(_selectedConNo);
+}
 function renderCon(){
   const q=(document.getElementById('conQ')||{}).value||'',tf=(document.getElementById('conTypeQ')||{}).value||'all';
   // 인라인 입력/편집 행이 열려있으면 닫기
@@ -8133,6 +8138,19 @@ function deleteCon(no){
   const sbKey=keyPrefix+'_'+(c.cs||'');
   fetch(`${SB_URL}/rest/v1/contracts?key=eq.${encodeURIComponent(sbKey)}`,{method:'DELETE',headers:SB_HDR}).catch(()=>{});
   contracts=contracts.filter(x=>x.no!==no);
+
+  // 방금 지운 계약의 사번을 참조하는 다른 계약·근태저장 기록이 더 이상 없으면 인원현황에서도
+  // 즉시 제거한다(화면 + DB 둘 다). saveAll()의 비동기 저장에만 맡기면, 그 정리 로직이
+  // employees 배열이 그대로 남아있다는 전제로 동작해서 새로고침 전까지 화면에 그대로 남아있었다.
+  if(c.사번){
+    const stillReferenced=contracts.some(x=>x.사번===c.사번)
+      || Object.values(_hrRowsCache).flat().some(r=>r.emp&&r.emp.사번===c.사번);
+    if(!stillReferenced){
+      employees=employees.filter(e=>e.사번!==c.사번);
+      fetch(`${SB_URL}/rest/v1/employees?사번=eq.${encodeURIComponent(c.사번)}`,{method:'DELETE',headers:SB_HDR}).catch(()=>{});
+    }
+  }
+
   renderCon();saveAll();
 }
 function sendDoc(no,type){
