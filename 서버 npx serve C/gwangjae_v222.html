@@ -7896,7 +7896,7 @@ function submitAttReq(){
 // ============================================================
 const LS_COLS=['사번','이름','급여종','입사일','계약종료일','퇴사일','구분','사용시작일','사용종료일','발생시간','사용시간','잔여연차(시간)','알림발송'];
 function buildLsHead(){
-  document.getElementById('lsHead').innerHTML=LS_COLS.map((t,i)=>th(t,'lsT',i)).join('');
+  document.getElementById('lsHead').innerHTML=LS_COLS.map((t,i)=>th(t,'lsT',i,i<=8?'c':'')).join('');
 }
 // 1년미만연차 행을 클릭하면 월별 산정내역(상세)을 펼쳐 보여줌 — 펼쳐진 사번 저장
 let _lsExpandedEmp=null;
@@ -7985,15 +7985,15 @@ function renderLeaveStatus(){
     rows.forEach(r=>{
       const isU1=r.구분==='1년미만연차';
       html.push(`<tr${isU1?` style="cursor:pointer" onclick="toggleLsDetail('${e.사번}')" title="클릭하면 월별 산정내역을 볼 수 있습니다"`:''}>
-        <td style="font-family:monospace;font-size:11px">${e.사번}</td>
-        <td><strong>${e.이름}</strong></td>
-        <td><span class="bdg ${급여종==='월급직'?'bb':'bt'}" style="font-size:10px">${급여종}</span></td>
-        <td style="font-size:11px">${getJoinDate(e.사번)||'-'}</td>
-        <td style="font-size:11px">${conEnd||'-'}</td>
-        <td style="font-size:11px;color:${quitDate?'var(--red)':'var(--tx3)'}">${quitDate||'-'}</td>
-        <td><span class="bdg ${r.구분==='1년미만연차'?'ba':'bg'}" style="font-size:10px">${r.구분}${isU1?' ▾':''}</span></td>
-        <td style="font-size:11px">${r.cs}</td>
-        <td style="font-size:11px">${r.ce}</td>
+        <td class="c" style="font-family:monospace;font-size:11px">${e.사번}</td>
+        <td class="c"><strong>${e.이름}</strong></td>
+        <td class="c"><span class="bdg ${급여종==='월급직'?'bb':'bt'}" style="font-size:10px">${급여종}</span></td>
+        <td class="c" style="font-size:11px">${getJoinDate(e.사번)||'-'}</td>
+        <td class="c" style="font-size:11px">${conEnd||'-'}</td>
+        <td class="c" style="font-size:11px;color:${quitDate?'var(--red)':'var(--tx3)'}">${quitDate||'-'}</td>
+        <td class="c"><span class="bdg ${r.구분==='1년미만연차'?'ba':'bg'}" style="font-size:10px">${r.구분}${isU1?' ▾':''}</span></td>
+        <td class="c" style="font-size:11px">${r.cs}</td>
+        <td class="c" style="font-size:11px">${r.ce}</td>
         <td class="c">${r.발생}</td>
         <td class="c">${r.사용}</td>
         <td class="c" style="font-weight:700;${r.잔여<0?'color:var(--red)':''}">${r.잔여}</td>
