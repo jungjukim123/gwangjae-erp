@@ -103,10 +103,9 @@ const ConEndMonthly = (function(){
     return ty + '-' + String(tm).padStart(2,'0');
   }
 
-  function buildText(list, ym){
-    const mo = parseInt(ym.split('-')[1], 10);
+  function buildText(list){
     const dot = d => (d||'').replace(/-/g, '.');
-    const lines = ['[' + mo + '월 계약종료자 안내]'];
+    const lines = ['📅 [계약종료자 안내]'];
     list.forEach(c => lines.push('- ' + c.이름 + ' ~ ' + dot(c.ce)));
     return lines.join('\n');
   }
@@ -135,7 +134,7 @@ const ConEndMonthly = (function(){
       Logger.log(ym + ' 계약종료자 없음 — 발송 생략');
       return;
     }
-    const ok = _postSlack(PROD_CHANNEL, buildText(list, ym));
+    const ok = _postSlack(PROD_CHANNEL, buildText(list));
     Logger.log(ym + ' 계약종료자 안내 발송 ' + (ok?'성공':'실패') + ' (' + list.length + '명)');
   }
 
@@ -145,7 +144,7 @@ const ConEndMonthly = (function(){
     const employees = sbSelect('employees');
     const ym = nextYm(new Date());
     const list = contractsEndingInMonth(contracts, employees, ym);
-    const text = '(테스트 발송)\n' + (list.length ? buildText(list, ym) : ('[' + parseInt(ym.split('-')[1],10) + '월 계약종료자 안내]\n(해당 없음)'));
+    const text = '(테스트 발송)\n' + (list.length ? buildText(list) : '📅 [계약종료자 안내]\n(해당 없음)');
     const ok = _postSlack(TEST_CHANNEL, text);
     Logger.log('테스트 발송 ' + (ok?'성공':'실패') + ' → ' + TEST_CHANNEL);
   }
