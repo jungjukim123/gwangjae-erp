@@ -7853,7 +7853,7 @@ function buildNewHireSlackText(c){
   const emp=c.사번 ? employees.find(e=>e.사번===c.사번) : null;
 
   return [
-    '[입사자]',
+    '🟢 [ 입사 안내 ]',
     '',
     `채용경로 : ${emp?.경로||''}`,
     `임금구분 : ${wageLabel}`,
@@ -7871,7 +7871,7 @@ function buildNewHireSlackText(c){
 function buildQuitShareText(c){
   const dot=d=>(d||'').replace(/-/g,'.');
   return [
-    '[퇴사안내]',
+    '🔴 [ 퇴사 안내 ]',
     `입사일 : ${dot(c.입사)}`,
     `퇴사일 : ${dot(c.퇴사)}`,
     `퇴사사유 : ${c.퇴사사유||''}`,
