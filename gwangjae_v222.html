@@ -7718,8 +7718,18 @@ function _insertConRow(){
   tr.className='con-new-row';
   tr.innerHTML=`
     <td></td>
-    <td style="text-align:center;color:var(--blue);font-weight:700;font-size:11px">NEW</td>
+    <td style="text-align:center;color:var(--blue);font-weight:700;font-size:11px">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+        <span>NEW</span>
+        <div style="display:flex;gap:2px">
+          <button class="btn sm p" onclick="saveConRow()" style="padding:2px 6px;font-size:10px;white-space:nowrap">✓</button>
+          <button class="btn sm" onclick="cancelConRow()" style="padding:2px 6px;font-size:10px;white-space:nowrap">✕</button>
+        </div>
+      </div>
+    </td>
     <td><select class="con-sel" id="cn2-type"><option>신규</option><option>계약연장</option><option>계약조건변경</option><option>퇴사</option></select></td>
+    <td style="text-align:center;color:var(--tx3);font-size:10px">-</td>
+    <td style="text-align:center;color:var(--tx3);font-size:10px">-</td>
     <td style="text-align:center;color:var(--tx3);font-size:10px">-</td>
     <td><select class="con-sel" id="cn2-subtype"><option>파트타이머</option><option>풀타임</option><option>파견직</option><option>계약직</option></select></td>
     <td>
@@ -7751,13 +7761,7 @@ function _insertConRow(){
     <td><input class="con-inp" id="cn2-sun" value="주휴" style="width:38px;text-align:center"></td>
     <td><input class="con-inp" id="cn2-email" type="email" placeholder="이메일" style="width:120px"></td>
     <td><input class="con-inp" id="cn2-phone" placeholder="010-0000-0000" style="width:110px"></td>
-    <td><input class="con-inp" id="cn2-slackid" placeholder="U0XXXXXXXXX" style="width:100px"></td>
-    <td>
-      <div style="display:flex;gap:3px">
-        <button class="btn sm p" onclick="saveConRow()" style="white-space:nowrap">✓ 저장</button>
-        <button class="btn sm" onclick="cancelConRow()" style="white-space:nowrap">✕</button>
-      </div>
-    </td>`;
+    <td><input class="con-inp" id="cn2-slackid" placeholder="U0XXXXXXXXX" style="width:100px"></td>`;
 
   tbody.insertBefore(tr, tbody.firstChild);
   tr.scrollIntoView({behavior:'smooth', block:'center'});
