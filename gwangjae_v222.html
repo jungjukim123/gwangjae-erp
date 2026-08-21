@@ -7832,7 +7832,9 @@ function fillConRowFromEmp(){
 // 자동 발송한다. 발송 자체는 근태소명 발송과 동일한 _sendSlackMsg(GAS JSONP 프록시) 경로를
 // 그대로 재사용한다 — 이 브라우저에 Slack 토큰(③ 근태관리에서 입력, localStorage slk_token)이
 // 저장돼 있어야 실제로 전송된다.
-const HR_SHARE_SLACK_CHANNEL='C09HM3PDL90';
+// ★ 채널(C09HM3PDL90)에 봇이 아직 초대되지 않아, 봇 초대 전까지는 개인 슬랙 DM(김정주,
+//   U03PLHYF126)으로 임시 발송한다. 채널 초대가 끝나면 아래 값을 'C09HM3PDL90'으로 되돌린다.
+const HR_SHARE_SLACK_CHANNEL='U03PLHYF126';
 function buildNewHireSlackText(c){
   const dayKeyLabel=[['mon','월'],['tue','화'],['wed','수'],['thu','목'],['fri','금'],['sat','토'],['sun','일']];
   const workDays=[], offDays=[];
