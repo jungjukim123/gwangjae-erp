@@ -1630,6 +1630,11 @@ function _applyData(data) {
         if (link) { c.문서ID = link.문서ID || ''; c.서명상태 = link.서명상태 || ''; c.문서제목 = link.문서제목 || ''; }
       });
     } catch(e) {}
+    // 계약기간관리 "퇴사사유" 열 복원(contracts 테이블에 컬럼이 없어 meta에 별도 저장 — saveAll 참고)
+    try {
+      const quitReasons = JSON.parse(_v('quitReasons') || '{}');
+      contracts.forEach(c => { if (quitReasons[c.no]) c.퇴사사유 = quitReasons[c.no]; });
+    } catch(e) {}
     // 계정 목록 복원
     try {
       const raw = _v('accounts');
@@ -1804,9 +1809,13 @@ async function saveAll() {
     // 컬럼을 추가하지 않고(스키마 변경 없이) meta의 자유 형식 key/value로 저장한다.
     const docLinks = {};
     contracts.forEach(c => { if (c.문서ID) docLinks[c.no] = { 문서ID: c.문서ID, 서명상태: c.서명상태 || '', 문서제목: c.문서제목 || '' }; });
+    // 퇴사사유도 contracts 테이블에 컬럼이 없어 같은 방식(meta 자유 형식 key/value)으로 저장한다.
+    const quitReasons = {};
+    contracts.forEach(c => { if (c.퇴사사유) quitReasons[c.no] = c.퇴사사유; });
     const metaRows = [
       { key: 'accounts',      value: JSON.stringify(getAccounts()),        updated: _now },
       { key: 'docLinks',      value: JSON.stringify(docLinks),             updated: _now },
+      { key: 'quitReasons',   value: JSON.stringify(quitReasons),          updated: _now },
       { key: 'salExtra',      value: JSON.stringify(salExtra||{}),         updated: _now },
       { key: 'salSyncedYrMo',value: JSON.stringify(salSyncedYrMo||null),  updated: _now },
       { key: 'otRequests',    value: JSON.stringify(otRequests||[]),       updated: _now },
@@ -2881,7 +2890,7 @@ function buildEmpHead(){
   document.getElementById('empHead').innerHTML=EMP_COLS.map((t,i)=>th(t,'empT',i,t==='월소정'?'c':'')).join('');
 }
 // CONTRACT TABLE HEADERS (②) — 맨 앞 빈 열은 선택 체크박스용
-const CON_COLS=['','NO','구분','서명상태','발송여부','사직원','구분2','이름','사번','소속','입사일','퇴사일','임금구분','시급','기본급','식대','직책수당','야간근로수당','계약시작','계약종료','시업','종료','소정','휴게','월','화','수','목','금','토','일','이메일','전화','SlackID'];
+const CON_COLS=['','NO','구분','서명상태','발송여부','사직원','구분2','이름','사번','소속','입사일','퇴사일','퇴사사유','임금구분','시급','기본급','식대','직책수당','야간근로수당','계약시작','계약종료','시업','종료','소정','휴게','월','화','수','목','금','토','일','이메일','전화','SlackID'];
 function buildConHead(){
   document.getElementById('conHead').innerHTML=CON_COLS.map((t,i)=>i===0?thPlain(t):th(t,'conT',i)).join('');
 }
@@ -7593,6 +7602,7 @@ function renderCon(){
       <td>${c.소속}</td>
       <td style="font-size:11px">${c.입사}</td>
       <td style="font-size:11px;color:${c.퇴사?'var(--red)':'var(--tx3)'}">${c.퇴사||'-'}</td>
+      <td style="font-size:11px">${c.퇴사사유||'-'}</td>
       <td><span class="bdg ${c.임금==='월급직'?'bb':'bt'}" style="font-size:10px">${c.임금}</span></td>
       <td>${c.임금==='시급직'?(c.시급||'-'):'-'}</td>
       <td style="text-align:right">${c.기본?nFmt(c.기본):'-'}</td>
@@ -7740,6 +7750,7 @@ function _insertConRow(){
     <td><input class="con-inp" id="cn2-soct" placeholder="딜버" value="딜버" style="min-width:55px"></td>
     <td><input class="con-inp" id="cn2-join" type="date"></td>
     <td><input class="con-inp" id="cn2-quit" type="date"></td>
+    <td><select class="con-sel" id="cn2-quitreason"><option value=""></option><option>개인사유</option><option>계약만료</option></select></td>
     <td><select class="con-sel" id="cn2-stype"><option>월급직</option><option>시급직</option></select></td>
     <td><input class="con-inp" id="cn2-rate" type="number" placeholder="0" style="width:70px"></td>
     <td><input class="con-inp" id="cn2-base" type="number" placeholder="0" style="width:80px"></td>
@@ -7815,12 +7826,13 @@ function fillConRowFromEmp(){
   set('cn2-br',e.휴게||1);
 }
 
-// ── 입사자 발생 시 Slack 자동 공유 ──────────────────────────────
-// 계약기간관리에서 "+ 계약 추가"로 구분=신규 계약을 저장하면 지정된 채널로 입사자 정보를
-// 자동 발송한다(saveConRow 참고). 발송 자체는 근태소명 발송과 동일한 _sendSlackMsg(GAS JSONP
-// 프록시) 경로를 그대로 재사용한다 — 이 브라우저에 Slack 토큰(③ 근태관리에서 입력, localStorage
-// slk_token)이 저장돼 있어야 실제로 전송된다.
-const NEW_HIRE_SLACK_CHANNEL='C09HM3PDL90';
+// ── 입사자/퇴사자 발생 시 Slack 자동 공유 ────────────────────────
+// 계약기간관리에서 "+ 계약 추가"로 구분=신규 계약을 저장하면(saveConRow) 입사자 정보를,
+// 기존 행을 수정해 퇴사일을 처음 채워 저장하면(saveEditCon) 퇴사자 정보를 지정된 채널로
+// 자동 발송한다. 발송 자체는 근태소명 발송과 동일한 _sendSlackMsg(GAS JSONP 프록시) 경로를
+// 그대로 재사용한다 — 이 브라우저에 Slack 토큰(③ 근태관리에서 입력, localStorage slk_token)이
+// 저장돼 있어야 실제로 전송된다.
+const HR_SHARE_SLACK_CHANNEL='C09HM3PDL90';
 function buildNewHireSlackText(c){
   const dayKeyLabel=[['mon','월'],['tue','화'],['wed','수'],['thu','목'],['fri','금'],['sat','토'],['sun','일']];
   const workDays=[], offDays=[];
@@ -7850,6 +7862,17 @@ function buildNewHireSlackText(c){
     `근로시간 : ${dailyHours.toFixed(1)}H, 휴게시간 : ${Number(c.휴게||0).toFixed(1)}H`,
     `연락처 : ${c.phone||''}`,
     `이메일 : ${c.email||''}`,
+  ].join('\n');
+}
+
+// 퇴사 공유 메시지(saveEditCon 참고) — 사용자가 지정한 형식 그대로.
+function buildQuitShareText(c){
+  return [
+    `- 이름 : ${c.이름||''}`,
+    `- 입사일 : ${c.입사||''}`,
+    `- 퇴사일 : ${c.퇴사||''}`,
+    `- 퇴사사유 : ${c.퇴사사유||''}`,
+    '-',
   ].join('\n');
 }
 
@@ -7894,6 +7917,7 @@ function saveConRow(){
     소속: 소속입력,
     입사: 입사입력,
     퇴사: document.getElementById('cn2-quit').value||'',
+    퇴사사유: document.getElementById('cn2-quitreason')?.value||'',
     임금: 임금입력,
     시급: 시급입력,
     기본: 기본입력,
@@ -7942,7 +7966,7 @@ function saveConRow(){
   renderCon();
   saveAll();
   if(newCon.구분==='신규'){
-    _sendSlackMsg(buildNewHireSlackText(newCon), NEW_HIRE_SLACK_CHANNEL);
+    _sendSlackMsg(buildNewHireSlackText(newCon), HR_SHARE_SLACK_CHANNEL);
   }
 }
 
@@ -8020,6 +8044,7 @@ function startEditCon(no){
     <td><input class="con-inp" type="text" value="${c.소속||'딜버'}" style="min-width:50px"></td>
     <td><input class="con-inp" type="date" value="${c.입사||''}"></td>
     <td><input class="con-inp" type="date" value="${c.퇴사||''}"></td>
+    <td>${sel(c.퇴사사유||'',['','개인사유','계약만료'])}</td>
     <td>${sel(c.임금||'월급직',['월급직','시급직'])}</td>
     <td>${numInp(c.시급||0,'65px')}</td>
     <td>${numInp(c.기본||0,'80px')}</td>
@@ -8048,11 +8073,13 @@ function saveEditCon(no){
 
   const inputs=tr.querySelectorAll('input,select');
   const vals=[...inputs].map(el=>el.value);
-  // 순서: 구분(sel0), type(sel1), 이름, 사번, 소속, 입사, 퇴사, 임금(sel2), 시급, 기본, 식대, 직책, 야간, cs, ce, st, et, 소정, 휴게, mon,tue,wed,thu,fri,sat,sun, email, phone, slackId
+  // 순서: 구분(sel0), type(sel1), 이름, 사번, 소속, 입사, 퇴사, 퇴사사유(sel2), 임금(sel3), 시급, 기본, 식대, 직책, 야간, cs, ce, st, et, 소정, 휴게, mon,tue,wed,thu,fri,sat,sun, email, phone, slackId
   const sels=tr.querySelectorAll('select');
   const inps=tr.querySelectorAll('input:not(.aux-date)');
   const sv=i=>sels[i]?.value||'';
   const iv=i=>inps[i]?.value||'';
+
+  const prevQuit=(c.퇴사||'').trim();
 
   c.구분=sv(0);
   c.type=sv(1);
@@ -8061,7 +8088,8 @@ function saveEditCon(no){
   c.소속=iv(2)||'딜버';
   c.입사=iv(3);
   c.퇴사=iv(4);
-  c.임금=sv(2);
+  c.퇴사사유=sv(2);
+  c.임금=sv(3);
   c.시급=c.임금==='시급직'?(Number(iv(5))||0):0;
   c.기본=Number(iv(6))||0;
   c.식대=Number(iv(7))||0;
@@ -8084,6 +8112,11 @@ function saveEditCon(no){
   syncContractsToEmployees();
   renderCon();
   saveAll();
+  // 퇴사일이 이번 저장으로 처음 채워진 경우에만 퇴사 공유를 보낸다(이미 퇴사일이 있는 행을
+  // 다른 항목 수정으로 다시 저장해도 중복 발송되지 않도록 "비어있음 → 채워짐" 전환만 감지).
+  if(!prevQuit && (c.퇴사||'').trim()){
+    _sendSlackMsg(buildQuitShareText(c), HR_SHARE_SLACK_CHANNEL);
+  }
 }
 
 function cancelEditCon(){
