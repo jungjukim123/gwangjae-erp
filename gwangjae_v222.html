@@ -2381,6 +2381,17 @@ function allocateLeaveUsage(rows,usageRecords,empId){
     r.사용=Math.round(r.사용*100)/100;
     r.잔여=Math.round((r.발생-r.사용)*100)/100;
   });
+  // ★ 어느 회차든 잔여가 마이너스(과다사용)로 남으면, 그 초과분을 바로 다음 회차의 사용연차로
+  //   이어서 반영한다 — 예: 1년미만연차를 초과 사용했으면, 1년 경과 후 새로 발생하는 1년이상연차
+  //   (15일)에서 그 초과분만큼 이미 당겨 쓴 것으로 보아 사용연차에 가산한다.
+  //   해당 회차 자체의 잔여(마이너스)는 실제 초과 이력을 그대로 보여주기 위해 건드리지 않는다.
+  for(let i=0;i<rows.length-1;i++){
+    if(rows[i].잔여<0){
+      const over=-rows[i].잔여;
+      rows[i+1].사용=Math.round((rows[i+1].사용+over)*100)/100;
+      rows[i+1].잔여=Math.round((rows[i+1].발생-rows[i+1].사용)*100)/100;
+    }
+  }
 }
 
 function getSched(empId,ds){
