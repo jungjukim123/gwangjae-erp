@@ -1416,6 +1416,7 @@ function _applyData(data) {
     contracts = data.contracts.map(r => ({
       no: Number(r.no)||0, 구분: r.구분||'', 발송: r.발송||'', type: r.type||'',
       이름: r.이름||'', 사번: String(r.사번||''), 소속: r.소속||'딜버',
+      직책구분: r.직책구분||'구성원',
       입사: _kstDate(r.입사), 퇴사: _kstDate(r.퇴사), 임금: r.임금||'시급직',
       시급: r.시급===''?'':Number(r.시급)||0,
       기본: Number(r.기본)||0, 식대: Number(r.식대)||0,
@@ -1722,7 +1723,7 @@ async function saveAll() {
         key: _newConKey,
         no: c.no, 사번: c.사번||'', 이름: c.이름||'',
         구분: c.구분||'', 발송: c.발송||'', type: c.type||'',
-        소속: c.소속||'', 입사: c.입사||'', 퇴사: c.퇴사||'',
+        소속: c.소속||'', 직책구분: c.직책구분||'구성원', 입사: c.입사||'', 퇴사: c.퇴사||'',
         임금: c.임금||'', 시급: c.시급||0, 기본: c.기본||0,
         식대: c.식대||0, 직책: c.직책||0, 야간: c.야간||0,
         cs: c.cs||'', ce: c.ce||'',
@@ -2223,6 +2224,7 @@ function getMergedEmp(e){
     기본: Number(con.기본)||e.기본||0,
     식대: Number(con.식대)||e.식대||0,
     직책: Number(con.직책)||e.직책||0,
+    직책구분: con.직책구분||e.직책구분||'구성원',
     야간: Number(con.야간)||e.야간||0,
     cs: con.cs||e.cs,
     ce: con.ce||e.ce,
@@ -2437,9 +2439,19 @@ function isFullAttendanceWeek(empId,ds){
     const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');
     weekDates.push(`${y}-${m}-${dd}`);
   }
+  // ★ 월초 주휴일은 직전 7일이 전월로 걸쳐서, 이번 달 데이터만 든 row.days에는 그 날짜가 없어
+  //   근무예정일이 항상 0건으로 잡히던 문제 — 전월이 이미 저장돼 멀티월 캐시(_hrRowsCache)에
+  //   있으면 그쪽에서 마저 찾는다(loadEmpIntoAtt 등에서 전월 근태를 이미 불러온 적 있어야 함).
+  const findDay=dt=>{
+    const found=row.days.find(x=>x.date===dt);
+    if(found)return found;
+    const cacheKey=dt.slice(0,7).replace('-','_');
+    const otherRow=(_hrRowsCache[cacheKey]||[]).find(r=>r.emp.사번===empId);
+    return otherRow?otherRow.days.find(x=>x.date===dt):null;
+  };
   // 그 주의 근무예정일(소정>0인 평일/공휴일) 추출
-  const workDays=row.days.filter(d=>{
-    if(!weekDates.includes(d.date))return false;
+  const workDays=weekDates.map(findDay).filter(d=>{
+    if(!d)return false;
     if(d.gbn!=='평일'&&d.gbn!=='공휴일')return false;
     return typeof d.소정==='number'&&d.소정>0;
   });
@@ -2903,7 +2915,7 @@ function buildEmpHead(){
   document.getElementById('empHead').innerHTML=EMP_COLS.map((t,i)=>th(t,'empT',i,t==='월소정'?'c':'')).join('');
 }
 // CONTRACT TABLE HEADERS (②) — 맨 앞 빈 열은 선택 체크박스용
-const CON_COLS=['','NO','구분','서명상태','발송여부','사직원','구분2','이름','사번','소속','입사일','퇴사일','퇴사사유','임금구분','시급','기본급','식대','직책수당','야간근로수당','계약시작','계약종료','시업','종료','소정','휴게','월','화','수','목','금','토','일','이메일','전화','SlackID'];
+const CON_COLS=['','NO','구분','서명상태','발송여부','사직원','구분2','이름','사번','소속','직책','입사일','퇴사일','퇴사사유','임금구분','시급','기본급','식대','직책수당','야간근로수당','계약시작','계약종료','시업','종료','소정','휴게','월','화','수','목','금','토','일','이메일','전화','SlackID'];
 function buildConHead(){
   document.getElementById('conHead').innerHTML=CON_COLS.map((t,i)=>i===0?thPlain(t):th(t,'conT',i)).join('');
 }
@@ -5350,7 +5362,8 @@ function _calcSalRow(row, yr, mo){
   // ── 주휴수당 (시급직만, 주휴시간합계 * 통상시급)
   const 주휴수당=_ovr('주휴수당',emp.임금==='시급직'?mJH*r:0);
   // ── 근로장려수당 (금/토/일 소정근로시간 합계 × 2,000원, 그 달 만근 시에만 지급 — 결근·미출퇴근 기록 있으면 0)
-  const _fullAtt=isFullAttendanceMonth(emp.사번,days);
+  // ★ 계약기간관리 직책 필드가 "관리자"인 인원은 지급 대상에서 제외(구성원만 지급)
+  const _fullAtt=isFullAttendanceMonth(emp.사번,days)&&emp.직책구분!=='관리자';
   const 근로장려시간=_fullAtt?mGJ:0;
   const 근로장려수당=_ovr('근로장려수당',_fullAtt?_ceilTo10(mGJ*2000):0);
   // ── 연장근로수당 (연장시간합계 * 통상시급 * 1.5)
@@ -7634,6 +7647,7 @@ function renderCon(){
       <td><strong>${c.이름}</strong></td>
       <td style="font-family:monospace;font-size:11px">${c.사번?c.사번:'<span style="color:var(--tx3);font-size:10px">미부여</span>'}&nbsp;<button class="btn sm" style="padding:2px 5px;font-size:10px" onclick="editConId(${c.no})">✏</button></td>
       <td>${c.소속}</td>
+      <td><span class="bdg ${c.직책구분==='관리자'?'ba':'bb'}" style="font-size:10px">${c.직책구분||'구성원'}</span></td>
       <td style="font-size:11px">${c.입사}</td>
       <td style="font-size:11px;color:${c.퇴사?'var(--red)':'var(--tx3)'}">${c.퇴사||'-'}</td>
       <td style="font-size:11px">${c.퇴사사유||'-'}</td>
@@ -7782,6 +7796,7 @@ function _insertConRow(){
     </td>
     <td><input class="con-inp" id="cn2-sabun" placeholder="사번" style="min-width:70px;font-family:monospace"></td>
     <td><input class="con-inp" id="cn2-soct" placeholder="딜버" value="딜버" style="min-width:55px"></td>
+    <td><select class="con-sel" id="cn2-jikchaek"><option>구성원</option><option>관리자</option></select></td>
     <td><input class="con-inp" id="cn2-join" type="date"></td>
     <td><input class="con-inp" id="cn2-quit" type="date"></td>
     <td><select class="con-sel" id="cn2-quitreason"><option value=""></option><option>개인사유</option><option>계약만료</option></select></td>
@@ -7932,6 +7947,7 @@ function saveConRow(){
   }
 
   const 소속입력=document.getElementById('cn2-soct').value||'딜버';
+  const 직책구분입력=document.getElementById('cn2-jikchaek')?.value||'구성원';
   const 입사입력=document.getElementById('cn2-join').value||'';
   const 임금입력=document.getElementById('cn2-stype').value;
   const 시급입력=임금입력==='시급직'?(Number(document.getElementById('cn2-rate').value)||0):0;
@@ -7950,6 +7966,7 @@ function saveConRow(){
     type: document.getElementById('cn2-subtype').value,
     이름, 사번,
     소속: 소속입력,
+    직책구분: 직책구분입력,
     입사: 입사입력,
     퇴사: document.getElementById('cn2-quit').value||'',
     퇴사사유: document.getElementById('cn2-quitreason')?.value||'',
@@ -8077,6 +8094,7 @@ function startEditCon(no){
     <td><input class="con-inp" type="text" value="${c.이름||''}" style="min-width:80px"></td>
     <td><input class="con-inp" type="text" value="${c.사번||''}" placeholder="미부여" style="min-width:80px;font-family:monospace;font-size:10px"></td>
     <td><input class="con-inp" type="text" value="${c.소속||'딜버'}" style="min-width:50px"></td>
+    <td>${sel(c.직책구분||'구성원',['구성원','관리자'])}</td>
     <td><input class="con-inp" type="date" value="${c.입사||''}"></td>
     <td><input class="con-inp" type="date" value="${c.퇴사||''}"></td>
     <td>${sel(c.퇴사사유||'',['','개인사유','계약만료'])}</td>
@@ -8108,7 +8126,7 @@ function saveEditCon(no){
 
   const inputs=tr.querySelectorAll('input,select');
   const vals=[...inputs].map(el=>el.value);
-  // 순서: 구분(sel0), type(sel1), 이름, 사번, 소속, 입사, 퇴사, 퇴사사유(sel2), 임금(sel3), 시급, 기본, 식대, 직책, 야간, cs, ce, st, et, 소정, 휴게, mon,tue,wed,thu,fri,sat,sun, email, phone, slackId
+  // 순서: 구분(sel0), type(sel1), 직책구분(sel2), 이름, 사번, 소속, 입사, 퇴사, 퇴사사유(sel3), 임금(sel4), 시급, 기본, 식대, 직책, 야간, cs, ce, st, et, 소정, 휴게, mon,tue,wed,thu,fri,sat,sun, email, phone, slackId
   const sels=tr.querySelectorAll('select');
   const inps=tr.querySelectorAll('input:not(.aux-date)');
   const sv=i=>sels[i]?.value||'';
@@ -8121,10 +8139,11 @@ function saveEditCon(no){
   c.이름=iv(0)||c.이름;
   c.사번=iv(1);
   c.소속=iv(2)||'딜버';
+  c.직책구분=sv(2);
   c.입사=iv(3);
   c.퇴사=iv(4);
-  c.퇴사사유=sv(2);
-  c.임금=sv(3);
+  c.퇴사사유=sv(3);
+  c.임금=sv(4);
   c.시급=c.임금==='시급직'?(Number(iv(5))||0):0;
   c.기본=Number(iv(6))||0;
   c.식대=Number(iv(7))||0;
@@ -8878,14 +8897,14 @@ async function saveSchedEmpMonth(empId,yr,mo){
 }
 
 function schedCellHtml(empId,ds,empColor){
-  const bl=`border-left:3px solid ${empColor}`;
+  const bl=`border-left:3px solid var(--bd2)`;
   const st=getScheduleState(empId,ds);
   if(!st.state)return`<td style="text-align:center;font-size:11px;color:var(--tx3);background:var(--bg);${bl}">계약외</td>`;
   const label=st.note?`${st.state}(${st.note})`:st.state;
-  let bg='#EFF6FF',fg='#2563EB';
-  if(st.state==='무급휴일'){bg='#F3F4F6';fg='#374151';}
-  else if(st.state==='주휴일'){bg='#FFF0F5';fg='#BE185D';}
-  if(st.note){bg='#FEF3C7';fg='#92400E';}
+  let bg='var(--card)',fg='var(--tx2)';
+  if(st.state==='무급휴일'){bg='var(--bg)';fg='var(--tx3)';}
+  else if(st.state==='주휴일'){bg='#E5E7EB';fg='var(--tx)';}
+  if(st.note){bg='#E5E7EB';fg='var(--tx)';}
   return`<td style="position:relative;text-align:center;font-size:11px;font-weight:600;padding:6px 20px 6px 6px;white-space:nowrap;background:${bg};color:${fg};${bl}">${label}<button type="button" onclick="event.stopPropagation();toggleSchedMenu(this,'${empId}','${ds}')" title="수정" style="position:absolute;top:3px;right:3px;width:15px;height:15px;line-height:13px;padding:0;border:none;border-radius:3px;background:rgba(0,0,0,.08);color:inherit;font-size:9px;cursor:pointer">✎</button></td>`;
 }
 
@@ -8903,7 +8922,7 @@ async function renderSchedMgmt(){
   const head=document.getElementById('schedHead'),body=document.getElementById('schedBody');
   if(!head||!body)return;
   head.innerHTML='<tr><th class="sk" style="padding:7px 9px;min-width:90px">날짜</th><th style="padding:7px 9px;min-width:44px">요일</th><th style="padding:7px 9px;min-width:70px">휴일여부</th>'
-    +emps.map((e,idx)=>{const c=_schedEmpColor(idx);return`<th style="padding:7px 9px;min-width:90px;border-left:3px solid ${c.fg}" title="사번: ${e.사번}"><span style="display:inline-block;padding:2px 8px;border-radius:20px;background:${c.bg};color:${c.fg};font-weight:700">${e.이름}</span></th>`;}).join('')+'</tr>';
+    +emps.map(e=>`<th style="padding:7px 9px;min-width:90px;border-left:3px solid var(--bd2)" title="사번: ${e.사번}"><span style="display:inline-block;padding:2px 8px;border-radius:20px;background:var(--bg);color:var(--tx2);font-weight:700">${e.이름}</span></th>`).join('')+'</tr>';
   if(!emps.length){
     body.innerHTML=`<tr><td colspan="3" style="text-align:center;padding:30px;color:var(--tx3);font-size:13px">해당 월에 재직 중인 인원이 없습니다.</td></tr>`;
     return;
