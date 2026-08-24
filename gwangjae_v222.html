@@ -2484,6 +2484,14 @@ function getAtt(empId,ds){
 }
 // 근로장려시간 대상일: 소정근로일(평일 gbn)이면서 금/토/일요일인 날 — 그 날의 기본근무시간(W, 소정 한도·연장·휴일 제외)만큼 산정
 function isGjDay(dow,gbn){return gbn==='평일'&&(dow==='금'||dow==='토'||dow==='일');}
+// 근로장려수당 시행월 — 2026년 8월부터 적용(그 이전 월 근태에는 소급 반영하지 않음)
+const GJ_START_YM='2026-08';
+// 근로장려 지급 대상 여부: 계약기간관리 직책이 "관리자"가 아니고, 귀속월이 시행월 이후일 것
+// ★ renderHrAtt/_calcEmpMonthTotals/_patchHrAttRow(월별 근태현황 화면)와 _calcSalRow(급여계산)가
+//   모두 이 함수 하나만 참조 — 한쪽만 고치면 화면마다 근로장려 표시가 어긋나는 사고를 방지
+function isGjEligible(emp,yr,mo){
+  return emp.직책구분!=='관리자'&&(yr+'-'+String(mo).padStart(2,'0'))>=GJ_START_YM;
+}
 // 근로장려 만근 판정: 그 달 모든 소정근로일(평일 gbn, 소정>0)에 결근 없이 출퇴근이 모두 기록되어야 함
 function isFullAttendanceMonth(empId,days){
   const workDays=days.filter(d=>d.gbn==='평일'&&typeof d.소정==='number'&&d.소정>0);
@@ -3398,9 +3406,9 @@ async function syncSomyungWorkflow(silent){
     const cleanName=v=>String(v||'').replace(/^@/,'').replace(/\([^)]*\)/g,'').replace(/\s/g,'').trim();
     const ck=yr+'_'+String(mo).padStart(2,'0');
     if(!_somyungData[ck])_somyungData[ck]=[];
-    let matched=0,skipped=0,already=0,notApproved=0,monthMismatch=0,noRequest=0,noNameOrDate=0;
+    let matched=0,skipped=0,already=0,notApproved=0,monthMismatch=0,noRequest=0,noNameOrDate=0,autoCreated=0;
     // 진단용: 각 스킵 사유별로 실제 행 내용을 최대 10건까지 기록 — 화면에서 원인을 바로 확인할 수 있게
-    const detail={notApproved:[],noNameOrDate:[],monthMismatch:[],skipped:[],noRequest:[],already:[]};
+    const detail={notApproved:[],noNameOrDate:[],monthMismatch:[],skipped:[],noRequest:[],already:[],autoCreated:[]};
     const pushDetail=(bucket,msg)=>{if(detail[bucket].length<10)detail[bucket].push(msg);};
     rows.forEach(row=>{
       const 승인처리=String(pick(row,['승인처리'])||'').trim();
@@ -3430,8 +3438,23 @@ async function syncSomyungWorkflow(silent){
       const empRow=nameMatched.find(e=>!e.퇴사||e.퇴사==='')||nameMatched[0];
       if(!empRow){skipped++;pushDetail('skipped',`${이름} ${dateStr} (직원 목록에서 이름 매칭 실패)`);return;}
       const eid=empRow.사번;
-      const items=_somyungData[ck].filter(x=>x.eid===eid&&x.date===dateStr);
-      if(!items.length){noRequest++;pushDetail('noRequest',`${이름}(${eid}) ${dateStr} (근태관리 확인사항에 해당 날짜 항목 없음)`);return;} // ★ 확인사항은 근태관리에서 HR이 직접 지정한 항목만 사용 — 없으면 새로 만들지 않고 건너뜀
+      let items=_somyungData[ck].filter(x=>x.eid===eid&&x.date===dateStr);
+      // ★ HR이 근태관리 확인사항에서 아직 지정하지 않은 날짜라도, 근로자가 소명신청서를 먼저
+      //   제출했으면 더 이상 건너뛰지 않고 제출 내용 기준으로 항목을 새로 만들어 소명관리에 노출한다.
+      //   (출/퇴근시간 제출 → 출근·퇴근 기록 없음류로, 연차/결근/지각 소명사유만 제출 → 그 사유를 그대로 확인사항으로 사용)
+      if(!items.length){
+        let autoType='';
+        if(출근시간&&퇴근시간)autoType='출근/퇴근 기록 없음';
+        else if(출근시간)autoType='출근 기록 없음';
+        else if(퇴근시간)autoType='퇴근 기록 없음';
+        else if(소명사유)autoType=소명사유;
+        if(!autoType){noRequest++;pushDetail('noRequest',`${이름}(${eid}) ${dateStr} (확인사항·소명사유·출퇴근시간이 모두 비어 있어 항목을 만들 수 없음)`);return;}
+        const newItem={eid,name:empRow.이름||이름,date:dateStr,type:autoType,status:'대기중',memo:''};
+        _somyungData[ck].push(newItem);
+        items=[newItem];
+        autoCreated++;
+        pushDetail('autoCreated',`${이름}(${eid}) ${dateStr} (확인사항="${autoType}")`);
+      }
       // 이미 인사담당자가 근태관리에서 적재해둔 항목 → 직원 작성 내용만 채움 (status/memo는 인사담당자가 직접 확정)
       // ★ 같은 날짜에 확인사항이 2건(출근 기록 없음/퇴근 기록 없음) 이상 있을 수 있으므로 매칭되는 항목 전체에 반영
       const toFill=items.filter(x=>!(x.workerNote&&x.workerType));
@@ -3448,10 +3471,10 @@ async function syncSomyungWorkflow(silent){
     if(matched>0)await saveAll();
     if(!silent){
       const detailText=Object.entries(detail).filter(([,v])=>v.length).map(([k,v])=>{
-        const label={notApproved:'승인 미완료',noNameOrDate:'이름/날짜 인식 실패',monthMismatch:'선택 월과 다른 날짜',skipped:'직원 매칭 실패',noRequest:'확인사항 미지정',already:'이미 연동됨'}[k];
+        const label={notApproved:'승인 미완료',noNameOrDate:'이름/날짜 인식 실패',monthMismatch:'선택 월과 다른 날짜',skipped:'직원 매칭 실패',noRequest:'확인사항 미지정',already:'이미 연동됨',autoCreated:'근로자 선제출(신규 생성)'}[k];
         return`\n[${label}]\n${v.join('\n')}`;
       }).join('\n');
-      alert(`✅ 근태소명 연동 완료! (기준: ${yr}년 ${mo}월, 시트 수신 ${rows.length}건)\n반영: ${matched}건${already?`\n이미 연동됨(건너뜀): ${already}건`:''}${skipped?`\n매칭 실패(직원/날짜 불일치): ${skipped}건`:''}${notApproved?`\n승인 미완료: ${notApproved}건`:''}${monthMismatch?`\n선택 월과 다른 날짜: ${monthMismatch}건`:''}${noRequest?`\n확인사항 미지정(연동 안 함): ${noRequest}건`:''}${noNameOrDate?`\n이름/날짜 인식 실패: ${noNameOrDate}건`:''}${detailText?`\n${detailText}`:''}\n\n근태소명관리 목록에서 직원 작성 내용을 확인 후 소명내용·완료 처리해주세요.`);
+      alert(`✅ 근태소명 연동 완료! (기준: ${yr}년 ${mo}월, 시트 수신 ${rows.length}건)\n반영: ${matched}건${autoCreated?`\n(그중 근로자 선제출로 신규 생성: ${autoCreated}건)`:''}${already?`\n이미 연동됨(건너뜀): ${already}건`:''}${skipped?`\n매칭 실패(직원/날짜 불일치): ${skipped}건`:''}${notApproved?`\n승인 미완료: ${notApproved}건`:''}${monthMismatch?`\n선택 월과 다른 날짜: ${monthMismatch}건`:''}${noRequest?`\n확인사항·소명사유 모두 비어 생성 불가: ${noRequest}건`:''}${noNameOrDate?`\n이름/날짜 인식 실패: ${noNameOrDate}건`:''}${detailText?`\n${detailText}`:''}\n\n근태소명관리 목록에서 직원 작성 내용을 확인 후 소명내용·완료 처리해주세요.`);
     }
   }catch(e){
     if(!silent)alert(`❌ 근태소명 연동 실패: ${e.message}`);
@@ -3677,7 +3700,7 @@ function renderHrAtt(){
       // 주휴시간 누적: (주 소정/40)*8, 시급직만 / 수기반영(day.주휴수기) 우선
       const juhyuH=day.gbn==='주휴일'?calcJuhyu(emp,day.date,day.주휴수기):0;
       mJH+=juhyuH;
-      const gjH=isGjDay(day.dow,day.gbn)?W:0;
+      const gjH=(isGjDay(day.dow,day.gbn)&&isGjEligible(emp,yr,mo))?W:0;
       mGJ+=gjH;
       const isM=att.source==='manual';
       const isSom=att.source==='somyung';
@@ -3880,7 +3903,7 @@ function _calcEmpMonthTotals(rowData){
     mX+=X;mY+=Y;mAA+=AA;mAB+=AB;
     if(day.연장승인==='승인'||day.연장인사==='승인')mApprove++;
     mJH+=day.gbn==='주휴일'?calcJuhyu(emp,day.date,day.주휴수기):0;
-    mGJ+=isGjDay(day.dow,day.gbn)?W:0;
+    mGJ+=(isGjDay(day.dow,day.gbn)&&isGjEligible(emp,yr,mo))?W:0;
   });
   return {mU,mV,mW,mX,mY,mAA,mAB,mJH,mGJ,mAN,mApprove};
 }
@@ -3915,7 +3938,7 @@ function _patchHrAttRow(eid,ds){
   const AA=day.수기AA!==undefined?day.수기AA:_AA0;
   const AB=day.수기AB!==undefined?day.수기AB:_AB0;
   const juhyuH=day.gbn==='주휴일'?calcJuhyu(emp,day.date,day.주휴수기):0;
-  const gjH=isGjDay(day.dow,day.gbn)?W:0;
+  const gjH=(isGjDay(day.dow,day.gbn)&&isGjEligible(emp,yr,mo))?W:0;
   const isM=att.source==='manual';
   const isSom=att.source==='somyung';
   const _baseCls=day.gbn==='주휴일'?'juhyu':day.gbn==='무급휴일'?'mugu':day.gbn==='공휴일'?'holiday':day.gbn==='계약기간 없음'?'we':'';
@@ -5324,7 +5347,7 @@ function _calcSalRow(row, yr, mo){
     // 기본근무시간(W) 누적 — 시급직 기본급 계산용
     if(day.gbn!=='주휴일')mW+=W;
     mY+=Y;mX+=X;mAA+=AA;mAB+=AB;mJH+=juhyuH;
-    mGJ+=isGjDay(day.dow,day.gbn)?W:0;
+    mGJ+=(isGjDay(day.dow,day.gbn)&&isGjEligible(emp,yr,mo))?W:0;
   });
 
   // ── 월급직 일할계산 공통 변수 (기본급·식대·직책수당·야간수당 공용)
@@ -5362,8 +5385,8 @@ function _calcSalRow(row, yr, mo){
   // ── 주휴수당 (시급직만, 주휴시간합계 * 통상시급)
   const 주휴수당=_ovr('주휴수당',emp.임금==='시급직'?mJH*r:0);
   // ── 근로장려수당 (금/토/일 소정근로시간 합계 × 2,000원, 그 달 만근 시에만 지급 — 결근·미출퇴근 기록 있으면 0)
-  // ★ 계약기간관리 직책 필드가 "관리자"인 인원은 지급 대상에서 제외(구성원만 지급)
-  const _fullAtt=isFullAttendanceMonth(emp.사번,days)&&emp.직책구분!=='관리자';
+  // ★ 관리자 제외·시행월(2026-08) 이전 소급 제외는 isGjEligible()에서 판정
+  const _fullAtt=isFullAttendanceMonth(emp.사번,days)&&isGjEligible(emp,yr,mo);
   const 근로장려시간=_fullAtt?mGJ:0;
   const 근로장려수당=_ovr('근로장려수당',_fullAtt?_ceilTo10(mGJ*2000):0);
   // ── 연장근로수당 (연장시간합계 * 통상시급 * 1.5)
