@@ -2929,7 +2929,7 @@ document.addEventListener('click',function(ev){
 // ============================================================
 // EMPLOYEE TABLE HEADERS (①)
 // ============================================================
-const EMP_COLS=['NO','계약구분','구분','채용경로','이름','사번','소속','입사일','퇴사일','임금구분','시급','기본급','식대','직책수당','야간근로수당','계약시작','계약종료','시업','종료','소정','휴게','월소정'];
+const EMP_COLS=['NO','계약구분','구분','채용경로','이름','사번','소속','직책','입사일','퇴사일','임금구분','시급','기본급','식대','직책수당','야간근로수당','계약시작','계약종료','시업','종료','소정','휴게','월소정'];
 function buildEmpHead(){
   document.getElementById('empHead').innerHTML=EMP_COLS.map((t,i)=>th(t,'empT',i,t==='월소정'?'c':'')).join('');
 }
@@ -3678,7 +3678,11 @@ function renderHrAtt(){
     return;
   }
   if(!document.getElementById('hrHead').children.length)buildHrHead();
-  const filtered=hrAttRows.filter(r=>!q||r.emp.이름.includes(q)||r.emp.사번.includes(q));
+  // ★ 계약기간관리 퇴사일 실시간 반영 — "인원 불러오기"를 다시 하지 않아도, 저장된 hrAttRows 중
+  //   선택월 기준으로 이미 퇴사한 인원은 화면에서 자동으로 제외한다(과거 담당자가 입력해둔
+  //   다른 인원의 근태 데이터/이력은 그대로 보존).
+  const monthSel=yr+'-'+String(mo).padStart(2,'0');
+  const filtered=hrAttRows.filter(r=>isVisibleInMonth(r.emp.사번,monthSel)&&(!q||r.emp.이름.includes(q)||r.emp.사번.includes(q)));
   let totalPay=0;
   let html='';
   filtered.forEach((row,ri)=>{
@@ -5509,8 +5513,9 @@ function renderSal(){
         return;
       }
     }
+    // ★ 계약기간관리 퇴사일 실시간 반영 — 선택월 기준으로 이미 퇴사한 인원은 "인원 불러오기" 없이도 제외
     baseList = hrAttRows
-      .filter(r=>contracts.some(c=>c.사번===r.emp.사번)) // 계약이 하나도 남아있지 않으면 제외
+      .filter(r=>isVisibleInMonth(r.emp.사번,yr+'-'+String(mo).padStart(2,'0')))
       .map(row=>_calcSalRow(row,yr,mo));
   }
 
@@ -5757,7 +5762,7 @@ function exportSalExcel(){
     }
     // 화면(renderSal)과 완전히 동일한 계산 함수(_calcSalRow)를 그대로 사용 — 화면·엑셀 값 불일치 방지
     rowDataList = hrAttRows
-      .filter(r=>contracts.some(c=>c.사번===r.emp.사번))
+      .filter(r=>isVisibleInMonth(r.emp.사번,yr+'-'+String(mo).padStart(2,'0')))
       .map(row=>_calcSalRow(row,yr,mo));
   }
   const wb=XLSX.utils.book_new();
@@ -7211,6 +7216,7 @@ function renderEmp(){
     const active=isActive(e.사번);
     const monCon=getConForMonth(e.사번,monthSel); // 선택월에 해당하는 계약(월소정 표시용)
     const monSojeong=monCon?(Number(monCon.소정)||m.월소정):m.월소정;
+    const monJikchaek=monCon?.직책구분||m.직책구분||'구성원'; // 선택 기간의 계약조건상 직책
     return`<tr${!active?' class="we"':''}>
     <td>${idx+1}</td>
     <td><span class="bdg ${e.gbu==='사업소득'?'bv':'bs'}" style="font-size:10px">${e.gbu}</span></td>
@@ -7219,6 +7225,7 @@ function renderEmp(){
     <td><strong>${e.이름}</strong></td>
     <td style="font-family:monospace;font-size:11px">${e.사번}</td>
     <td>${e.소속}</td>
+    <td><span class="bdg ${monJikchaek==='관리자'?'ba':'bb'}" style="font-size:10px">${monJikchaek}</span></td>
     <td style="font-size:11px">${e.입사}</td>
     <td style="font-size:11px;color:${quitDate?'var(--red)':'var(--tx3)'};font-weight:${quitDate?700:400}">${quitDate||'-'}</td>
     <td><span class="bdg ${m.임금==='월급직'?'bb':'bt'}" style="font-size:10px">${m.임금}</span></td>
