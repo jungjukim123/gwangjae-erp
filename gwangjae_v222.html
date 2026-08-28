@@ -707,6 +707,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <div class="swrap"><input type="text" class="sinp" id="luQ" placeholder="이름·사번" oninput="renderLeaveUsage()" onkeydown="if(event.key==='Enter'){renderLeaveUsage();this.blur();}" style="width:150px"></div>
       <button class="btn p" onclick="addLeaveUsageRow()">+ 사용 추가</button>
       <button class="btn p" onclick="saveAllLuPendRows()">✓ 전체 저장</button>
+      <button class="btn p" onclick="syncAllLeaveUsageToAtt()" title="수기입력된 연차/반차/결근 이력을 월별근태현황 비고에 반영">🔄 근태현황 반영</button>
       <label class="btn p" style="cursor:pointer">📂 엑셀 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="uploadLeaveUsageExcel(event)"></label>
       <button class="btn p" onclick="downloadLeaveUsageExcel()">⬇ 엑셀 다운로드</button>
       <button class="btn p" onclick="downloadLeaveUsageTemplate()">📋 엑셀 템플릿</button>
@@ -2340,7 +2341,7 @@ function getLeaveUsageRecords(empId){
     monthRows.forEach(r=>{
       if(!r.emp||r.emp.사번!==empId)return;
       r.days.forEach(d=>{
-        if(d.bigo==='연차'||d.bigo==='반차'||d.bigo==='결근')list.push({사번:empId,구분:d.bigo,사용일:d.date,source:'auto'});
+        if(d.bigo==='연차'||d.bigo==='반차'||d.bigo==='반반차'||d.bigo==='결근'||d.bigo==='공가')list.push({사번:empId,구분:d.bigo,사용일:d.date,source:'auto'});
         else if(d.bigo==='월차')list.push({사번:empId,구분:'연차',사용일:d.date,source:'auto'});
       });
     });
@@ -2532,6 +2533,8 @@ function cV(emp,ds,gbn,소정,i,o,U,bigo,juhyuOv,otApproved){
   if(bigo==='연차')return typeof 소정==='number'?소정:0;
   if(bigo==='월차'){const wk=getWeekSojeong(emp.사번,ds);return (wk/40)*8;}
   if(bigo==='반차'){const half=typeof 소정==='number'?소정/2:0;if(i!==null&&o!==null){const o24=o<=i?o+24:o,X2=o24>22?o24-22:0;const worked=o24<=24?Math.max(0,o24-i-U):Math.max(0,18-i-U-X2);return half+worked;}return half;}
+  if(bigo==='반반차'){const quarter=typeof 소정==='number'?소정/4:0;if(i!==null&&o!==null){const o24=o<=i?o+24:o,X2=o24>22?o24-22:0;const worked=o24<=24?Math.max(0,o24-i-U):Math.max(0,18-i-U-X2);return quarter+worked;}return quarter;}
+  if(bigo==='공가')return typeof 소정==='number'?소정:0;
   if(bigo==='결근')return 0;
   if(gbn==='주휴일'){
     // 주휴일에 실제 근무했으면 휴일근무(AA) 계산을 위해 실근무시간 반환
@@ -3741,7 +3744,7 @@ function renderHrAtt(){
         ${skTd(nFmt(r),HR_SK_WIDTHS[11],getLeft(11))}
         ${skTd(`<span style="font-size:11px">${conTimes.st||'-'}</span>`,HR_SK_WIDTHS[12],getLeft(12))}
         ${skTd(`<span style="font-size:11px">${conTimes.et||'-'}</span>`,HR_SK_WIDTHS[13],getLeft(13))}
-        ${(()=>{const _bigoContent=day.bigo?(day.bigo==='결근'?`<span class="bdg" style="font-size:9px;background:#F1F5F9;color:#475569;font-weight:700">${day.bigo}</span>`:`<span class="bdg" style="font-size:9px;background:#DCFCE7;color:#15803D;font-weight:700">${day.bigo}</span>`):'<span style="color:#ccc;font-size:11px">-</span>';const _bigoActions=!confirmed?`<div class="att-actions"><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','');">-</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','연차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">연차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','월차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">월차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','반차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">반차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','결근');" style="background:#FEE2E2;border-color:#FECACA;color:#991B1B;font-weight:700">결근</button></div>`:'';return`<td class="sk bigo-td${!confirmed?' att-cell':''}" style="left:${getLeft(14)}px;min-width:${HR_SK_WIDTHS[14]}px;max-width:${HR_SK_WIDTHS[14]}px;text-align:center;position:sticky"${!confirmed?` onclick="toggleCellMenu(this)"`:''}data-val="${day.bigo||''}">${_bigoContent}${_bigoActions}</td>`;})()}
+        ${(()=>{const _bigoColor={결근:['#F1F5F9','#475569'],반반차:['#EDE9FE','#6D28D9'],공가:['#DBEAFE','#1E40AF']};const _bc=_bigoColor[day.bigo]||['#DCFCE7','#15803D'];const _bigoContent=day.bigo?`<span class="bdg" style="font-size:9px;background:${_bc[0]};color:${_bc[1]};font-weight:700">${day.bigo}</span>`:'<span style="color:#ccc;font-size:11px">-</span>';const _bigoActions=!confirmed?`<div class="att-actions"><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','');">-</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','연차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">연차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','월차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">월차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','반차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">반차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','반반차');" style="background:#EDE9FE;border-color:#DDD6FE;color:#6D28D9;font-weight:700">반반차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','공가');" style="background:#DBEAFE;border-color:#BFDBFE;color:#1E40AF;font-weight:700">공가</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','결근');" style="background:#FEE2E2;border-color:#FECACA;color:#991B1B;font-weight:700">결근</button></div>`:'';return`<td class="sk bigo-td${!confirmed?' att-cell':''}" style="left:${getLeft(14)}px;min-width:${HR_SK_WIDTHS[14]}px;max-width:${HR_SK_WIDTHS[14]}px;text-align:center;position:sticky"${!confirmed?` onclick="toggleCellMenu(this)"`:''}data-val="${day.bigo||''}">${_bigoContent}${_bigoActions}</td>`;})()}
         <td class="sk att-cell" style="left:${getLeft(15)}px;min-width:${HR_SK_WIDTHS[15]}px;max-width:${HR_SK_WIDTHS[15]}px;text-align:center" ${!confirmed&&day.gbn!=='계약기간 없음'?`onclick="toggleCellMenu(this)"`:''}data-val="${day.gbn==='주휴일'||day.소정수기==='주휴'?'주휴':(typeof day.소정==='number'?day.소정:'-')}"><span style="${day.소정수기!==undefined&&day.소정수기!==''?'color:var(--orange);font-weight:700;':''}">${day.gbn==='주휴일'||day.소정수기==='주휴'?'<span class="bdg" style="font-size:9px;background:#FCE7F3;color:#BE185D">주휴</span>':typeof day.소정==='number'&&day.소정>=1?day.소정:typeof day.소정==='number'?day.소정:'-'}</span>${!confirmed&&day.gbn!=='계약기간 없음'?`<div class="att-actions"><button onclick="setSojeongManual('${emp.사번}','${day.date}')">수기입력</button>${day.소정수기!==undefined&&day.소정수기!==''?`<button class="rev" onclick="revertSojeong('${emp.사번}','${day.date}')">↩ 되돌리기</button>`:''}</div>`:''}</td>
         <td class="att-cell att-drag-cell" tabindex="0" data-eid="${emp.사번}" data-ds="${day.date}" data-field="in" onmousedown="attDragStart(event,this)" onmouseover="attDragOver(event,this)" data-val="${att.in||''}" style="font-size:12px;font-weight:700;color:${isSom?'#2563EB':'#1C2035'};text-align:center;border-top:1.5px solid #CDD1D9;border-bottom:1.5px solid #CDD1D9;border-left:2px solid #6B7280;border-right:1px solid #EDF0F7;background:${isM?'#FFF4EC':'#fff'}">${att.in||(day.gbn==='평일'||day.gbn==='공휴일'?'<span style="color:#aaa">-</span>':'-')}<div class="att-actions" onmousedown="event.stopPropagation()"><button class="std" onclick="setAttFromSched('${emp.사번}','${day.date}','in')">기준시간 반영</button><button onclick="setAttManual('${emp.사번}','${day.date}','in')">수기입력</button><button class="rev" onclick="revertAtt('${emp.사번}','${day.date}')">↩ 되돌리기</button></div></td>
         <td class="att-cell att-drag-cell" tabindex="0" data-eid="${emp.사번}" data-ds="${day.date}" data-field="out" onmousedown="attDragStart(event,this)" onmouseover="attDragOver(event,this)" data-val="${att.out||''}" style="font-size:12px;font-weight:700;color:${isSom?'#2563EB':'#1C2035'};text-align:center;border-top:1.5px solid #CDD1D9;border-bottom:1.5px solid #CDD1D9;border-left:1px solid #EDF0F7;border-right:2px solid #6B7280;background:${isM?'#FFF4EC':'#fff'}">${att.out||(day.gbn==='평일'||day.gbn==='공휴일'?'<span style="color:#aaa">-</span>':'-')}<div class="att-actions" onmousedown="event.stopPropagation()"><button class="std" onclick="setAttFromSched('${emp.사번}','${day.date}','out')">기준시간 반영</button><button onclick="setAttManual('${emp.사번}','${day.date}','out')">수기입력</button><button class="rev" onclick="revertAtt('${emp.사번}','${day.date}')">↩ 되돌리기</button></div></td>
@@ -4006,7 +4009,7 @@ function _patchHrAttRow(eid,ds){
     ${skTd(nFmt(r),HR_SK_WIDTHS[11],getLeft(11))}
     ${skTd(`<span style="font-size:11px">${conTimes.st||'-'}</span>`,HR_SK_WIDTHS[12],getLeft(12))}
     ${skTd(`<span style="font-size:11px">${conTimes.et||'-'}</span>`,HR_SK_WIDTHS[13],getLeft(13))}
-    ${(()=>{const _bigoContent=day.bigo?(day.bigo==='결근'?`<span class="bdg" style="font-size:9px;background:#F1F5F9;color:#475569;font-weight:700">${day.bigo}</span>`:`<span class="bdg" style="font-size:9px;background:#DCFCE7;color:#15803D;font-weight:700">${day.bigo}</span>`):'<span style="color:#ccc;font-size:11px">-</span>';const _bigoActions=!confirmed?`<div class="att-actions"><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','');">-</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','연차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">연차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','월차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">월차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','반차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">반차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','결근');" style="background:#FEE2E2;border-color:#FECACA;color:#991B1B;font-weight:700">결근</button></div>`:'';return`<td class="sk bigo-td${!confirmed?' att-cell':''}" style="left:${getLeft(14)}px;min-width:${HR_SK_WIDTHS[14]}px;max-width:${HR_SK_WIDTHS[14]}px;text-align:center;position:sticky"${!confirmed?` onclick="toggleCellMenu(this)"`:''}data-val="${day.bigo||''}">${_bigoContent}${_bigoActions}</td>`;})()}
+    ${(()=>{const _bigoColor={결근:['#F1F5F9','#475569'],반반차:['#EDE9FE','#6D28D9'],공가:['#DBEAFE','#1E40AF']};const _bc=_bigoColor[day.bigo]||['#DCFCE7','#15803D'];const _bigoContent=day.bigo?`<span class="bdg" style="font-size:9px;background:${_bc[0]};color:${_bc[1]};font-weight:700">${day.bigo}</span>`:'<span style="color:#ccc;font-size:11px">-</span>';const _bigoActions=!confirmed?`<div class="att-actions"><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','');">-</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','연차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">연차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','월차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">월차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','반차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">반차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','반반차');" style="background:#EDE9FE;border-color:#DDD6FE;color:#6D28D9;font-weight:700">반반차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','공가');" style="background:#DBEAFE;border-color:#BFDBFE;color:#1E40AF;font-weight:700">공가</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','결근');" style="background:#FEE2E2;border-color:#FECACA;color:#991B1B;font-weight:700">결근</button></div>`:'';return`<td class="sk bigo-td${!confirmed?' att-cell':''}" style="left:${getLeft(14)}px;min-width:${HR_SK_WIDTHS[14]}px;max-width:${HR_SK_WIDTHS[14]}px;text-align:center;position:sticky"${!confirmed?` onclick="toggleCellMenu(this)"`:''}data-val="${day.bigo||''}">${_bigoContent}${_bigoActions}</td>`;})()}
     <td class="sk att-cell" style="left:${getLeft(15)}px;min-width:${HR_SK_WIDTHS[15]}px;max-width:${HR_SK_WIDTHS[15]}px;text-align:center" ${!confirmed&&day.gbn!=='계약기간 없음'?`onclick="toggleCellMenu(this)"`:''}data-val="${day.gbn==='주휴일'||day.소정수기==='주휴'?'주휴':(typeof day.소정==='number'?day.소정:'-')}"><span style="${day.소정수기!==undefined&&day.소정수기!==''?'color:var(--orange);font-weight:700;':''}">${day.gbn==='주휴일'||day.소정수기==='주휴'?'<span class="bdg" style="font-size:9px;background:#FCE7F3;color:#BE185D">주휴</span>':typeof day.소정==='number'&&day.소정>=1?day.소정:typeof day.소정==='number'?day.소정:'-'}</span>${!confirmed&&day.gbn!=='계약기간 없음'?`<div class="att-actions"><button onclick="setSojeongManual('${emp.사번}','${day.date}')">수기입력</button>${day.소정수기!==undefined&&day.소정수기!==''?`<button class="rev" onclick="revertSojeong('${emp.사번}','${day.date}')">↩ 되돌리기</button>`:''}</div>`:''}</td>
     <td class="att-cell att-drag-cell" tabindex="0" data-eid="${emp.사번}" data-ds="${day.date}" data-field="in" onmousedown="attDragStart(event,this)" onmouseover="attDragOver(event,this)" data-val="${att.in||''}" style="font-size:12px;font-weight:700;color:${isSom?'#2563EB':'#1C2035'};text-align:center;border-top:1.5px solid #CDD1D9;border-bottom:1.5px solid #CDD1D9;border-left:2px solid #6B7280;border-right:1px solid #EDF0F7;background:${isM?'#FFF4EC':'#fff'}">${att.in||(day.gbn==='평일'||day.gbn==='공휴일'?'<span style="color:#aaa">-</span>':'-')}<div class="att-actions" onmousedown="event.stopPropagation()"><button class="std" onclick="setAttFromSched('${emp.사번}','${day.date}','in')">기준시간 반영</button><button onclick="setAttManual('${emp.사번}','${day.date}','in')">수기입력</button><button class="rev" onclick="revertAtt('${emp.사번}','${day.date}')">↩ 되돌리기</button></div></td>
     <td class="att-cell att-drag-cell" tabindex="0" data-eid="${emp.사번}" data-ds="${day.date}" data-field="out" onmousedown="attDragStart(event,this)" onmouseover="attDragOver(event,this)" data-val="${att.out||''}" style="font-size:12px;font-weight:700;color:${isSom?'#2563EB':'#1C2035'};text-align:center;border-top:1.5px solid #CDD1D9;border-bottom:1.5px solid #CDD1D9;border-left:1px solid #EDF0F7;border-right:2px solid #6B7280;background:${isM?'#FFF4EC':'#fff'}">${att.out||(day.gbn==='평일'||day.gbn==='공휴일'?'<span style="color:#aaa">-</span>':'-')}<div class="att-actions" onmousedown="event.stopPropagation()"><button class="std" onclick="setAttFromSched('${emp.사번}','${day.date}','out')">기준시간 반영</button><button onclick="setAttManual('${emp.사번}','${day.date}','out')">수기입력</button><button class="rev" onclick="revertAtt('${emp.사번}','${day.date}')">↩ 되돌리기</button></div></td>
@@ -7636,7 +7639,8 @@ function topEditSelectedCon(){
   startEditCon(_selectedConNo);
 }
 function topSaveSelectedCon(){
-  if(_editingConNo===null){alert('먼저 ✏ 수정 버튼으로 편집을 시작해주세요.');return;}
+  if(document.getElementById('conNewRow')){saveConRow();return;}
+  if(_editingConNo===null){alert('먼저 ✏ 수정 버튼으로 편집을 시작하거나, + 계약 추가로 신규 계약을 입력해주세요.');return;}
   saveEditCon(_editingConNo);
 }
 function topDeleteSelectedCon(){
@@ -7821,7 +7825,6 @@ function _insertConRow(){
       <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
         <span>NEW</span>
         <div style="display:flex;gap:2px">
-          <button class="btn sm p" onclick="saveConRow()" style="padding:2px 6px;font-size:10px;white-space:nowrap">✓</button>
           <button class="btn sm" onclick="cancelConRow()" style="padding:2px 6px;font-size:10px;white-space:nowrap">✕</button>
         </div>
       </div>
@@ -8608,6 +8611,45 @@ function luPendColumnPaste(idx,field,evt){
   });
   renderLeaveUsage();
 }
+// 연차사용현황(수기입력/엑셀업로드) 저장 시, 해당 날짜가 이미 월별근태현황에 불러와져 있으면
+// 그 날의 비고(day.bigo)에도 함께 반영해 급여계산(연차/반차/반반차/공가=유급, 결근=무급)에 실제로 반영되도록 한다.
+// (LU_GUBUN_LIST 5종 모두 cV/cSal에서 비고로 인식해 처리함)
+// ★ 월이 확정됐거나, 비고가 잠겨있거나, 이미 다른 비고가 입력돼 있으면 데이터 충돌을 막기 위해
+//   자동 덮어쓰지 않고 사유만 반환 — 기존 근태 데이터/확정 로직을 건드리지 않는다.
+function syncLeaveUsageToAtt(사번,사용일,구분){
+  if(!LU_GUBUN_LIST.includes(구분))return{ok:false,applicable:false};
+  const m=(사용일||'').match(/^(\d{4})-(\d{2})-\d{2}$/);
+  if(!m)return{ok:false,applicable:true,reason:'사용일 형식 오류'};
+  const yr=Number(m[1]),mo=Number(m[2]);
+  const monthRows=_hrRowsCache[yr+'_'+m[2]];
+  if(!monthRows)return{ok:false,applicable:true,reason:`${yr}년 ${mo}월 근태현황이 아직 없음(③ 근태관리에서 "인원 불러오기" 필요)`};
+  const row=monthRows.find(r=>r.emp&&r.emp.사번===사번);
+  if(!row)return{ok:false,applicable:true,reason:`${yr}년 ${mo}월 근태현황에 해당 인원이 없음`};
+  const day=row.days.find(d=>d.date===사용일);
+  if(!day)return{ok:false,applicable:true,reason:'해당 날짜를 근태현황에서 찾을 수 없음'};
+  if(_confirmState[getConfirmKey(yr,mo)])return{ok:false,applicable:true,reason:`${yr}년 ${mo}월 근태가 이미 확정되어 자동반영 불가(확정해제 후 가능)`};
+  if(day.bigo_locked)return{ok:false,applicable:true,reason:'해당 날짜 비고가 잠금 상태라 자동반영 불가'};
+  if(day.bigo&&day.bigo!==구분)return{ok:false,applicable:true,reason:`해당 날짜에 이미 다른 비고(${day.bigo})가 입력돼 있어 자동반영하지 않음`};
+  day.bigo=구분;
+  day.bigo_locked=false; // setDayBigo와 동일하게, 값이 채워지면 잠금 해제 상태로 맞춤
+  return{ok:true,applicable:true};
+}
+// 연차사용현황에 이미 저장된 모든 수기입력/엑셀업로드 이력을 한 번에 월별근태현황 비고에 반영
+// (이전에 저장했지만 아직 비고에 반영 안 된 이력까지 일괄 처리 — 새 이력은 저장 시 자동 반영됨)
+function syncAllLeaveUsageToAtt(){
+  if(!leaveUsage.length){alert('반영할 수기입력 연차사용 이력이 없습니다.');return;}
+  let ok=0;const failReasons=[];
+  leaveUsage.forEach(u=>{
+    const r=syncLeaveUsageToAtt(u.사번,u.사용일,u.구분);
+    if(r.ok)ok++;
+    else if(r.applicable)failReasons.push(`${u.사번} ${u.사용일}(${u.구분}) - ${r.reason}`);
+  });
+  saveAll();
+  renderHrAtt();
+  let msg=`✅ 근태현황 비고 반영 완료: ${ok}건`;
+  if(failReasons.length)msg+=`\n\n⚠️ 반영 안 됨 ${failReasons.length}건(필요 시 ③ 근태관리에서 직접 입력):\n`+failReasons.slice(0,20).join('\n')+(failReasons.length>20?`\n...외 ${failReasons.length-20}건`:'');
+  alert(msg);
+}
 function validateLuPendRow(p){
   if(!luPendMatchEmp(p.사번))return'사번 매칭 실패(계약기간관리에 없는 사번)';
   if(!p.사용일||!/^\d{4}-\d{2}-\d{2}$/.test(p.사용일))return'사용일 형식 오류(YYYY-MM-DD)';
@@ -8621,23 +8663,29 @@ function saveLuPendRow(idx){
   if(err){alert('저장할 수 없습니다: '+err);return;}
   const no=leaveUsage.reduce((a,b)=>Math.max(a,b.no||0),0)+1;
   leaveUsage.push({no,사번:p.사번,구분:p.구분,사용일:p.사용일,updated:new Date().toISOString()});
+  const sync=syncLeaveUsageToAtt(p.사번,p.사용일,p.구분);
   _luPendingRows.splice(idx,1);
   renderLeaveUsage();saveAll();
+  if(sync.applicable&&!sync.ok)alert(`✓ 연차사용현황에 저장했지만, 월별근태현황 비고에는 반영되지 않았습니다.\n사유: ${sync.reason}\n\n필요 시 ③ 근태관리 탭에서 해당 날짜 비고를 직접 입력해주세요.`);
 }
 function saveAllLuPendRows(){
   if(!_luPendingRows.length){alert('추가할 행이 없습니다. "+ 사용 추가" 버튼으로 행을 먼저 추가하세요.');return;}
   let maxNo=leaveUsage.reduce((a,b)=>Math.max(a,b.no||0),0);
-  const remain=[],fails=[];let added=0;
+  const remain=[],fails=[],syncFails=[];let added=0;
   _luPendingRows.forEach(p=>{
     const err=validateLuPendRow(p);
     if(err){remain.push(p);fails.push(`${p.사번||'(빈값)'} ${p.사용일||''} - ${err}`);return;}
     maxNo++;
     leaveUsage.push({no:maxNo,사번:p.사번,구분:p.구분,사용일:p.사용일,updated:new Date().toISOString()});
     added++;
+    const sync=syncLeaveUsageToAtt(p.사번,p.사용일,p.구분);
+    if(sync.applicable&&!sync.ok)syncFails.push(`${p.사번} ${p.사용일}(${p.구분}) - ${sync.reason}`);
   });
   _luPendingRows=remain;
   renderLeaveUsage();saveAll();
-  alert(`✅ 저장 완료: ${added}건${fails.length?`\n\n⚠ 저장 실패 ${fails.length}건(행 유지, 수정 후 재저장):\n`+fails.join('\n'):''}`);
+  let msg=`✅ 저장 완료: ${added}건${fails.length?`\n\n⚠ 저장 실패 ${fails.length}건(행 유지, 수정 후 재저장):\n`+fails.join('\n'):''}`;
+  if(syncFails.length)msg+=`\n\n⚠ 월별근태현황 비고 반영 안 됨 ${syncFails.length}건(필요 시 ③ 근태관리에서 직접 입력):\n`+syncFails.join('\n');
+  alert(msg);
 }
 function addLeaveUsageRow(){
   _luPendingRows.push({사번:'',구분:'연차',사용일:''});
@@ -8714,7 +8762,7 @@ function uploadLeaveUsageExcel(evt){
         if(typeof v==='number'){const dd=new Date(Math.round((v-25569)*86400*1000));const y=dd.getUTCFullYear(),m=String(dd.getUTCMonth()+1).padStart(2,'0'),d=String(dd.getUTCDate()).padStart(2,'0');return`${y}-${m}-${d}`;}
         return String(v).slice(0,10);
       };
-      let added=0,skipped=0;
+      let added=0,skipped=0;const syncFails=[];
       const dataRows=rows.slice(1).filter(r=>{const first=String(r[0]||'').trim();return first!==''&&!first.startsWith('※');});
       let maxNo=leaveUsage.reduce((a,b)=>Math.max(a,b.no||0),0);
       dataRows.forEach(row=>{
@@ -8726,9 +8774,13 @@ function uploadLeaveUsageExcel(evt){
         maxNo++;
         leaveUsage.push({no:maxNo,사번,구분,사용일,updated:new Date().toISOString()});
         added++;
+        const sync=syncLeaveUsageToAtt(사번,사용일,구분);
+        if(sync.applicable&&!sync.ok)syncFails.push(`${사번} ${사용일}(${구분}) - ${sync.reason}`);
       });
       renderLeaveUsage();saveAll();
-      alert(`✅ 엑셀 업로드 완료!\n추가: ${added}건 / 건너뜀: ${skipped}건`);
+      let msg=`✅ 엑셀 업로드 완료!\n추가: ${added}건 / 건너뜀: ${skipped}건`;
+      if(syncFails.length)msg+=`\n\n⚠ 월별근태현황 비고 반영 안 됨 ${syncFails.length}건(필요 시 ③ 근태관리에서 직접 입력):\n`+syncFails.slice(0,20).join('\n')+(syncFails.length>20?`\n...외 ${syncFails.length-20}건`:'');
+      alert(msg);
     }catch(err){
       alert('❌ 업로드 오류: '+err.message);
     }

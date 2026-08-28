@@ -1,0 +1,162 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>나의 근태현황</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#222;margin:0;padding:0}
+  .login-wrap{max-width:340px;margin:60px auto;padding:0 20px}
+  .login-wrap h2{text-align:center}
+  input{width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;box-sizing:border-box;font-size:15px}
+  button{width:100%;padding:12px;background:#2563EB;color:#fff;border:none;border-radius:6px;font-size:15px;font-weight:600;margin-top:8px;cursor:pointer}
+  button:disabled{opacity:.6;cursor:default}
+  .err{color:#DC2626;font-size:13px;text-align:center;margin-top:10px;min-height:16px}
+  .att-wrap{margin:16px;display:none}
+  .att-wrap h2{margin:0 0 4px}
+  .sub{color:#666;font-size:13px;margin-bottom:12px}
+  .f2{margin-bottom:12px}
+  .f2 select{padding:6px;margin-right:6px}
+  .f2 button{width:auto;padding:6px 14px;margin-top:0}
+  .wrap{overflow-x:auto;border:1px solid #eee;border-radius:8px}
+  table{border-collapse:collapse;font-size:11px;white-space:nowrap;width:100%}
+  th,td{border:1px solid #eee;padding:4px 8px;text-align:center}
+  th{background:#F3F4F6;position:sticky;top:0}
+  tr.total td{font-weight:700;background:#F9FAFB}
+  tr.juhyu td{background:#FEE2E2}
+  .notice{color:#999;font-size:12px;margin-top:10px}
+</style>
+</head>
+<body>
+
+<div id="loginView" class="login-wrap">
+  <h2>🔒 나의 근태현황</h2>
+  <form id="loginForm">
+    <input type="text" id="eid" placeholder="사번" required>
+    <input type="text" id="phone4" placeholder="휴대폰 번호 뒷자리 4자리" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" required>
+    <button type="submit" id="loginBtn">로그인</button>
+    <div class="err" id="loginErr"></div>
+  </form>
+</div>
+
+<div id="attView" class="att-wrap">
+  <h2 id="attTitle"></h2>
+  <div class="sub">본인만 조회 가능한 읽기전용 화면이며, 수정은 불가합니다.</div>
+  <form class="f2" id="queryForm">
+    <select id="yrSel"></select>
+    <select id="moSel"></select>
+    <button type="submit">조회</button>
+  </form>
+  <div class="wrap"><table><thead><tr id="attHead"></tr></thead><tbody id="attBody"></tbody></table></div>
+  <div class="notice">※ 월별 스케줄 등록으로 개별 조정된 날짜는 반영되지 않을 수 있습니다.</div>
+</div>
+
+<script>
+// ★ 근태연동 GAS(SomyungBtn.handleMyAttApi)를 JSONP로 호출합니다.
+//   Apps Script exec URL을 직접 열면 브라우저 서드파티 쿠키 차단으로 콘텐츠 iframe이
+//   로드되지 않는 문제가 있어, 이 페이지를 별도 정적 사이트로 분리하고
+//   <script> 태그(JSONP)로 데이터만 받아오는 방식으로 우회합니다.
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwhXhu8jaFHg4OTIdSHFV-jcWDwbTJpA3V-eAheXXCl1Gee0XRMm4bxSDM3gLZpopyTBA/exec';
+
+let _eid = '', _phone4 = '';
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function callApi(params, onDone){
+  const cb = '_myAtt_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+  const qs = Object.keys(params).map(k => k + '=' + encodeURIComponent(params[k])).join('&');
+  const s = document.createElement('script');
+  s.src = GAS_URL + '?action=my_att_api&callback=' + cb + '&' + qs;
+  let done = false;
+  window[cb] = (json) => {
+    if (done) return; done = true;
+    delete window[cb];
+    if (s.parentNode) s.parentNode.removeChild(s);
+    onDone(json);
+  };
+  s.onerror = () => {
+    if (done) return; done = true;
+    delete window[cb];
+    if (s.parentNode) s.parentNode.removeChild(s);
+    onDone({ ok:false, error:'서버에 연결할 수 없습니다.' });
+  };
+  setTimeout(() => {
+    if (done) return; done = true;
+    delete window[cb];
+    if (s.parentNode) s.parentNode.removeChild(s);
+    onDone({ ok:false, error:'응답 시간이 초과되었습니다.' });
+  }, 15000);
+  document.body.appendChild(s);
+}
+
+function renderTable(built){
+  const now = new Date();
+  document.getElementById('attTitle').textContent = '👤 ' + built.name + '님의 근태현황';
+
+  const yrSel = document.getElementById('yrSel');
+  yrSel.innerHTML = '';
+  for (let y = now.getFullYear() - 1; y <= now.getFullYear() + 1; y++) {
+    const opt = document.createElement('option');
+    opt.value = y; opt.textContent = y + '년';
+    if (y === built.yr) opt.selected = true;
+    yrSel.appendChild(opt);
+  }
+
+  const moSel = document.getElementById('moSel');
+  moSel.innerHTML = '';
+  for (let m = 1; m <= 12; m++) {
+    const opt = document.createElement('option');
+    opt.value = m; opt.textContent = m + '월';
+    if (m === built.mo) opt.selected = true;
+    moSel.appendChild(opt);
+  }
+
+  document.getElementById('attHead').innerHTML = built.header.map(h => '<th>' + esc(h) + '</th>').join('');
+  let rowsHtml = '';
+  built.rows.forEach(r => {
+    const cls = r[9] === '주휴' ? ' class="juhyu"' : '';
+    rowsHtml += '<tr' + cls + '><td>' + r.map(esc).join('</td><td>') + '</td></tr>';
+  });
+  rowsHtml += '<tr class="total"><td>' + built.totalRow.map(esc).join('</td><td>') + '</td></tr>';
+  document.getElementById('attBody').innerHTML = rowsHtml;
+
+  document.getElementById('loginView').style.display = 'none';
+  document.getElementById('attView').style.display = 'block';
+}
+
+function loadAtt(yr, mo){
+  const params = { eid:_eid, phone4:_phone4 };
+  if (yr) params.yr = yr;
+  if (mo) params.mo = mo;
+  callApi(params, (json) => {
+    if (json.ok) renderTable(json);
+    else alert(json.error || '조회 중 오류가 발생했습니다.');
+  });
+}
+
+document.getElementById('loginForm').addEventListener('submit', function(ev){
+  ev.preventDefault();
+  const eid = document.getElementById('eid').value.trim();
+  const phone4 = document.getElementById('phone4').value.trim();
+  const errEl = document.getElementById('loginErr');
+  const btn = document.getElementById('loginBtn');
+  errEl.textContent = '';
+  btn.disabled = true; btn.textContent = '확인 중...';
+  callApi({ eid:eid, phone4:phone4 }, (json) => {
+    btn.disabled = false; btn.textContent = '로그인';
+    if (json.ok) {
+      _eid = eid; _phone4 = phone4;
+      renderTable(json);
+    } else {
+      errEl.textContent = json.error || '로그인에 실패했습니다.';
+    }
+  });
+});
+
+document.getElementById('queryForm').addEventListener('submit', function(ev){
+  ev.preventDefault();
+  loadAtt(document.getElementById('yrSel').value, document.getElementById('moSel').value);
+});
+</script>
+</body>
+</html>
