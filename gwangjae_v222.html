@@ -2256,6 +2256,13 @@ function getConWageType(empId,ds){
   if(m.length)return m[0].임금||'시급직';
   const e=employees.find(x=>x.사번===empId);return e?.임금||'시급직';
 }
+// 사번의 직책구분(구성원/관리자)을 특정 날짜 시점 계약 기준으로 조회 — getConWageType과 동일 패턴
+// (월 중간에 구성원→관리자로 전환되는 경우, 그 날짜 이전/이후를 구분해 근로장려수당 대상 여부를 판정하기 위함)
+function getConJikchaek(empId,ds){
+  const m=contracts.filter(c=>c.사번===empId&&c.구분!=='퇴사'&&c.cs<=ds&&c.ce>=ds).sort((a,b)=>new Date(b.cs)-new Date(a.cs));
+  if(m.length)return m[0].직책구분||'구성원';
+  const e=employees.find(x=>x.사번===empId);return e?.직책구분||'구성원';
+}
 
 // 사번의 계약기간관리상 최종(가장 늦은) 계약 종료일 조회 — '퇴사' 구분 행은 제외
 function getLatestConEnd(empId){
@@ -3718,15 +3725,19 @@ function renderHrAtt(){
       // 주휴시간 누적: (주 소정/40)*8, 시급직만 / 수기반영(day.주휴수기) 우선
       const juhyuH=day.gbn==='주휴일'?calcJuhyu(emp,day.date,day.주휴수기):0;
       mJH+=juhyuH;
-      const gjH=(isGjDay(day.dow,day.gbn)&&isGjEligible(emp,yr,mo))?W:0;
+      // 월 중간에 구성원→관리자 전환 시, 근로장려 대상 여부는 그날 시점의 계약(직책구분) 기준으로 판정
+      const dayJikchaek=getConJikchaek(emp.사번,day.date);
+      const gjH=(isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:dayJikchaek},yr,mo))?W:0;
       mGJ+=gjH;
       const isM=att.source==='manual';
       const isSom=att.source==='somyung';
       const _baseCls=day.gbn==='주휴일'?'juhyu':day.gbn==='무급휴일'?'mugu':day.gbn==='공휴일'?'holiday':day.gbn==='계약기간 없음'?'we':'';
       const _cls=[_baseCls,confirmed?'att-locked':''].filter(Boolean).join(' ');
-      const trCls=_cls?` class="${_cls}"`:''; 
+      const trCls=_cls?` class="${_cls}"`:'';
       const gB=day.gbn==='주휴일'?'<span class="bdg" style="font-size:9px;background:#FCE7F3;color:#BE185D">주휴</span>':day.gbn==='무급휴일'?'<span class="bdg bs" style="font-size:9px">무급</span>':day.gbn==='공휴일'?'<span class="bdg br" style="font-size:9px">휴일</span>':day.gbn==='계약기간 없음'?'<span class="bdg br" style="font-size:9px">계약외</span>':'<span class="bdg bb" style="font-size:9px">평일</span>';
       const conTimes=getConTimes(emp.사번,day.date);
+      // 급여종(시급직/월급직) 표시도 그날 시점의 계약 기준으로 판정(월 중간 전환 반영)
+      const dayWage=getConWageType(emp.사번,day.date);
       // sticky cells
       function skTd(content,w,left,extra='',dataVal){return`<td class="sk${extra?(' '+extra):''}" style="left:${left}px;min-width:${w}px;max-width:${w}px;text-align:center"${dataVal!==undefined?` data-val="${dataVal}"`:''}>${content}</td>`}
       dHtml+=`<tr${trCls} data-att-eid="${emp.사번}" data-att-ds="${day.date}">
@@ -3735,7 +3746,7 @@ function renderHrAtt(){
         ${skTd(`<span style="font-size:10px">${String(mo).padStart(2,'0')}</span>`,HR_SK_WIDTHS[2],getLeft(2))}
         ${skTd(`<span style="font-family:monospace;font-size:10px">${emp.사번}</span>`,HR_SK_WIDTHS[3],getLeft(3))}
         ${skTd(emp.소속,HR_SK_WIDTHS[4],getLeft(4))}
-        ${skTd(emp.임금==='월급직'?'<span class="bdg bb" style="font-size:9px">월급</span>':'<span class="bdg bt" style="font-size:9px">시급</span>',HR_SK_WIDTHS[5],getLeft(5))}
+        ${skTd(dayWage==='월급직'?'<span class="bdg bb" style="font-size:9px">월급</span>':'<span class="bdg bt" style="font-size:9px">시급</span>',HR_SK_WIDTHS[5],getLeft(5))}
         ${skTd(`<strong>${emp.이름}</strong>`,HR_SK_WIDTHS[6],getLeft(6))}
         ${skTd(`<span style="font-size:9px">${day.date}</span>`,HR_SK_WIDTHS[7],getLeft(7))}
         ${skTd(day.dow,HR_SK_WIDTHS[8],getLeft(8))}
@@ -3921,7 +3932,7 @@ function _calcEmpMonthTotals(rowData){
     mX+=X;mY+=Y;mAA+=AA;mAB+=AB;
     if(day.연장승인==='승인'||day.연장인사==='승인')mApprove++;
     mJH+=day.gbn==='주휴일'?calcJuhyu(emp,day.date,day.주휴수기):0;
-    mGJ+=(isGjDay(day.dow,day.gbn)&&isGjEligible(emp,yr,mo))?W:0;
+    mGJ+=(isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:getConJikchaek(emp.사번,day.date)},yr,mo))?W:0;
   });
   return {mU,mV,mW,mX,mY,mAA,mAB,mJH,mGJ,mAN,mApprove};
 }
@@ -3956,7 +3967,9 @@ function _patchHrAttRow(eid,ds){
   const AA=day.수기AA!==undefined?day.수기AA:_AA0;
   const AB=day.수기AB!==undefined?day.수기AB:_AB0;
   const juhyuH=day.gbn==='주휴일'?calcJuhyu(emp,day.date,day.주휴수기):0;
-  const gjH=(isGjDay(day.dow,day.gbn)&&isGjEligible(emp,yr,mo))?W:0;
+  const dayJikchaek=getConJikchaek(emp.사번,day.date);
+  const gjH=(isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:dayJikchaek},yr,mo))?W:0;
+  const dayWage=getConWageType(emp.사번,day.date);
   const isM=att.source==='manual';
   const isSom=att.source==='somyung';
   const _baseCls=day.gbn==='주휴일'?'juhyu':day.gbn==='무급휴일'?'mugu':day.gbn==='공휴일'?'holiday':day.gbn==='계약기간 없음'?'we':'';
@@ -4000,7 +4013,7 @@ function _patchHrAttRow(eid,ds){
     ${skTd(`<span style="font-size:10px">${String(mo).padStart(2,'0')}</span>`,HR_SK_WIDTHS[2],getLeft(2))}
     ${skTd(`<span style="font-family:monospace;font-size:10px">${emp.사번}</span>`,HR_SK_WIDTHS[3],getLeft(3))}
     ${skTd(emp.소속,HR_SK_WIDTHS[4],getLeft(4))}
-    ${skTd(emp.임금==='월급직'?'<span class="bdg bb" style="font-size:9px">월급</span>':'<span class="bdg bt" style="font-size:9px">시급</span>',HR_SK_WIDTHS[5],getLeft(5))}
+    ${skTd(dayWage==='월급직'?'<span class="bdg bb" style="font-size:9px">월급</span>':'<span class="bdg bt" style="font-size:9px">시급</span>',HR_SK_WIDTHS[5],getLeft(5))}
     ${skTd(`<strong>${emp.이름}</strong>`,HR_SK_WIDTHS[6],getLeft(6))}
     ${skTd(`<span style="font-size:9px">${day.date}</span>`,HR_SK_WIDTHS[7],getLeft(7))}
     ${skTd(day.dow,HR_SK_WIDTHS[8],getLeft(8))}
@@ -5365,7 +5378,7 @@ function _calcSalRow(row, yr, mo){
     // 기본근무시간(W) 누적 — 시급직 기본급 계산용
     if(day.gbn!=='주휴일')mW+=W;
     mY+=Y;mX+=X;mAA+=AA;mAB+=AB;mJH+=juhyuH;
-    mGJ+=(isGjDay(day.dow,day.gbn)&&isGjEligible(emp,yr,mo))?W:0;
+    mGJ+=(isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:getConJikchaek(emp.사번,day.date)},yr,mo))?W:0;
   });
 
   // ── 월급직 일할계산 공통 변수 (기본급·식대·직책수당·야간수당 공용)
@@ -5403,8 +5416,9 @@ function _calcSalRow(row, yr, mo){
   // ── 주휴수당 (시급직만, 주휴시간합계 * 통상시급)
   const 주휴수당=_ovr('주휴수당',emp.임금==='시급직'?mJH*r:0);
   // ── 근로장려수당 (금/토/일 소정근로시간 합계 × 2,000원, 그 달 만근 시에만 지급 — 결근·미출퇴근 기록 있으면 0)
-  // ★ 관리자 제외·시행월(2026-08) 이전 소급 제외는 isGjEligible()에서 판정
-  const _fullAtt=isFullAttendanceMonth(emp.사번,days)&&isGjEligible(emp,yr,mo);
+  // ★ 관리자 제외는 mGJ 누적 시 날짜별 계약(직책구분) 기준 isGjEligible()에서 이미 판정됨(월 중간 구성원→관리자 전환 반영).
+  //   여기서는 만근 여부와 시행월(2026-08) 이후 여부만 게이트로 사용 — 관리자 여부까지 다시 걸면 승진 월의 재직기간분까지 0원 처리되는 문제가 생김.
+  const _fullAtt=isFullAttendanceMonth(emp.사번,days)&&(yr+'-'+String(mo).padStart(2,'0'))>=GJ_START_YM;
   const 근로장려시간=_fullAtt?mGJ:0;
   const 근로장려수당=_ovr('근로장려수당',_fullAtt?_ceilTo10(mGJ*2000):0);
   // ── 연장근로수당 (연장시간합계 * 통상시급 * 1.5)
@@ -7417,6 +7431,7 @@ async function sendContractToEsign(no){
     이름:c.이름, 사번:c.사번, 소속:c.소속,
     계약시작:c.cs, 계약종료:c.ce, 시업:c.st, 종료:c.et,
     소정:v(c.소정), 휴게:v(c.휴게), 시급:v(c.시급), 기본급:v(c.기본),
+    식대:v(c.식대), 직책수당:v(c.직책), 야간근로수당:v(c.야간),
     월:v(c.mon), 화:v(c.tue), 수:v(c.wed), 목:v(c.thu), 금:v(c.fri), 토:v(c.sat), 일:v(c.sun),
     퇴사일:v(c.퇴사),
     이메일:c.email, 전화:c.phone,
