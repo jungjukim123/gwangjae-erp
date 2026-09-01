@@ -3692,6 +3692,36 @@ function renderHrAtt(){
   //   선택월 기준으로 이미 퇴사한 인원은 화면에서 자동으로 제외한다(과거 담당자가 입력해둔
   //   다른 인원의 근태 데이터/이력은 그대로 보존).
   const monthSel=yr+'-'+String(mo).padStart(2,'0');
+  // ★ 계약기간관리 신규 인원 실시간 반영 — "인원 불러오기"를 다시 하지 않아도, 계약기간관리에서
+  //   새로 추가되어 이번 달에 재직중인 사번을 hrAttRows에 자동으로 추가한다(기존에 저장된
+  //   다른 인원의 근태 데이터/이력은 전혀 건드리지 않는다). 확정된 월은 변경하지 않는다.
+  if(!confirmed){
+    const existingIds=new Set(hrAttRows.map(r=>r.emp.사번));
+    const newHires=employees.filter(e=>e.사번&&!existingIds.has(e.사번)&&isVisibleInMonth(e.사번,monthSel));
+    if(newHires.length){
+      newHires.forEach(emp=>{
+        const days=[];
+        for(let d=1;d<=dim(yr,mo);d++){
+          const ds=dStr(yr,mo,d),sched=getSched(emp.사번,ds);
+          const sojeong=getSchedSojeong(emp.사번,ds);
+          let gbn,소정;
+          const afterQuit=emp.퇴사&&emp.퇴사!==''&&ds>emp.퇴사;
+          if(afterQuit){gbn='계약기간 없음';소정='계약기간 없음';}
+          else if(sched==='계약기간 없음'){gbn='계약기간 없음';소정='계약기간 없음';}
+          else if(sched==='주휴'||sojeong==='주휴'){gbn='주휴일';소정=0;}
+          else if(sched===0){gbn='무급휴일';소정=0;}
+          else{
+            if(isHoliday(ds)){gbn='공휴일';소정=typeof sojeong==='number'?sojeong:sched;}
+            else{gbn='평일';소정=typeof sojeong==='number'?sojeong:sched;}
+          }
+          days.push({date:ds,d,dow:DAYS[new Date(ds).getDay()],gbn,소정,bigo:'',확인:'',연장승인:'',연장인사:'',주휴수기:''});
+        }
+        hrAttRows.push({emp,yr,mo,days});
+      });
+      _hrRowsCache[selectedKey]=hrAttRows;
+      saveAll();
+    }
+  }
   const filtered=hrAttRows.filter(r=>isVisibleInMonth(r.emp.사번,monthSel)&&(!q||r.emp.이름.includes(q)||r.emp.사번.includes(q)));
   let totalPay=0;
   let html='';
@@ -7630,6 +7660,7 @@ function uploadConExcel(evt){
 
       syncContractsToEmployees();
       renderCon();saveAll();
+      if(typeof renderHrAtt==='function')renderHrAtt(); // 신규 인원을 월별 근태현황에 즉시 반영
       alert(`✅ 엑셀 업로드 완료!\n추가: ${added}건 / 건너뜀: ${skipped}건`);
     }catch(err){
       alert('❌ 업로드 오류: '+err.message);
@@ -8076,6 +8107,7 @@ function saveConRow(){
   }
   renderCon();
   saveAll();
+  if(typeof renderHrAtt==='function')renderHrAtt(); // 신규 인원을 월별 근태현황에 즉시 반영
   if(newCon.구분==='신규'){
     _sendSlackMsg(buildNewHireSlackText(newCon), HR_SHARE_SLACK_CHANNEL);
   }
