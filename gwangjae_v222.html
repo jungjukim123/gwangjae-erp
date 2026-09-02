@@ -2218,9 +2218,9 @@ function getLatestCon(empId){
     .sort((a,b)=>new Date(b.cs)-new Date(a.cs));
   return list[0]||null;
 }
-// employees + 최신 계약 합성
-function getMergedEmp(e){
-  const con=getLatestCon(e.사번);
+// employees + 특정 계약(con) 합성 — getMergedEmp(최신 계약)과 급여계산 구간별 합성(특정 날짜 계약)이
+// 동일한 필드 매핑 규칙을 공유하도록 분리 (한쪽만 고치면 화면마다 값이 달라지는 사고 방지)
+function mergeEmpWithCon(e,con){
   if(!con)return e;
   return{
     ...e,
@@ -2241,7 +2241,10 @@ function getMergedEmp(e){
     월소정: e.월소정||209,
   };
 }
-function rate(e){const m=getMergedEmp(e);return m.임금==='시급직'?m.시급:((m.기본||0)+(m.식대||0)+(m.직책||0))/(m.월소정||209)}
+// employees + 최신 계약 합성
+function getMergedEmp(e){return mergeEmpWithCon(e,getLatestCon(e.사번));}
+function rateOf(m){return m.임금==='시급직'?m.시급:((m.기본||0)+(m.식대||0)+(m.직책||0))/(m.월소정||209)}
+function rate(e){return rateOf(getMergedEmp(e));}
 
 // ============================================================
 // 연차현황 / 연차사용현황 — 계산 헬퍼
@@ -2267,6 +2270,13 @@ function getConJikchaek(empId,ds){
   const m=contracts.filter(c=>c.사번===empId&&c.구분!=='퇴사'&&c.cs<=ds&&c.ce>=ds).sort((a,b)=>new Date(b.cs)-new Date(a.cs));
   if(m.length)return m[0].직책구분||'구성원';
   const e=employees.find(x=>x.사번===empId);return e?.직책구분||'구성원';
+}
+// 특정 날짜(ds) 시점에 적용되는 계약 원본 행 조회 — getConWageType/getConJikchaek과 동일 패턴이지만
+// 필드 하나가 아니라 계약 레코드 전체(기본·식대·직책·야간·시급 등)가 필요할 때 사용
+// (월 중간 시급직↔월급직 전환 시 구간별 기본급/식대 계산에 사용 — _calcSalRow 참고)
+function getConOnDate(empId,ds){
+  const m=contracts.filter(c=>c.사번===empId&&c.구분!=='퇴사'&&c.cs<=ds&&c.ce>=ds).sort((a,b)=>new Date(b.cs)-new Date(a.cs));
+  return m[0]||null;
 }
 
 // 사번의 계약기간관리상 최종(가장 늦은) 계약 종료일 조회 — '퇴사' 구분 행은 제외
@@ -5432,6 +5442,7 @@ function _calcSalRow(row, yr, mo){
   const _ovr=(field,calc)=>{const m=getSalManual(emp.사번,yr,mo,field);return m!==undefined?m:calc;};
   // 근태 집계
   let mW=0,mY=0,mX=0,mAA=0,mAB=0,mJH=0,mGJ=0;
+  const _dayW=new Map(); // date -> 기본근무시간(W) — 월 중간 시급/월급 전환 시 구간별 기본급 계산용
   days.forEach(day=>{
     const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
     const otApproved=day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무';
@@ -5451,6 +5462,7 @@ function _calcSalRow(row, yr, mo){
     const AB=day.수기AB!==undefined?day.수기AB:_AB0;
     const juhyuH=day.gbn==='주휴일'?calcJuhyu(emp,day.date,day.주휴수기):0;
     // 기본근무시간(W) 누적 — 시급직 기본급 계산용
+    _dayW.set(day.date,W);
     if(day.gbn!=='주휴일')mW+=W;
     mY+=Y;mX+=X;mAA+=AA;mAB+=AB;mJH+=juhyuH;
     mGJ+=(isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:getConJikchaek(emp.사번,day.date)},yr,mo))?W:0;
@@ -5478,10 +5490,41 @@ function _calcSalRow(row, yr, mo){
     const numer=Math.max(0,_tD-_gyeolgeunCnt);
     return c10(원액*numer/_tD);
   }
-  // ── 기본급 (시급직: 기본근무시간*통상시급 / 월급직: 일할계산)
-  const 기본급=_ovr('기본급',emp.임금==='시급직'?mW*r:_ilhalCeil(emp.기본||0));
-  // ── 식대 (시급직 없음, 월급직: 일할계산)
-  const 식대=_ovr('식대',emp.임금==='시급직'?0:_ilhalCeil(emp.식대||0));
+  // ── 기본급/식대: 월 중간에 시급직↔월급직으로 전환된 경우, 계약 구간별로 나눠 정확히 계산
+  //    (시급 구간: 그 구간 실제 근무시간 합계×그 구간 시급 / 월급 구간: 그 구간 기준급여×그 구간
+  //    재직일수(결근 제외)/그 달 총일수). 한 달 내내 계약이 하나뿐인 일반적인 경우엔 이 분기를 타지
+  //    않고 기존 방식(_ilhalCeil) 그대로 계산되어 결과가 달라지지 않는다.
+  const _activeDays=days.filter(d=>d.gbn!=='계약기간 없음');
+  const _wageSwitched=new Set(_activeDays.map(d=>getConWageType(emp.사번,d.date))).size>1;
+  let 기본급,식대;
+  if(_wageSwitched){
+    const _segMap=new Map();
+    _activeDays.forEach(day=>{
+      const con=getConOnDate(emp.사번,day.date);
+      if(!_segMap.has(con))_segMap.set(con,{con,days:[]});
+      _segMap.get(con).days.push(day);
+    });
+    let _baseSum=0,_foodSum=0;
+    _segMap.forEach(({con,days:segDays})=>{
+      const mCon=mergeEmpWithCon(_emp,con);
+      if(mCon.임금==='시급직'){
+        const segRate=rateOf(mCon);
+        const segW=segDays.reduce((s,d)=>s+(_dayW.get(d.date)||0),0);
+        _baseSum+=segW*segRate;
+      }else{
+        const segCnt=segDays.filter(d=>d.bigo!=='결근').length;
+        _baseSum+=(mCon.기본||0)*segCnt/_tD;
+        _foodSum+=(mCon.식대||0)*segCnt/_tD;
+      }
+    });
+    기본급=_ovr('기본급',_ceilTo10(_baseSum));
+    식대=_ovr('식대',_ceilTo10(_foodSum));
+  }else{
+    // ── 기본급 (시급직: 기본근무시간*통상시급 / 월급직: 일할계산)
+    기본급=_ovr('기본급',emp.임금==='시급직'?mW*r:_ilhalCeil(emp.기본||0));
+    // ── 식대 (시급직 없음, 월급직: 일할계산)
+    식대=_ovr('식대',emp.임금==='시급직'?0:_ilhalCeil(emp.식대||0));
+  }
   // ── 직책수당 (계약기간관리 직책 필드 / 월급직은 일할계산 적용)
   const 직책수당=_ovr('직책수당',_ilhalCeil(emp.직책||0));
   // ── 야간근로수당: 계약기간관리 야간(고정, 월급직은 일할계산) vs 근태 산출값(mX*시급*0.5) 중 큰 값
