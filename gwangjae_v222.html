@@ -1697,7 +1697,14 @@ function onHrMonthChange() {
 async function saveAll() {
   // ★ 저장 시작 즉시 타임스탬프 갱신 — Supabase upsert 완료 전에 Realtime 이벤트가
   //    먼저 도착해 _onRealtimeChange를 통과하고 renderHrAtt를 재호출하는 현상 차단
+  // ★ _saveInFlightCount: "저장 시작 후 2초"라는 고정 시간만으로는, hr_saved처럼 큰 데이터를
+  //   올리는 저장이 2초를 넘기면 그 사이 도착한 실시간 이벤트를 "외부 변경"으로 오인해
+  //   loadSaved()가 방금 저장한 내용을 되돌려버리는 사고가 있었다(예: 근태연동 직후 며칠치
+  //   데이터가 반영됐다가 실시간 동기화로 사라지는 문제). 저장이 실제로 끝날 때까지는
+  //   시간과 무관하게 무시하도록, 진행 중인 saveAll 호출 수를 센다(동시에 여러 번 호출돼도
+  //   전부 끝나야 0이 됨).
   _lastSaveTs = Date.now();
+  _saveInFlightCount++;
   try {
     const _now = _kstNow();
     const _ATT_BUILD_RE = /^([A-Z][0-9]+)_(\d{4}-\d{2}-\d{2})$/;
@@ -1864,6 +1871,7 @@ async function saveAll() {
     _setDbStatus(ok ? 'ok' : 'error', ok ? `저장 완료 ${t}` : '로컬에만 저장됨');
     return ok;
   } catch(e) { console.warn('saveAll 오류:', e); return false; }
+  finally { _saveInFlightCount--; }
 }
 
 // ============================================================
@@ -2004,9 +2012,11 @@ function _stopRealtime() {
 
 let _realtimeDebounce = null;
 let _lastSaveTs = 0; // 자기 저장 이벤트 무시용 — saveAll 완료 시각 기록
+let _saveInFlightCount = 0; // 진행 중인 saveAll 호출 수 — 0보다 크면 저장이 아직 안 끝난 것
 function _onRealtimeChange(msg) {
-  // 자기 자신의 saveAll이 유발한 이벤트는 무시 (2000ms 이내)
-  if (Date.now() - _lastSaveTs < 2000) return;
+  // 자기 자신의 saveAll이 유발한 이벤트는 무시 — 저장이 아직 진행 중이면(시간과 무관) 항상 무시,
+  // 끝난 뒤에도 2000ms 동안은 여유를 두고 무시한다.
+  if (_saveInFlightCount > 0 || Date.now() - _lastSaveTs < 2000) return;
   // 500ms 디바운스 — 연속 변경 시 한번만 리로드
   clearTimeout(_realtimeDebounce);
   _realtimeDebounce = setTimeout(async () => {
