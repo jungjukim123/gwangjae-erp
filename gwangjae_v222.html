@@ -2511,8 +2511,10 @@ function isFullAttendanceWeek(empId,ds){
 }
 // 주휴시간 계산: (주 소정근로시간 / 40) * 8, 시급직만, 그 주 개근 시에만
 // override: 수기반영 값이 있으면 개근 여부와 무관하게 그 값 사용
+// ★ 급여종은 emp(최신 계약 기준 병합값)가 아니라 주휴일(ds) 시점의 계약기간관리 기준으로 판정 —
+//   월 중간에 시급직↔월급직 전환되는 경우 전환 전/후 주휴일을 정확히 구분하기 위함
 function calcJuhyu(emp,ds,override){
-  if(emp.임금!=='시급직')return 0;
+  if(getConWageType(emp.사번,ds)!=='시급직')return 0;
   if(override!==undefined&&override!==null&&override!=='')return Number(override)||0;
   if(!isFullAttendanceWeek(emp.사번,ds))return 0; // 개근 못하면 주휴 없음
   const week=getWeekSojeong(emp.사번,ds);
@@ -2615,8 +2617,11 @@ function cSal(emp,ds,gbn,소정,W,X,Y,Z,AA,AB,bigo,yr,mo,juhyuOv){
   const AG=r*Z*0.5;
   // 주휴수당(AH): 시급직 주휴일이면 개근 여부와 무관하게 주휴시간만큼 지급
   // (주휴일에 실제 근무했어도 주휴수당은 별도 발생)
+  // ★ 급여종 판정은 calcJuhyu 내부에서 이미 그 주휴일(ds) 시점 기준으로 정확히 처리하므로,
+  //   여기서 emp.임금(최신 계약 기준 병합값)으로 다시 게이트하면 월 중간 시급↔월급 전환 시
+  //   시급직 기간의 주휴수당까지 0으로 막아버리는 문제가 생겨 별도 게이트를 두지 않는다.
   const juhyuH=gbn==='주휴일'?calcJuhyu(emp,ds,juhyuOv):0;
-  const AH=emp.임금==='시급직'&&gbn==='주휴일'?juhyuH*r:0;
+  const AH=juhyuH*r;
   const AI=AA*r*1.5,AJ=AB*r*0.5;
   return{AD,AE,AF,AG,AH,AI,AJ,AN:AD+AE+AF+AG+AH+AI+AJ};
 }
@@ -3885,13 +3890,18 @@ function renderHrAtt(){
     // 합계행 — 말일 아래, sticky 15개 + 비sticky 합산값
     function gskTd(c,w,left,extra=''){return`<td class="sk ghd${extra?(' '+extra):''}" style="left:${left}px;min-width:${w}px;max-width:${w}px">${c}</td>`}
     html+=dHtml;
+    // ★ 급여종 배지는 emp(최신 계약 기준 병합값)가 아니라, 조회 중인 그 달의 마지막 재직일 기준
+    //   계약기간관리 값으로 판정 — 월 중간에 시급직↔월급직 전환된 경우 "합계"행이 조회월과 무관하게
+    //   가장 최근(미래) 계약의 급여종으로 표시되던 문제 방지
+    const _lastActiveDay=[...days].reverse().find(d=>d.gbn!=='계약기간 없음');
+    const _summaryWage=_lastActiveDay?getConWageType(emp.사번,_lastActiveDay.date):emp.임금;
     html+=`<tr class="ghd" data-ghd-eid="${emp.사번}" style="text-align:center">
       ${gskTd(ri+1,                                    HR_SK_WIDTHS[0], getLeft(0),' c')}
       ${gskTd(yr,                                      HR_SK_WIDTHS[1], getLeft(1),' c')}
       ${gskTd(String(mo).padStart(2,'0'),              HR_SK_WIDTHS[2], getLeft(2),' c')}
       ${gskTd(emp.사번,                                HR_SK_WIDTHS[3], getLeft(3),' c')}
       ${gskTd(emp.소속,                                HR_SK_WIDTHS[4], getLeft(4),' c')}
-      ${gskTd(emp.임금==='월급직'?'<span class="bdg bb" style="font-size:9px">월급</span>':'<span class="bdg bt" style="font-size:9px">시급</span>', HR_SK_WIDTHS[5], getLeft(5),' c')}
+      ${gskTd(_summaryWage==='월급직'?'<span class="bdg bb" style="font-size:9px">월급</span>':'<span class="bdg bt" style="font-size:9px">시급</span>', HR_SK_WIDTHS[5], getLeft(5),' c')}
       ${gskTd(`<strong>${emp.이름}</strong>`,          HR_SK_WIDTHS[6], getLeft(6),' c')}
       ${gskTd('',                                      HR_SK_WIDTHS[7], getLeft(7),' c')}
       ${gskTd('',                                      HR_SK_WIDTHS[8], getLeft(8),' c')}
@@ -5413,6 +5423,11 @@ function _calcSalRow(row, yr, mo){
   const{emp:_emp,days}=row;
   const emp=getMergedEmp(_emp);
   const r=rate(emp);
+  // ★ 급여종 표시값은 emp.임금(최신 계약 기준 병합값)이 아니라 조회 중인 그 달의 마지막 재직일
+  //   기준 계약기간관리 값으로 판정 — 월 중간/이후 시급↔월급 전환 시 과거월 조회에서도
+  //   "지금" 급여종이 아니라 "그 달" 급여종이 표시되게 함 (renderHrAtt 합계행과 동일 패턴)
+  const _lastActiveDay=[...days].reverse().find(d=>d.gbn!=='계약기간 없음');
+  const _displayWage=_lastActiveDay?getConWageType(emp.사번,_lastActiveDay.date):emp.임금;
   // 급여계산 셀 수기 오버라이드 — "수정된 값이 항상 우선 적용"
   const _ovr=(field,calc)=>{const m=getSalManual(emp.사번,yr,mo,field);return m!==undefined?m:calc;};
   // 근태 집계
@@ -5474,7 +5489,9 @@ function _calcSalRow(row, yr, mo){
   const 야간산출=mX*r*0.5;
   const 야간수당=_ovr('야간수당',야간정액>=야간산출?야간정액:야간산출);
   // ── 주휴수당 (시급직만, 주휴시간합계 * 통상시급)
-  const 주휴수당=_ovr('주휴수당',emp.임금==='시급직'?mJH*r:0);
+  // ★ mJH는 이미 calcJuhyu 내부에서 각 주휴일(day.date) 시점 기준 급여종으로 게이트되어 있으므로
+  //   (월 중간 시급↔월급 전환 시에도 정확) 여기서 emp.임금(최신 계약 기준)으로 다시 게이트하지 않는다.
+  const 주휴수당=_ovr('주휴수당',mJH*r);
   // ── 근로장려수당 (금/토/일 소정근로시간 합계 × 2,000원, 그 달 만근 시에만 지급 — 결근·미출퇴근 기록 있으면 0)
   // ★ 관리자 제외는 mGJ 누적 시 날짜별 계약(직책구분) 기준 isGjEligible()에서 이미 판정됨(월 중간 구성원→관리자 전환 반영).
   //   여기서는 만근 여부와 시행월(2026-08) 이후 여부만 게이트로 사용 — 관리자 여부까지 다시 걸면 승진 월의 재직기간분까지 0원 처리되는 문제가 생김.
@@ -5552,7 +5569,7 @@ function _calcSalRow(row, yr, mo){
   const _표시퇴사=(emp.퇴사&&emp.퇴사<=_monthLast)?emp.퇴사:'';
 
   return {
-    사번:emp.사번, 소속:emp.소속, 임금:emp.임금, 이름:emp.이름, 입사:emp.입사, 퇴사:_표시퇴사,
+    사번:emp.사번, 소속:emp.소속, 임금:_displayWage, 이름:emp.이름, 입사:emp.입사, 퇴사:_표시퇴사,
     mW,mJH,mY,mX,mAA,mAB,
     근로장려시간,
     기본급,식대,직책수당,야간수당,주휴수당,근로장려수당,연장수당,휴일수당,휴일연장,
