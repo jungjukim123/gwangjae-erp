@@ -1164,6 +1164,12 @@ const KR_HOLIDAYS=new Set([
 ]);
 function isHoliday(ds){return KR_HOLIDAYS.has(ds);}
 function isWeekend(ds){const d=new Date(ds).getDay();return d===0||d===6;}
+// 주 소정근로시간이 15시간 미만인 초단시간근로자는 근로기준법상 유급휴일(공휴일) 특례가
+// 적용되지 않으므로, 그 날짜가 공휴일이어도 평일로 취급한다.
+function isPaidHolidayFor(empId,ds){
+  if(!isHoliday(ds))return false;
+  return getWeekSojeong(empId,ds)>=15;
+}
 let employees=[];
 let contracts=[];
 let otRequests=[],attRequests=[],attData={},hrAttRows=[],currentRole='emp',currentEmpId='';
@@ -1550,7 +1556,7 @@ function _applyData(data) {
         else if (sched === '주휴' || sojeong === '주휴') { gbn = '주휴일'; 소정 = 0; }
         else if (sched === 0) { gbn = '무급휴일'; 소정 = 0; }
         else {
-          gbn = isHoliday(ds) ? '공휴일' : '평일';
+          gbn = isPaidHolidayFor(emp.사번, ds) ? '공휴일' : '평일';
           소정 = typeof sojeong === 'number' ? sojeong : sched;
         }
         // ★ 월별 스케줄 등록(sched_saved) override — contracts 기본값보다 우선, gbn수기보다 낮음
@@ -1559,7 +1565,7 @@ function _applyData(data) {
           if (_sov.state === '주휴일')       { gbn = '주휴일';  소정 = 0; }
           else if (_sov.state === '무급휴일') { gbn = '무급휴일'; 소정 = 0; }
           else if (_sov.state === '평일근무') {
-            gbn = isHoliday(ds) ? '공휴일' : '평일';
+            gbn = isPaidHolidayFor(emp.사번, ds) ? '공휴일' : '평일';
             소정 = typeof sojeong === 'number' ? sojeong : (typeof sched === 'number' ? sched : 0);
           }
         }
@@ -1579,7 +1585,7 @@ function _applyData(data) {
           } else if (Number(sd.소정수기) === 0) {
             _gbn = '무급휴일';
           } else if (Number(sd.소정수기) > 0) {
-            _gbn = isHoliday(ds) ? '공휴일' : '평일';
+            _gbn = isPaidHolidayFor(emp.사번, ds) ? '공휴일' : '평일';
           }
         }
         rebuilt.push({
@@ -3096,8 +3102,8 @@ function loadEmpIntoAtt(){if(isMonthConfirmed()){alert("확정된 월은 인원�
       else if(sched==='주휴'||sojeong==='주휴'){gbn='주휴일';소정=0;}
       else if(sched===0){gbn='무급휴일';소정=0;}
       else{
-        // 한국 공휴일이면 '공휴일' (주말 공휴일 포함)
-        if(isHoliday(ds)){gbn='공휴일';소정=typeof sojeong==='number'?sojeong:sched;}
+        // 한국 공휴일이면 '공휴일' (주말 공휴일 포함) — 단, 주 소정근로시간 15시간 미만이면 평일 취급
+        if(isPaidHolidayFor(emp.사번,ds)){gbn='공휴일';소정=typeof sojeong==='number'?sojeong:sched;}
         else{gbn='평일';소정=typeof sojeong==='number'?sojeong:sched;}
       }
       days.push({date:ds,d,dow:DAYS[new Date(ds).getDay()],gbn,소정,bigo:'',확인:'',연장승인:'',연장인사:'',주휴수기:''});
@@ -3795,7 +3801,7 @@ function renderHrAtt(){
           else if(sched==='주휴'||sojeong==='주휴'){gbn='주휴일';소정=0;}
           else if(sched===0){gbn='무급휴일';소정=0;}
           else{
-            if(isHoliday(ds)){gbn='공휴일';소정=typeof sojeong==='number'?sojeong:sched;}
+            if(isPaidHolidayFor(emp.사번,ds)){gbn='공휴일';소정=typeof sojeong==='number'?sojeong:sched;}
             else{gbn='평일';소정=typeof sojeong==='number'?sojeong:sched;}
           }
           days.push({date:ds,d,dow:DAYS[new Date(ds).getDay()],gbn,소정,bigo:'',확인:'',연장승인:'',연장인사:'',주휴수기:''});
@@ -6191,7 +6197,7 @@ function setSojeongInline(eid,ds,v){
     d.소정=0;d.소정수기='주휴';d.gbn='주휴일';d.gbn수기='주휴일';
   }else if(!isNaN(Number(t))){
     const n=Number(t);d.소정=n;d.소정수기=n;
-    d.gbn=n>0?(isHoliday(ds)?'공휴일':'평일'):'무급휴일';
+    d.gbn=n>0?(isPaidHolidayFor(eid,ds)?'공휴일':'평일'):'무급휴일';
     d.gbn수기=d.gbn;
   }else{return;}
   _patchHrAttRow(eid,ds);saveAll();
@@ -6248,7 +6254,7 @@ function setSojeongManual(eid,ds){if(isMonthConfirmed()){alert("확정된 월은
     d.소정=newSojeong;
     d.소정수기=newSojeong;
     if(newSojeong>0){
-      d.gbn=isHoliday(ds)?'공휴일':'평일';
+      d.gbn=isPaidHolidayFor(eid,ds)?'공휴일':'평일';
     }else{
       d.gbn='무급휴일';
     }
@@ -9528,7 +9534,7 @@ function _applySchedOvToHrRows(empId,ds,state){
     if(state==='주휴일'){day.gbn='주휴일';day.소정=0;}
     else if(state==='무급휴일'){day.gbn='무급휴일';day.소정=0;}
     else if(state==='평일근무'){
-      day.gbn=isHoliday(ds)?'공휴일':'평일';
+      day.gbn=isPaidHolidayFor(empId,ds)?'공휴일':'평일';
       day.소정=typeof sojeong==='number'?sojeong:(typeof sched==='number'?sched:0);
     }
   });
