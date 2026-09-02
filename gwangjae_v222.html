@@ -903,8 +903,12 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
 // LOGIN & ACCOUNT SYSTEM
 // ============================================================
 const ACC_KEY = 'gwangjae_accounts_v1';
+// ★ 보안: 이 저장소는 Public GitHub 저장소이므로 실제 로그인 가능한 비밀번호를 여기 하드코딩하지 않는다.
+//   평소에는 Supabase(meta.accounts)에 저장된 실제 계정 목록을 쓰므로 이 기본값은 영향이 없고,
+//   Supabase에 jungjukim 계정이 전혀 없는 아주 예외적인 경우에만 fallback으로 쓰인다 —
+//   그 경우 pw가 없어 로그인이 막히므로, Supabase 대시보드에서 meta.accounts에 직접 계정을 등록해야 한다.
 const DEFAULT_ACCOUNTS = [
-  {id:'jungjukim', pw:'ju12345!', role:'hr', name:'관리자', info:'HR팀 · 시스템관리자', av:'관'},
+  {id:'jungjukim', pw:null, role:'hr', name:'관리자', info:'HR팀 · 시스템관리자', av:'관'},
 ];
 
 /* 계정 읽기: 로컬 캐시 우선 */
@@ -931,7 +935,8 @@ function doLogin(){
   const id=document.getElementById('loginId').value.trim();
   const pw=document.getElementById('loginPw').value;
   const err=document.getElementById('loginErr');
-  const acc=getAccounts().find(a=>a.id===id&&a.pw===pw);
+  // ★ id/pw가 비어있으면(예: pw:null인 기본계정) 절대 매칭되지 않도록 방어
+  const acc=(id&&pw)?getAccounts().find(a=>a.id===id&&a.pw===pw):null;
   if(!acc){
     err.style.display='block';
     document.getElementById('loginPw').value='';
@@ -2458,6 +2463,11 @@ function isFullAttendanceWeek(empId,ds){
     const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');
     weekDates.push(`${y}-${m}-${dd}`);
   }
+  // ★ 입사 첫 주(계약기간관리 기준 입사일이 이 주 안에 있는 경우)는 소정근로일을
+  //   온전히 채운 것이 아니므로 주휴 미발생 — 입사한 달, 입사 전 요일은 소정근로일에서
+  //   빠져 "근무예정일 전부 출근"으로 잘못 판정되는 것을 방지
+  const joinDate=getJoinDate(empId);
+  if(joinDate&&joinDate>weekDates[0])return false;
   // ★ 월초 주휴일은 직전 7일이 전월로 걸쳐서, 이번 달 데이터만 든 row.days에는 그 날짜가 없어
   //   근무예정일이 항상 0건으로 잡히던 문제 — 전월이 이미 저장돼 멀티월 캐시(_hrRowsCache)에
   //   있으면 그쪽에서 마저 찾는다(loadEmpIntoAtt 등에서 전월 근태를 이미 불러온 적 있어야 함).
