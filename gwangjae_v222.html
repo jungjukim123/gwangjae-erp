@@ -1203,13 +1203,25 @@ let _realtimeChannel = null;
 // Supabase 통신 레이어
 // ============================================================
 
-/* 단일 테이블 전체 조회 */
+/* 단일 테이블 전체 조회 — 페이지네이션으로 5000행 넘는 테이블도 전부 가져온다.
+   ★ 예전엔 limit=5000 한 번만 요청해서, slack_data처럼 계속 쌓이는 테이블이 5000행을
+   넘기면 그 뒤 행(대체로 최근에 추가된 행)이 조회할 때마다 통째로 잘려나가 사라지는
+   문제가 있었다(예: 근태연동으로 방금 반영한 데이터가 새로고침/재로그인 후 사라짐). */
 async function _sbSelect(table, params='') {
-  const res = await fetch(`${SB_URL}/rest/v1/${table}?${params}&limit=5000`, {
-    headers: { ...SB_HDR, 'Range-Unit':'items' }
-  });
-  if (!res.ok) throw new Error(`SELECT ${table} 실패: ${res.status}`);
-  return res.json();
+  const PAGE = 1000;
+  let all = [];
+  let offset = 0;
+  while (true) {
+    const res = await fetch(`${SB_URL}/rest/v1/${table}?${params}&limit=${PAGE}&offset=${offset}`, {
+      headers: { ...SB_HDR, 'Range-Unit':'items' }
+    });
+    if (!res.ok) throw new Error(`SELECT ${table} 실패: ${res.status}`);
+    const rows = await res.json();
+    all = all.concat(rows);
+    if (rows.length < PAGE) break;
+    offset += PAGE;
+  }
+  return all;
 }
 
 /* upsert (insert or update) — key 기반 */
