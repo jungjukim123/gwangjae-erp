@@ -2278,6 +2278,14 @@ function getConOnDate(empId,ds){
   const m=contracts.filter(c=>c.사번===empId&&c.구분!=='퇴사'&&c.cs<=ds&&c.ce>=ds).sort((a,b)=>new Date(b.cs)-new Date(a.cs));
   return m[0]||null;
 }
+// 사번의 통상시급을 특정 날짜 시점 계약 기준으로 조회 — getConWageType과 동일 패턴
+// (월 중간 시급↔월급 전환 시, "통상시급" 표시가 최신 계약 하나로 고정되지 않고 그 날짜의
+// 실제 계약 기준으로 나오게 함)
+function getConRate(empId,ds){
+  const e=employees.find(x=>x.사번===empId);
+  if(!e)return 0;
+  return rateOf(mergeEmpWithCon(e,getConOnDate(empId,ds)));
+}
 
 // 사번의 계약기간관리상 최종(가장 늦은) 계약 종료일 조회 — '퇴사' 구분 행은 제외
 function getLatestConEnd(empId){
@@ -2614,7 +2622,11 @@ function cY(gbn,V,소정,확인){
 function cAA(i,o,U,X,gbn){if(i===null||o===null)return 0;if(gbn!=='휴일'&&gbn!=='주휴일'&&gbn!=='무급휴일'&&gbn!=='공휴일')return 0;if(gbn==='무급휴일')return 0;const o24=o<=i?o+24:o;if(o24<=24)return Math.max(0,o24-i-U);return Math.max(0,18-i-U-X);}
 function cAB(AA){return Math.max(0,AA-8)}
 function cSal(emp,ds,gbn,소정,W,X,Y,Z,AA,AB,bigo,yr,mo,juhyuOv){
-  const r=rate(emp),tD=dim(yr,mo);
+  // ★ 호출자가 넘긴 emp가 "최신 계약" 기준으로 병합된 값이어도, 여기서 다시 그 날짜(ds) 시점의
+  //   계약으로 재병합한다 — 월 중간 시급↔월급 전환 시 날짜별로 정확한 임금/기본/식대/시급을 쓰기
+  //   위함 (renderHrAtt/exportExcel/_calcEmpMonthTotals 등 이 함수를 쓰는 모든 화면에 자동 반영)
+  emp=mergeEmpWithCon(emp,getConOnDate(emp.사번,ds));
+  const r=rateOf(emp),tD=dim(yr,mo);
   const dB=emp.임금==='월급직'?(emp.기본||0)/tD:0;
   const dM=emp.임금==='월급직'?(emp.식대||0)/tD:0;
   let AD=0;
@@ -3661,7 +3673,8 @@ function exportExcel(){
   const hdr=['NO','귀속년도','귀속월','사번','소속','급여종','이름','입사일','퇴사일','확인사항','사유','일자','요일','구분','통상시급','비고','대체일','소정근로','S출근','T퇴근','U휴게','V총근무','W기본','X야간','Y연장','Z야간2','AA휴일','AB휴일연장','','AD기본급','AE식대','AF연장','AG야간','AH주휴','AI휴일','AJ휴일연장','AK소급','AL기타','AM연차','AN합계'];
   const data=[hdr];
   hrAttRows.forEach((row,ri)=>{
-    const{emp,yr:y,mo:m,days}=row;
+    const{emp:_emp,yr:y,mo:m,days}=row;
+    const emp=getMergedEmp(_emp); // ★ 최신 계약 합성 — renderHrAtt와 동일하게 맞춰 cSal 계산이 화면과 일치하게 함
     days.forEach(day=>{
       const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
       const otApp=(day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무');
@@ -3678,7 +3691,11 @@ function exportExcel(){
       const AA=day.수기AA!==undefined?day.수기AA:_AA0;
       const AB=day.수기AB!==undefined?day.수기AB:_AB0;
       const Z=X,sal=cSal(emp,day.date,day.gbn,day.소정,W,X,Y,Z,AA,AB,day.bigo,y,m,day.주휴수기);
-      data.push([ri+1,y,m,emp.사번,emp.소속,emp.임금,emp.이름,emp.입사,emp.퇴사||'',day.확인,day.bigo,day.date,day.dow,day.gbn,Math.round(rate(emp)),day.bigo,'',typeof day.소정==='number'?day.소정:day.소정,att.in||'',att.out||'',U,V,W,X,Y,Z,AA,AB,'',Math.round(sal.AD),Math.round(sal.AE),Math.round(sal.AF),Math.round(sal.AG),Math.round(sal.AH),Math.round(sal.AI),Math.round(sal.AJ),0,0,0,Math.round(sal.AN)]);
+      // ★ 급여종/통상시급은 emp(최신 계약 병합값)가 아니라 그 날짜(day.date) 시점의 계약기간관리
+      //   기준으로 조회 — 월 중간 시급↔월급 전환 시에도 화면(renderHrAtt)과 동일하게 표시됨
+      const dayWage=getConWageType(emp.사번,day.date);
+      const dayRate=getConRate(emp.사번,day.date);
+      data.push([ri+1,y,m,emp.사번,emp.소속,dayWage,emp.이름,emp.입사,emp.퇴사||'',day.확인,day.bigo,day.date,day.dow,day.gbn,Math.round(dayRate),day.bigo,'',typeof day.소정==='number'?day.소정:day.소정,att.in||'',att.out||'',U,V,W,X,Y,Z,AA,AB,'',Math.round(sal.AD),Math.round(sal.AE),Math.round(sal.AF),Math.round(sal.AG),Math.round(sal.AH),Math.round(sal.AI),Math.round(sal.AJ),0,0,0,Math.round(sal.AN)]);
     });
   });
   const ws=XLSX.utils.aoa_to_sheet(data);
@@ -3827,7 +3844,7 @@ function renderHrAtt(){
         ${skTd(day.dow,HR_SK_WIDTHS[8],getLeft(8))}
         ${skTd(`<div style="cursor:${!confirmed&&day.gbn!=='계약기간 없음'?'pointer':'default'}"${!confirmed&&day.gbn!=='계약기간 없음'?` onclick="toggleGbnMenu(this,'${emp.사번}','${day.date}')"`:''}>${gB}</div>`,HR_SK_WIDTHS[9],getLeft(9))}
         ${skTd(`<div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer" onclick="toggleOtInsaMenu(this,'${emp.사번}','${day.date}')">${day.연장승인==='승인'?'<span class="bdg" style="font-size:9px;background:#FFF4EC;color:#E07B2A;font-weight:700">승인</span>':''}${day.연장인사==='승인'?'<span class="bdg" style="font-size:9px;background:#FEF9C3;color:#92400E;font-weight:700">승인(인사)</span>':''}${(!day.연장승인&&!day.연장인사)?'<span style="color:#ccc;font-size:10px">-</span>':''}</div>`,HR_SK_WIDTHS[10],getLeft(10))}
-        ${skTd(nFmt(r),HR_SK_WIDTHS[11],getLeft(11))}
+        ${skTd(nFmt(getConRate(emp.사번,day.date)),HR_SK_WIDTHS[11],getLeft(11))}
         ${skTd(`<span style="font-size:11px">${conTimes.st||'-'}</span>`,HR_SK_WIDTHS[12],getLeft(12))}
         ${skTd(`<span style="font-size:11px">${conTimes.et||'-'}</span>`,HR_SK_WIDTHS[13],getLeft(13))}
         ${(()=>{const _bigoColor={결근:['#F1F5F9','#475569'],반반차:['#EDE9FE','#6D28D9'],공가:['#DBEAFE','#1E40AF']};const _bc=_bigoColor[day.bigo]||['#DCFCE7','#15803D'];const _bigoContent=day.bigo?`<span class="bdg" style="font-size:9px;background:${_bc[0]};color:${_bc[1]};font-weight:700">${day.bigo}</span>`:'<span style="color:#ccc;font-size:11px">-</span>';const _bigoActions=!confirmed?`<div class="att-actions"><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','');">-</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','연차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">연차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','월차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">월차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','반차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">반차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','반반차');" style="background:#EDE9FE;border-color:#DDD6FE;color:#6D28D9;font-weight:700">반반차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','공가');" style="background:#DBEAFE;border-color:#BFDBFE;color:#1E40AF;font-weight:700">공가</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','결근');" style="background:#FEE2E2;border-color:#FECACA;color:#991B1B;font-weight:700">결근</button></div>`:'';return`<td class="sk bigo-td${!confirmed?' att-cell':''}" style="left:${getLeft(14)}px;min-width:${HR_SK_WIDTHS[14]}px;max-width:${HR_SK_WIDTHS[14]}px;text-align:center;position:sticky"${!confirmed?` onclick="toggleCellMenu(this)"`:''}data-val="${day.bigo||''}">${_bigoContent}${_bigoActions}</td>`;})()}
@@ -4099,7 +4116,7 @@ function _patchHrAttRow(eid,ds){
     ${skTd(day.dow,HR_SK_WIDTHS[8],getLeft(8))}
     ${skTd(`<div style="cursor:${!confirmed&&day.gbn!=='계약기간 없음'?'pointer':'default'}"${!confirmed&&day.gbn!=='계약기간 없음'?` onclick="toggleGbnMenu(this,'${emp.사번}','${day.date}')"`:''}>${gB}</div>`,HR_SK_WIDTHS[9],getLeft(9))}
     ${skTd(`<div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer" onclick="toggleOtInsaMenu(this,'${emp.사번}','${day.date}')">${day.연장승인==='승인'?'<span class="bdg" style="font-size:9px;background:#FFF4EC;color:#E07B2A;font-weight:700">승인</span>':''}${day.연장인사==='승인'?'<span class="bdg" style="font-size:9px;background:#FEF9C3;color:#92400E;font-weight:700">승인(인사)</span>':''}${(!day.연장승인&&!day.연장인사)?'<span style="color:#ccc;font-size:10px">-</span>':''}</div>`,HR_SK_WIDTHS[10],getLeft(10))}
-    ${skTd(nFmt(r),HR_SK_WIDTHS[11],getLeft(11))}
+    ${skTd(nFmt(getConRate(emp.사번,day.date)),HR_SK_WIDTHS[11],getLeft(11))}
     ${skTd(`<span style="font-size:11px">${conTimes.st||'-'}</span>`,HR_SK_WIDTHS[12],getLeft(12))}
     ${skTd(`<span style="font-size:11px">${conTimes.et||'-'}</span>`,HR_SK_WIDTHS[13],getLeft(13))}
     ${(()=>{const _bigoColor={결근:['#F1F5F9','#475569'],반반차:['#EDE9FE','#6D28D9'],공가:['#DBEAFE','#1E40AF']};const _bc=_bigoColor[day.bigo]||['#DCFCE7','#15803D'];const _bigoContent=day.bigo?`<span class="bdg" style="font-size:9px;background:${_bc[0]};color:${_bc[1]};font-weight:700">${day.bigo}</span>`:'<span style="color:#ccc;font-size:11px">-</span>';const _bigoActions=!confirmed?`<div class="att-actions"><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','');">-</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','연차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">연차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','월차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">월차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','반차');" style="background:#DCFCE7;border-color:#BBF7D0;color:#15803D;font-weight:700">반차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','반반차');" style="background:#EDE9FE;border-color:#DDD6FE;color:#6D28D9;font-weight:700">반반차</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','공가');" style="background:#DBEAFE;border-color:#BFDBFE;color:#1E40AF;font-weight:700">공가</button><button onclick="event.stopPropagation();setBigoVal('${emp.사번}','${day.date}','결근');" style="background:#FEE2E2;border-color:#FECACA;color:#991B1B;font-weight:700">결근</button></div>`:'';return`<td class="sk bigo-td${!confirmed?' att-cell':''}" style="left:${getLeft(14)}px;min-width:${HR_SK_WIDTHS[14]}px;max-width:${HR_SK_WIDTHS[14]}px;text-align:center;position:sticky"${!confirmed?` onclick="toggleCellMenu(this)"`:''}data-val="${day.bigo||''}">${_bigoContent}${_bigoActions}</td>`;})()}
@@ -4443,11 +4460,14 @@ function renderSalCfg(){
     // 계약기간관리에서 입사일/퇴사일 가져오기
     const 입사일=getJoinDate(e.사번)||'';
     const 퇴사일=getQuitDate(e.사번)||'';
+    // ★ 급여종 배지는 emp.임금(최신 계약)이 아니라 조회 중인 그 달 말일 기준으로 판정 —
+    //   월 중간/이후 시급↔월급 전환 시에도 과거월 조회 시 그 달 급여종이 표시되게 함
+    const _cfgWage=getConWageType(e.사번,dStr(yr,mo,dim(yr,mo)));
     return`<tr>
       <td class="c" style="font-size:11px" data-val="${idx+1}">${idx+1}</td>
       <td class="c" style="font-family:monospace;font-size:11px" data-val="${e.사번}">${e.사번}</td>
       <td class="c" style="font-size:11px" data-val="${emp.소속}">${emp.소속}</td>
-      <td class="c" data-val="${emp.임금}">${emp.임금==='월급직'?'<span class="bdg bb" style="font-size:9px">월급</span>':'<span class="bdg bt" style="font-size:9px">시급</span>'}</td>
+      <td class="c" data-val="${_cfgWage}">${_cfgWage==='월급직'?'<span class="bdg bb" style="font-size:9px">월급</span>':'<span class="bdg bt" style="font-size:9px">시급</span>'}</td>
       <td class="c" data-val="${e.이름}"><strong>${e.이름}</strong></td>
       <td class="c" style="font-size:11px" data-val="${입사일}">${입사일||'<span style="color:var(--tx3)">-</span>'}</td>
       <td class="c" style="font-size:11px;color:${퇴사일?'var(--red)':'var(--tx3)'}" data-val="${퇴사일}">${퇴사일||'-'}</td>
@@ -5442,6 +5462,11 @@ function _calcSalRow(row, yr, mo){
   const _ovr=(field,calc)=>{const m=getSalManual(emp.사번,yr,mo,field);return m!==undefined?m:calc;};
   // 근태 집계
   let mW=0,mY=0,mX=0,mAA=0,mAB=0,mJH=0,mGJ=0;
+  // ★ 연장/야간/휴일/휴일연장/주휴 "금액"은 시간 합계에 마지막에 단일 시급을 곱하지 않고,
+  //   그날그날의 계약기간관리 기준 시급(getConRate)으로 그 자리에서 바로 누적한다 — 월 중간
+  //   시급↔월급 전환 시에도 각 시점의 실제 시급으로 정확히 계산되게 함. 시간 합계(mY 등)는
+  //   화면 표시용으로 그대로 유지.
+  let mYPay=0,mAAPay=0,mABPay=0,mJHPay=0,mXPay=0;
   const _dayW=new Map(); // date -> 기본근무시간(W) — 월 중간 시급/월급 전환 시 구간별 기본급 계산용
   days.forEach(day=>{
     const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
@@ -5465,6 +5490,8 @@ function _calcSalRow(row, yr, mo){
     _dayW.set(day.date,W);
     if(day.gbn!=='주휴일')mW+=W;
     mY+=Y;mX+=X;mAA+=AA;mAB+=AB;mJH+=juhyuH;
+    const dayRate=getConRate(emp.사번,day.date);
+    mYPay+=Y*dayRate;mAAPay+=AA*dayRate;mABPay+=AB*dayRate;mJHPay+=juhyuH*dayRate;mXPay+=X*dayRate;
     mGJ+=(isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:getConJikchaek(emp.사번,day.date)},yr,mo))?W:0;
   });
 
@@ -5527,26 +5554,25 @@ function _calcSalRow(row, yr, mo){
   }
   // ── 직책수당 (계약기간관리 직책 필드 / 월급직은 일할계산 적용)
   const 직책수당=_ovr('직책수당',_ilhalCeil(emp.직책||0));
-  // ── 야간근로수당: 계약기간관리 야간(고정, 월급직은 일할계산) vs 근태 산출값(mX*시급*0.5) 중 큰 값
+  // ── 야간근로수당: 계약기간관리 야간(고정, 월급직은 일할계산) vs 근태 산출값(mXPay*0.5) 중 큰 값
+  //    ★ mXPay는 날짜별 시급으로 이미 누적된 금액이라 월 중간 시급↔월급 전환에도 정확
   const 야간정액=_ilhalCeil(emp.야간||0);
-  const 야간산출=mX*r*0.5;
+  const 야간산출=mXPay*0.5;
   const 야간수당=_ovr('야간수당',야간정액>=야간산출?야간정액:야간산출);
-  // ── 주휴수당 (시급직만, 주휴시간합계 * 통상시급)
-  // ★ mJH는 이미 calcJuhyu 내부에서 각 주휴일(day.date) 시점 기준 급여종으로 게이트되어 있으므로
-  //   (월 중간 시급↔월급 전환 시에도 정확) 여기서 emp.임금(최신 계약 기준)으로 다시 게이트하지 않는다.
-  const 주휴수당=_ovr('주휴수당',mJH*r);
+  // ── 주휴수당 (시급직만, 주휴시간 × 그 주휴일 시점 시급 — 날짜별로 이미 누적된 금액)
+  const 주휴수당=_ovr('주휴수당',mJHPay);
   // ── 근로장려수당 (금/토/일 소정근로시간 합계 × 2,000원, 그 달 만근 시에만 지급 — 결근·미출퇴근 기록 있으면 0)
   // ★ 관리자 제외는 mGJ 누적 시 날짜별 계약(직책구분) 기준 isGjEligible()에서 이미 판정됨(월 중간 구성원→관리자 전환 반영).
   //   여기서는 만근 여부와 시행월(2026-08) 이후 여부만 게이트로 사용 — 관리자 여부까지 다시 걸면 승진 월의 재직기간분까지 0원 처리되는 문제가 생김.
   const _fullAtt=isFullAttendanceMonth(emp.사번,days)&&(yr+'-'+String(mo).padStart(2,'0'))>=GJ_START_YM;
   const 근로장려시간=_fullAtt?mGJ:0;
   const 근로장려수당=_ovr('근로장려수당',_fullAtt?_ceilTo10(mGJ*2000):0);
-  // ── 연장근로수당 (연장시간합계 * 통상시급 * 1.5)
-  const 연장수당=_ovr('연장수당',mY*r*1.5);
-  // ── 휴일근로수당 (휴일시간합계 * 통상시급 * 1.5)
-  const 휴일수당=_ovr('휴일수당',mAA*r*1.5);
-  // ── 휴일연장근로수당 (8시간 초과분 가산 0.5배 — 8시간 이내분 1.5배는 휴일수당(mAA*r*1.5)에 이미 포함됨)
-  const 휴일연장=_ovr('휴일연장',mAB*r*0.5);
+  // ── 연장근로수당 (연장시간 × 그날 시점 시급 × 1.5, 날짜별로 이미 누적된 금액)
+  const 연장수당=_ovr('연장수당',mYPay*1.5);
+  // ── 휴일근로수당 (휴일시간 × 그날 시점 시급 × 1.5, 날짜별로 이미 누적된 금액)
+  const 휴일수당=_ovr('휴일수당',mAAPay*1.5);
+  // ── 휴일연장근로수당 (8시간 초과분 가산 0.5배 — 8시간 이내분 1.5배는 휴일수당에 이미 포함됨)
+  const 휴일연장=_ovr('휴일연장',mABPay*0.5);
   // ── 기타수당·소급
   const extra=getSalExtra(emp.사번,yr,mo);
   const 기타=extra.기타||0;
