@@ -3701,7 +3701,7 @@ function exportExcel(){
   if(!hrAttRows.length){alert('먼저 "인원 불러오기" 클릭');return}
   const yr=parseInt(document.getElementById('hrYear').value),mo=parseInt(document.getElementById('hrMonth').value);
   const wb=XLSX.utils.book_new();
-  const hdr=['NO','귀속년도','귀속월','사번','소속','급여종','이름','입사일','퇴사일','확인사항','사유','일자','요일','구분','통상시급','비고','대체일','소정근로','S출근','T퇴근','U휴게','V총근무','W기본','X야간','Y연장','Z야간2','AA휴일','AB휴일연장','','AD기본급','AE식대','AF연장','AG야간','AH주휴','AI근로장려수당','AJ휴일','AK휴일연장','AL소급','AM기타','AN연차','AO합계'];
+  const hdr=['NO','귀속년도','귀속월','사번','소속','급여종','이름','입사일','퇴사일','확인사항','사유','일자','요일','구분','통상시급','비고','대체일','소정근로','S출근','T퇴근','U휴게','V총근무','W기본','주휴시간','근로장려','X야간','Y연장','Z야간2','AA휴일','AB휴일연장','','AD기본급','AE식대','AF연장','AG야간','AH주휴','AI근로장려수당','AJ휴일','AK휴일연장','AL소급','AM기타','AN연차','AO합계'];
   const data=[hdr];
   hrAttRows.forEach((row,ri)=>{
     const{emp:_emp,yr:y,mo:m,days}=row;
@@ -3723,6 +3723,8 @@ function exportExcel(){
       const Y=day.수기Y!==undefined?day.수기Y:_Y0;
       const AA=day.수기AA!==undefined?day.수기AA:_AA0;
       const AB=day.수기AB!==undefined?day.수기AB:_AB0;
+      // 주휴시간: 시급직 주휴일 (renderHrAtt와 동일하게 calcJuhyu 재사용)
+      const juhyuH=day.gbn==='주휴일'?calcJuhyu(emp,day.date,day.주휴수기):0;
       // 월 중간에 구성원→관리자 전환 시, 근로장려 대상 여부는 그날 시점의 계약(직책구분) 기준으로 판정
       const gjH=(isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:getConJikchaek(emp.사번,day.date)},y,m))?W:0;
       const gjPay=_fullAtt?gjH*2000:0;
@@ -3731,7 +3733,7 @@ function exportExcel(){
       //   기준으로 조회 — 월 중간 시급↔월급 전환 시에도 화면(renderHrAtt)과 동일하게 표시됨
       const dayWage=getConWageType(emp.사번,day.date);
       const dayRate=getConRate(emp.사번,day.date);
-      data.push([ri+1,y,m,emp.사번,emp.소속,dayWage,emp.이름,emp.입사,emp.퇴사||'',day.확인,day.bigo,day.date,day.dow,day.gbn,Math.round(dayRate),day.bigo,'',typeof day.소정==='number'?day.소정:day.소정,att.in||'',att.out||'',U,V,W,X,Y,Z,AA,AB,'',Math.round(sal.AD),Math.round(sal.AE),Math.round(sal.AF),Math.round(sal.AG),Math.round(sal.AH),Math.round(sal.GJ),Math.round(sal.AI),Math.round(sal.AJ),0,0,0,Math.round(sal.AN)]);
+      data.push([ri+1,y,m,emp.사번,emp.소속,dayWage,emp.이름,emp.입사,emp.퇴사||'',day.확인,day.bigo,day.date,day.dow,day.gbn,Math.round(dayRate),day.bigo,'',typeof day.소정==='number'?day.소정:day.소정,att.in||'',att.out||'',U,V,W,juhyuH,gjH,X,Y,Z,AA,AB,'',Math.round(sal.AD),Math.round(sal.AE),Math.round(sal.AF),Math.round(sal.AG),Math.round(sal.AH),Math.round(sal.GJ),Math.round(sal.AI),Math.round(sal.AJ),0,0,0,Math.round(sal.AN)]);
     });
   });
   const ws=XLSX.utils.aoa_to_sheet(data);
