@@ -2649,7 +2649,7 @@ function cY(gbn,V,소정,확인){
 }
 function cAA(i,o,U,X,gbn){if(i===null||o===null)return 0;if(gbn!=='휴일'&&gbn!=='주휴일'&&gbn!=='무급휴일'&&gbn!=='공휴일')return 0;if(gbn==='무급휴일')return 0;const o24=o<=i?o+24:o;if(o24<=24)return Math.max(0,o24-i-U);return Math.max(0,18-i-U-X);}
 function cAB(AA){return Math.max(0,AA-8)}
-function cSal(emp,ds,gbn,소정,W,X,Y,Z,AA,AB,bigo,yr,mo,juhyuOv){
+function cSal(emp,ds,gbn,소정,W,X,Y,Z,AA,AB,bigo,yr,mo,juhyuOv,gjPay){
   // ★ 호출자가 넘긴 emp가 "최신 계약" 기준으로 병합된 값이어도, 여기서 다시 그 날짜(ds) 시점의
   //   계약으로 재병합한다 — 월 중간 시급↔월급 전환 시 날짜별로 정확한 임금/기본/식대/시급을 쓰기
   //   위함 (renderHrAtt/exportExcel/_calcEmpMonthTotals 등 이 함수를 쓰는 모든 화면에 자동 반영)
@@ -2673,7 +2673,10 @@ function cSal(emp,ds,gbn,소정,W,X,Y,Z,AA,AB,bigo,yr,mo,juhyuOv){
   const juhyuH=gbn==='주휴일'?calcJuhyu(emp,ds,juhyuOv):0;
   const AH=juhyuH*r;
   const AI=AA*r*1.5,AJ=AB*r*0.5;
-  return{AD,AE,AF,AG,AH,AI,AJ,AN:AD+AE+AF+AG+AH+AI+AJ};
+  // 근로장려수당(GJ): 그 달 만근 시에만 지급 — 호출자가 만근 여부까지 반영해 계산한 금액을 그대로 받는다
+  // (만근 여부는 그 달 전체 근태를 봐야 판정되므로 날짜 하나만 아는 이 함수 내부에서는 판정 불가)
+  const GJ=gjPay||0;
+  return{AD,AE,AF,AG,AH,AI,AJ,GJ,AN:AD+AE+AF+AG+AH+AI+AJ+GJ};
 }
 
 // ============================================================
@@ -3698,11 +3701,13 @@ function exportExcel(){
   if(!hrAttRows.length){alert('먼저 "인원 불러오기" 클릭');return}
   const yr=parseInt(document.getElementById('hrYear').value),mo=parseInt(document.getElementById('hrMonth').value);
   const wb=XLSX.utils.book_new();
-  const hdr=['NO','귀속년도','귀속월','사번','소속','급여종','이름','입사일','퇴사일','확인사항','사유','일자','요일','구분','통상시급','비고','대체일','소정근로','S출근','T퇴근','U휴게','V총근무','W기본','X야간','Y연장','Z야간2','AA휴일','AB휴일연장','','AD기본급','AE식대','AF연장','AG야간','AH주휴','AI휴일','AJ휴일연장','AK소급','AL기타','AM연차','AN합계'];
+  const hdr=['NO','귀속년도','귀속월','사번','소속','급여종','이름','입사일','퇴사일','확인사항','사유','일자','요일','구분','통상시급','비고','대체일','소정근로','S출근','T퇴근','U휴게','V총근무','W기본','X야간','Y연장','Z야간2','AA휴일','AB휴일연장','','AD기본급','AE식대','AF연장','AG야간','AH주휴','AI근로장려수당','AJ휴일','AK휴일연장','AL소급','AM기타','AN연차','AO합계'];
   const data=[hdr];
   hrAttRows.forEach((row,ri)=>{
     const{emp:_emp,yr:y,mo:m,days}=row;
     const emp=getMergedEmp(_emp); // ★ 최신 계약 합성 — renderHrAtt와 동일하게 맞춰 cSal 계산이 화면과 일치하게 함
+    // 근로장려수당은 그 달 만근 시에만 지급 — isGjEligible/isFullAttendanceMonth 하나만 참조(2582줄 주석 참고)
+    const _fullAtt=isFullAttendanceMonth(emp.사번,days)&&(y+'-'+String(m).padStart(2,'0'))>=GJ_START_YM;
     days.forEach(day=>{
       const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
       const otApp=(day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무');
@@ -3718,12 +3723,15 @@ function exportExcel(){
       const Y=day.수기Y!==undefined?day.수기Y:_Y0;
       const AA=day.수기AA!==undefined?day.수기AA:_AA0;
       const AB=day.수기AB!==undefined?day.수기AB:_AB0;
-      const Z=X,sal=cSal(emp,day.date,day.gbn,day.소정,W,X,Y,Z,AA,AB,day.bigo,y,m,day.주휴수기);
+      // 월 중간에 구성원→관리자 전환 시, 근로장려 대상 여부는 그날 시점의 계약(직책구분) 기준으로 판정
+      const gjH=(isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:getConJikchaek(emp.사번,day.date)},y,m))?W:0;
+      const gjPay=_fullAtt?gjH*2000:0;
+      const Z=X,sal=cSal(emp,day.date,day.gbn,day.소정,W,X,Y,Z,AA,AB,day.bigo,y,m,day.주휴수기,gjPay);
       // ★ 급여종/통상시급은 emp(최신 계약 병합값)가 아니라 그 날짜(day.date) 시점의 계약기간관리
       //   기준으로 조회 — 월 중간 시급↔월급 전환 시에도 화면(renderHrAtt)과 동일하게 표시됨
       const dayWage=getConWageType(emp.사번,day.date);
       const dayRate=getConRate(emp.사번,day.date);
-      data.push([ri+1,y,m,emp.사번,emp.소속,dayWage,emp.이름,emp.입사,emp.퇴사||'',day.확인,day.bigo,day.date,day.dow,day.gbn,Math.round(dayRate),day.bigo,'',typeof day.소정==='number'?day.소정:day.소정,att.in||'',att.out||'',U,V,W,X,Y,Z,AA,AB,'',Math.round(sal.AD),Math.round(sal.AE),Math.round(sal.AF),Math.round(sal.AG),Math.round(sal.AH),Math.round(sal.AI),Math.round(sal.AJ),0,0,0,Math.round(sal.AN)]);
+      data.push([ri+1,y,m,emp.사번,emp.소속,dayWage,emp.이름,emp.입사,emp.퇴사||'',day.확인,day.bigo,day.date,day.dow,day.gbn,Math.round(dayRate),day.bigo,'',typeof day.소정==='number'?day.소정:day.소정,att.in||'',att.out||'',U,V,W,X,Y,Z,AA,AB,'',Math.round(sal.AD),Math.round(sal.AE),Math.round(sal.AF),Math.round(sal.AG),Math.round(sal.AH),Math.round(sal.GJ),Math.round(sal.AI),Math.round(sal.AJ),0,0,0,Math.round(sal.AN)]);
     });
   });
   const ws=XLSX.utils.aoa_to_sheet(data);
@@ -3821,6 +3829,8 @@ function renderHrAtt(){
     const r=rate(_emp);
     let mAD=0,mAE=0,mAF=0,mAG=0,mAH=0,mAN=0;
     let mU=0,mV=0,mW=0,mX=0,mY=0,mAA=0,mAB=0,mJH=0,mGJ=0,mApprove=0;
+    // 근로장려수당은 그 달 만근 시에만 지급 — isGjEligible/isFullAttendanceMonth 하나만 참조(2582줄 주석 참고)
+    const _fullAtt=isFullAttendanceMonth(emp.사번,days)&&(yr+'-'+String(mo).padStart(2,'0'))>=GJ_START_YM;
     let dHtml='';
     days.forEach(day=>{
       const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
@@ -3837,7 +3847,11 @@ function renderHrAtt(){
       const Y=day.수기Y!==undefined?day.수기Y:_Y0;
       const AA=day.수기AA!==undefined?day.수기AA:_AA0;
       const AB=day.수기AB!==undefined?day.수기AB:_AB0;
-      const sal=cSal(emp,day.date,day.gbn,day.소정,W,X,Y,X,AA,AB,day.bigo,yr,mo,day.주휴수기);
+      // 월 중간에 구성원→관리자 전환 시, 근로장려 대상 여부는 그날 시점의 계약(직책구분) 기준으로 판정
+      const dayJikchaek=getConJikchaek(emp.사번,day.date);
+      const gjH=(isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:dayJikchaek},yr,mo))?W:0;
+      const gjPay=_fullAtt?gjH*2000:0;
+      const sal=cSal(emp,day.date,day.gbn,day.소정,W,X,Y,X,AA,AB,day.bigo,yr,mo,day.주휴수기,gjPay);
       mAD+=sal.AD;mAE+=sal.AE;mAF+=sal.AF;mAG+=sal.AG;mAH+=sal.AH;mAN+=sal.AN;
       if(V>0&&day.gbn!=='주휴일'){mU+=U;mV+=V;mW+=W;}else if(_isHolW){mU+=U;mV+=V;mW+=W;}
       mX+=X;mY+=Y;mAA+=AA;mAB+=AB;
@@ -3845,9 +3859,6 @@ function renderHrAtt(){
       // 주휴시간 누적: (주 소정/40)*8, 시급직만 / 수기반영(day.주휴수기) 우선
       const juhyuH=day.gbn==='주휴일'?calcJuhyu(emp,day.date,day.주휴수기):0;
       mJH+=juhyuH;
-      // 월 중간에 구성원→관리자 전환 시, 근로장려 대상 여부는 그날 시점의 계약(직책구분) 기준으로 판정
-      const dayJikchaek=getConJikchaek(emp.사번,day.date);
-      const gjH=(isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:dayJikchaek},yr,mo))?W:0;
       mGJ+=gjH;
       const isM=att.source==='manual';
       const isSom=att.source==='somyung';
@@ -4036,6 +4047,8 @@ function _calcEmpMonthTotals(rowData){
   const emp=getMergedEmp(rowData.emp);
   const yr=rowData.yr, mo=rowData.mo;
   let mAN=0, mU=0,mV=0,mW=0,mX=0,mY=0,mAA=0,mAB=0,mJH=0,mGJ=0,mApprove=0;
+  // 근로장려수당은 그 달 만근 시에만 지급 — isGjEligible/isFullAttendanceMonth 하나만 참조(2582줄 주석 참고)
+  const _fullAtt=isFullAttendanceMonth(emp.사번,rowData.days)&&(yr+'-'+String(mo).padStart(2,'0'))>=GJ_START_YM;
   rowData.days.forEach(day=>{
     const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
     const otApproved=day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무';
@@ -4051,13 +4064,15 @@ function _calcEmpMonthTotals(rowData){
     const Y=day.수기Y!==undefined?day.수기Y:_Y0;
     const AA=day.수기AA!==undefined?day.수기AA:_AA0;
     const AB=day.수기AB!==undefined?day.수기AB:_AB0;
-    const sal=cSal(emp,day.date,day.gbn,day.소정,W,X,Y,X,AA,AB,day.bigo,yr,mo,day.주휴수기);
+    const gjH=(isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:getConJikchaek(emp.사번,day.date)},yr,mo))?W:0;
+    const gjPay=_fullAtt?gjH*2000:0;
+    const sal=cSal(emp,day.date,day.gbn,day.소정,W,X,Y,X,AA,AB,day.bigo,yr,mo,day.주휴수기,gjPay);
     mAN+=sal.AN;
     if(V>0&&day.gbn!=='주휴일'){mU+=U;mV+=V;mW+=W;}else if(_isHolW){mU+=U;mV+=V;mW+=W;}
     mX+=X;mY+=Y;mAA+=AA;mAB+=AB;
     if(day.연장승인==='승인'||day.연장인사==='승인')mApprove++;
     mJH+=day.gbn==='주휴일'?calcJuhyu(emp,day.date,day.주휴수기):0;
-    mGJ+=(isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:getConJikchaek(emp.사번,day.date)},yr,mo))?W:0;
+    mGJ+=gjH;
   });
   return {mU,mV,mW,mX,mY,mAA,mAB,mJH,mGJ,mAN,mApprove};
 }
@@ -5551,7 +5566,7 @@ function _calcSalRow(row, yr, mo){
   //    않고 기존 방식(_ilhalCeil) 그대로 계산되어 결과가 달라지지 않는다.
   const _activeDays=days.filter(d=>d.gbn!=='계약기간 없음');
   const _wageSwitched=new Set(_activeDays.map(d=>getConWageType(emp.사번,d.date))).size>1;
-  let 기본급,식대;
+  let 기본급,식대,_posSum=0;
   if(_wageSwitched){
     const _segMap=new Map();
     _activeDays.forEach(day=>{
@@ -5570,6 +5585,7 @@ function _calcSalRow(row, yr, mo){
         const segCnt=segDays.filter(d=>d.bigo!=='결근').length;
         _baseSum+=(mCon.기본||0)*segCnt/_tD;
         _foodSum+=(mCon.식대||0)*segCnt/_tD;
+        _posSum+=(mCon.직책||0)*segCnt/_tD;
       }
     });
     기본급=_ovr('기본급',_ceilTo10(_baseSum));
@@ -5581,7 +5597,9 @@ function _calcSalRow(row, yr, mo){
     식대=_ovr('식대',emp.임금==='시급직'?0:_ilhalCeil(emp.식대||0));
   }
   // ── 직책수당 (계약기간관리 직책 필드 / 월급직은 일할계산 적용)
-  const 직책수당=_ovr('직책수당',_ilhalCeil(emp.직책||0));
+  //    ★ 월 중간 시급↔월급 전환 시엔 기본급/식대와 동일하게 계약 구간별로 나눠 계산
+  //    (월급 구간 직책수당 × 그 구간 재직일수(결근 제외)/그 달 총일수) — 시급 구간은 식대와 마찬가지로 0
+  const 직책수당=_ovr('직책수당',_wageSwitched?_ceilTo10(_posSum):_ilhalCeil(emp.직책||0));
   // ── 야간근로수당: 계약기간관리 야간(고정, 월급직은 일할계산) vs 근태 산출값(mXPay*0.5) 중 큰 값
   //    ★ mXPay는 날짜별 시급으로 이미 누적된 금액이라 월 중간 시급↔월급 전환에도 정확
   const 야간정액=_ilhalCeil(emp.야간||0);
