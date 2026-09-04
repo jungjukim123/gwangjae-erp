@@ -2590,11 +2590,15 @@ function isGjEligible(emp,yr,mo){
   return true;
 }
 // 근로장려 만근 판정: 그 달 모든 소정근로일(평일 gbn, 소정>0)에 결근 없이 출퇴근이 모두 기록되어야 함
+// ★ 공휴일(gbn='공휴일')은 소정근로일 집계에서 이미 제외되므로, 쉬어도(유급휴일) 만근에 영향 없음
+// ★ 연차/월차/반차/반반차/공가 등 결근이 아닌 모든 승인된 비고는 출근으로 인정
+//   (cV의 결근 판정과 동일한 기준 — 결근만 무급, 그 외에는 실제 출퇴근 기록이 없어도 만근 판정에서 제외되지 않음)
 function isFullAttendanceMonth(empId,days){
   const workDays=days.filter(d=>d.gbn==='평일'&&typeof d.소정==='number'&&d.소정>0);
   if(!workDays.length)return false;
   return workDays.every(d=>{
     if(d.bigo==='결근')return false;
+    if(d.bigo)return true;
     const att=getAtt(empId,d.date);
     return!!(att.in&&att.out);
   });
