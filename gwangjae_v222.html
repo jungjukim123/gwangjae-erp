@@ -3757,7 +3757,8 @@ function exportExcel(){
       // 주휴시간: 시급직 주휴일 (renderHrAtt와 동일하게 calcJuhyu 재사용)
       const juhyuH=day.gbn==='주휴일'?calcJuhyu(emp,day.date,day.주휴수기):0;
       // 월 중간에 구성원→관리자 전환 시, 근로장려 대상 여부는 그날 시점의 계약(직책구분) 기준으로 판정
-      const gjH=(isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:getConJikchaek(emp.사번,day.date)},y,m))?gjWorkHours(day,W,emp,i,o,U,otApp):0;
+      // ★ 그 달에 결근이 있으면(만근 실패) 근로장려 시간·수당 전부 미표시 — 급여계산 화면과 동일 기준(_fullAtt)
+      const gjH=(_fullAtt&&isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:getConJikchaek(emp.사번,day.date)},y,m))?gjWorkHours(day,W,emp,i,o,U,otApp):0;
       const gjPay=_fullAtt?gjH*2000:0;
       const Z=X,sal=cSal(emp,day.date,day.gbn,day.소정,W,X,Y,Z,AA,AB,day.bigo,y,m,day.주휴수기,gjPay);
       // ★ 급여종/통상시급은 emp(최신 계약 병합값)가 아니라 그 날짜(day.date) 시점의 계약기간관리
@@ -3882,7 +3883,8 @@ function renderHrAtt(){
       const AB=day.수기AB!==undefined?day.수기AB:_AB0;
       // 월 중간에 구성원→관리자 전환 시, 근로장려 대상 여부는 그날 시점의 계약(직책구분) 기준으로 판정
       const dayJikchaek=getConJikchaek(emp.사번,day.date);
-      const gjH=(isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:dayJikchaek},yr,mo))?gjWorkHours(day,W,emp,i,o,U,otApproved):0;
+      // ★ 그 달에 결근이 있으면(만근 실패) 근로장려 시간·수당 전부 미표시 — 급여계산 화면과 동일 기준(_fullAtt)
+      const gjH=(_fullAtt&&isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:dayJikchaek},yr,mo))?gjWorkHours(day,W,emp,i,o,U,otApproved):0;
       const gjPay=_fullAtt?gjH*2000:0;
       const sal=cSal(emp,day.date,day.gbn,day.소정,W,X,Y,X,AA,AB,day.bigo,yr,mo,day.주휴수기,gjPay);
       mAD+=sal.AD;mAE+=sal.AE;mAF+=sal.AF;mAG+=sal.AG;mAH+=sal.AH;mAN+=sal.AN;
@@ -4097,7 +4099,8 @@ function _calcEmpMonthTotals(rowData){
     const Y=day.수기Y!==undefined?day.수기Y:_Y0;
     const AA=day.수기AA!==undefined?day.수기AA:_AA0;
     const AB=day.수기AB!==undefined?day.수기AB:_AB0;
-    const gjH=(isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:getConJikchaek(emp.사번,day.date)},yr,mo))?gjWorkHours(day,W,emp,i,o,U,otApproved):0;
+    // ★ 그 달에 결근이 있으면(만근 실패) 근로장려 시간·수당 전부 미표시 — 급여계산 화면과 동일 기준(_fullAtt)
+    const gjH=(_fullAtt&&isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:getConJikchaek(emp.사번,day.date)},yr,mo))?gjWorkHours(day,W,emp,i,o,U,otApproved):0;
     const gjPay=_fullAtt?gjH*2000:0;
     const sal=cSal(emp,day.date,day.gbn,day.소정,W,X,Y,X,AA,AB,day.bigo,yr,mo,day.주휴수기,gjPay);
     mAN+=sal.AN;
@@ -4125,6 +4128,8 @@ function _patchHrAttRow(eid,ds){
   const day=rowData.days.find(d=>d.date===ds);
   if(!day){renderHrAtt();return;}
   const r=rate(_emp);
+  // 근로장려수당은 그 달 만근 시에만 지급 — isGjEligible/isFullAttendanceMonth 하나만 참조(2582줄 주석 참고)
+  const _fullAtt=isFullAttendanceMonth(emp.사번,rowData.days)&&(yr+'-'+String(mo).padStart(2,'0'))>=GJ_START_YM;
   const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
   const otApproved=day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무';
   const _U0=cU(i,o,day.gbn,tH(getConTimes(emp.사번,day.date).et),otApproved);
@@ -4141,7 +4146,8 @@ function _patchHrAttRow(eid,ds){
   const AB=day.수기AB!==undefined?day.수기AB:_AB0;
   const juhyuH=day.gbn==='주휴일'?calcJuhyu(emp,day.date,day.주휴수기):0;
   const dayJikchaek=getConJikchaek(emp.사번,day.date);
-  const gjH=(isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:dayJikchaek},yr,mo))?gjWorkHours(day,W,emp,i,o,U,otApproved):0;
+  // ★ 그 달에 결근이 있으면(만근 실패) 근로장려 시간·수당 전부 미표시 — 급여계산 화면과 동일 기준(_fullAtt)
+  const gjH=(_fullAtt&&isGjDay(day.dow,day.gbn)&&isGjEligible({...emp,직책구분:dayJikchaek},yr,mo))?gjWorkHours(day,W,emp,i,o,U,otApproved):0;
   const dayWage=getConWageType(emp.사번,day.date);
   const isM=att.source==='manual';
   const isSom=att.source==='somyung';
