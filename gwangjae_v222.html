@@ -5315,8 +5315,8 @@ const SAL_COLS=[
   {t:'NO',w:36},{t:'귀속년도',w:56},{t:'귀속월',w:48},{t:'사번',w:76},{t:'소속',w:56},{t:'급여종',w:48},{t:'이름',w:60},
   {t:'입사일',w:82},{t:'퇴사일',w:82},
   {t:'기본근무<br>시간',w:68,r:1,time:1},{t:'주휴<br>시간',w:56,r:1,time:1},{t:'근로장려<br>시간',w:68,r:1,time:1},{t:'연장근무<br>시간',w:68,r:1,time:1},{t:'야간근무<br>시간',w:68,r:1,time:1},{t:'휴일근무<br>시간',w:68,r:1,time:1},{t:'휴일연장<br>근무시간',w:72,r:1,time:1},
-  {t:'기본급',w:88,r:1},
   {t:'결근일수',w:64,r:1},
+  {t:'기본급',w:88,r:1},
   {t:'식대',w:68,r:1},{t:'직책수당',w:72,r:1},{t:'야간근로<br>수당',w:78,r:1},
   {t:'주휴수당',w:78,r:1},{t:'근로장려<br>수당',w:78,r:1},{t:'연장근로<br>수당',w:78,r:1},
   {t:'휴일근로<br>수당',w:78,r:1},{t:'휴일연장<br>근로수당',w:78,r:1},
@@ -5340,7 +5340,7 @@ function buildSalHead(){
 // ── 급여계산 표 열(컬럼) 표시/숨김 — 기본급~소급급여(지급항목), 소득세~공제액계(공제항목)만 선택 가능
 // (NO~퇴사일 기본정보 열, 근무시간 열, 지급액계/실지급액 합계 열은 항상 표시)
 const SAL_PAY_COLS=[
-  {i:16,t:'기본급'},{i:18,t:'식대'},{i:19,t:'직책수당'},{i:20,t:'야간근로수당'},
+  {i:17,t:'기본급'},{i:18,t:'식대'},{i:19,t:'직책수당'},{i:20,t:'야간근로수당'},
   {i:21,t:'주휴수당'},{i:22,t:'근로장려수당'},{i:23,t:'연장근로수당'},{i:24,t:'휴일근로수당'},{i:25,t:'휴일연장근로수당'},
   {i:26,t:'연차수당'},{i:27,t:'기타수당'},{i:28,t:'소급급여'}
 ];
@@ -5825,8 +5825,8 @@ function renderSal(){
       <td data-col="13" class="r" style="font-size:11px;color:#000000">${fh(d.mX)}</td>
       <td data-col="14" class="r" style="font-size:11px;color:#000000">${fh(d.mAA)}</td>
       <td data-col="15" class="r" style="font-size:11px;color:#000000">${fh(d.mAB)}</td>
-      ${salTd('기본급','기본급',d.기본급,cFmt,false,16)}
-      <td class="r" data-col="17" style="font-size:11px;color:#000000">${d.결근일수>0?d.결근일수+'일':'-'}</td>
+      <td class="r" data-col="16" style="font-size:11px;color:#000000">${d.결근일수>0?d.결근일수+'일':'-'}</td>
+      ${salTd('기본급','기본급',d.기본급,cFmt,false,17)}
       ${salTd('식대','식대',d.식대,cFmt,false,18)}
       ${salTd('직책수당','직책수당',d.직책수당,cFmt,false,19)}
       ${salTd('야간수당','야간근로수당',d.야간수당,cFmt,false,20)}
@@ -5874,8 +5874,8 @@ function renderSal(){
   const sumRow=`<tr class="ghd" style="font-size:13px">
     <td colspan="9" style="font-size:13px;font-weight:800;text-align:left">지급액계 (${filtered.length}명)${confirmed?' <span style="color:#D93644">🔒 확정됨</span>':''}</td>
     <td colspan="7"></td>
-    <td class="r" data-col="16">${nFmt(totBase)}</td>
-    <td class="r" data-col="17">${totAbsent!==0?totAbsent+'일':'-'}</td>
+    <td class="r" data-col="16">${totAbsent!==0?totAbsent+'일':'-'}</td>
+    <td class="r" data-col="17">${nFmt(totBase)}</td>
     <td class="r" data-col="18">${totMeal!==0?nFmt(totMeal):'-'}</td>
     <td class="r" data-col="19">${totPos!==0?nFmt(totPos):'-'}</td>
     <td class="r" data-col="20">${totNightFixed!==0?nFmt(totNightFixed):'-'}</td>
@@ -6022,13 +6022,13 @@ function exportSalExcel(){
       .map(row=>_calcSalRow(row,yr,mo));
   }
   const wb=XLSX.utils.book_new();
-  const hdr=['NO','귀속년도','귀속월','사번','소속','급여종','이름','기본근무시간','주휴시간','근로장려시간','연장근무시간','야간근무시간','휴일근무시간','휴일연장근무시간','기본급','결근일수','식대','직책수당','야간근로수당','주휴수당','근로장려수당','연장근로수당','휴일근로수당','휴일연장근로수당','연차수당','기타수당','소급급여','지급액계','소득세','지방소득세','건강보험','장기요양','국민연금','고용보험','기타공제','중도정산소득세','중도정산지방소득세','연말정산소득세','연말정산지방소득세','건강보험정산','장기요양정산','건강보험연말정산','장기요양연말정산','공제액계','실지급액'];
+  const hdr=['NO','귀속년도','귀속월','사번','소속','급여종','이름','기본근무시간','주휴시간','근로장려시간','연장근무시간','야간근무시간','휴일근무시간','휴일연장근무시간','결근일수','기본급','식대','직책수당','야간근로수당','주휴수당','근로장려수당','연장근로수당','휴일근로수당','휴일연장근로수당','연차수당','기타수당','소급급여','지급액계','소득세','지방소득세','건강보험','장기요양','국민연금','고용보험','기타공제','중도정산소득세','중도정산지방소득세','연말정산소득세','연말정산지방소득세','건강보험정산','장기요양정산','건강보험연말정산','장기요양연말정산','공제액계','실지급액'];
   const data=[hdr];
   const fhx=v=>v>0?Math.round(v*100)/100:0;
   rowDataList.forEach((d,ri)=>{
     data.push([ri+1,yr,mo,d.사번||'',d.소속,d.임금,d.이름,
       fhx(d.mW),fhx(d.mJH),fhx(d.근로장려시간||0),fhx(d.mY),fhx(d.mX),fhx(d.mAA),fhx(d.mAB),
-      _ceilTo10(d.기본급),d.결근일수||0,_ceilTo10(d.식대),_ceilTo10(d.직책수당),_ceilTo10(d.야간수당),_ceilTo10(d.주휴수당),_ceilTo10(d.근로장려수당||0),_ceilTo10(d.연장수당),_ceilTo10(d.휴일수당),_ceilTo10(d.휴일연장),
+      d.결근일수||0,_ceilTo10(d.기본급),_ceilTo10(d.식대),_ceilTo10(d.직책수당),_ceilTo10(d.야간수당),_ceilTo10(d.주휴수당),_ceilTo10(d.근로장려수당||0),_ceilTo10(d.연장수당),_ceilTo10(d.휴일수당),_ceilTo10(d.휴일연장),
       d.연차,d.기타,d.소급,d.지급액계,
       d.소득세,d.지방소득세,d.건강보험,d.장기요양,d.국민연금,d.고용보험,
       d.기타공제,d.중도정산소득세,d.중도정산지방소득세,d.연말정산소득세,d.연말정산지방소득세,
