@@ -2548,7 +2548,7 @@ function isFullAttendanceWeek(empId,ds){
   for(const d of workDays){
     const att=getAtt(empId,d.date);
     const hasIn=att.in&&att.in!=='';
-    if(d.bigo==='연차')continue;   // 연차는 개근 인정
+    if(d.bigo==='연차'||d.bigo==='월차')continue;   // 연차/월차는 개근 인정
     if(d.bigo==='결근')return false;
     if(d.gbn==='공휴일'&&!hasIn)continue; // 공휴일이라 쉬었어도(출근기록 없어도) 근로 처리로 보아 개근 인정 — 주휴수당 조건 충족
     if(!hasIn)return false;
@@ -2606,11 +2606,24 @@ function isFullAttendanceMonth(empId,days){
 // ============================================================
 // CALC (엑셀 수식)
 // ============================================================
-function cU(i,o,gbn){if(i===null||o===null)return 0;let d=o-i;if(d<=0)d+=24;
+function _uBucket(d){if(d>4&&d<8)return 0.5;if(d>=8)return 1;return 0;}
+function cU(i,o,gbn,et,otApproved){if(i===null||o===null)return 0;let d=o-i;if(d<=0)d+=24;
   // 무급휴일/주휴일 단독 근무는 정규 근무일처럼 이미 포함된 식사시간을 전제할 수 없으므로 근무시간(span)에 법정 기준(4h/8h)을 바로 적용
   // ★ 4시간 "정각"은 휴게 미적용 — 4시간을 초과할 때만 0.5시간 부여(딱 4시간 근무는 쉬는시간 없이 그대로 인정)
-  if(gbn==='무급휴일'||gbn==='주휴일'){if(d>4&&d<8)return 0.5;if(d>=8)return 1;return 0;}
-  d-=1;if(d>4&&d<8)return 0.5;if(d>=8)return 1;return 0;}
+  if(gbn==='무급휴일'||gbn==='주휴일')return _uBucket(d);
+  // 평일/공휴일 + 연장근무 승인 + 실제 퇴근이 소정 종료시각(et)을 넘긴 경우: 정규 근무 구간과
+  // 그 이후 연장근무 구간을 나눠서 각각 휴게시간을 계산한다 — 연장 구간은 정규 근무처럼 이미
+  // 식사시간이 포함돼 있다고 전제할 수 없으므로, 전체 span 하나로 뭉쳐서 -1시간 보정을 적용하면
+  // (예: 5.5시간 정규근무+4시간 연장 → 9.5시간) 실제보다 과다한 휴게(1시간)가 잡혀 연장시간이 줄어든다
+  if(otApproved&&et!==null&&et!==undefined){
+    const o24=o<=i?o+24:o;
+    if(o24>et&&et>i){
+      const dBase=et-i-1;
+      const dOt=o24-et;
+      return _uBucket(dBase)+_uBucket(dOt);
+    }
+  }
+  d-=1;return _uBucket(d);}
 function cV(emp,ds,gbn,소정,i,o,U,bigo,juhyuOv,otApproved){
   if(new Date(emp.입사)>new Date(ds))return 0;
   // 퇴사일 다음날부터는 0
@@ -3729,7 +3742,7 @@ function exportExcel(){
     days.forEach(day=>{
       const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
       const otApp=(day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무');
-      const _U0=cU(i,o,day.gbn);
+      const _U0=cU(i,o,day.gbn,tH(getConTimes(emp.사번,day.date).et),otApp);
       const U=day.수기U!==undefined?day.수기U:_U0;
       const _V0=cV(emp,day.date,day.gbn,day.소정,i,o,U,day.bigo,day.주휴수기,otApp);
       const _isHolW=day.gbn==='공휴일'&&typeof day.소정==='number'&&day.소정>0;
@@ -3855,7 +3868,7 @@ function renderHrAtt(){
     days.forEach(day=>{
       const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
       const otApproved=day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무';
-      const _U0=cU(i,o,day.gbn);
+      const _U0=cU(i,o,day.gbn,tH(getConTimes(emp.사번,day.date).et),otApproved);
       const U=day.수기U!==undefined?day.수기U:_U0;
       const _V0=cV(emp,day.date,day.gbn,day.소정,i,o,U,day.bigo,day.주휴수기,otApproved);
       const _isHolW=day.gbn==='공휴일'&&typeof day.소정==='number'&&day.소정>0;
@@ -4072,7 +4085,7 @@ function _calcEmpMonthTotals(rowData){
   rowData.days.forEach(day=>{
     const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
     const otApproved=day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무';
-    const _U0=cU(i,o,day.gbn);
+    const _U0=cU(i,o,day.gbn,tH(getConTimes(emp.사번,day.date).et),otApproved);
     const U=day.수기U!==undefined?day.수기U:_U0;
     const _V0=cV(emp,day.date,day.gbn,day.소정,i,o,U,day.bigo,day.주휴수기,otApproved);
     const _isHolW=day.gbn==='공휴일'&&typeof day.소정==='number'&&day.소정>0;
@@ -4114,7 +4127,7 @@ function _patchHrAttRow(eid,ds){
   const r=rate(_emp);
   const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
   const otApproved=day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무';
-  const _U0=cU(i,o,day.gbn);
+  const _U0=cU(i,o,day.gbn,tH(getConTimes(emp.사번,day.date).et),otApproved);
   const U=day.수기U!==undefined?day.수기U:_U0;
   const _V0=cV(emp,day.date,day.gbn,day.소정,i,o,U,day.bigo,day.주휴수기,otApproved);
   const _isHolW=day.gbn==='공휴일'&&typeof day.소정==='number'&&day.소정>0;
@@ -5538,7 +5551,7 @@ function _calcSalRow(row, yr, mo){
   days.forEach(day=>{
     const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
     const otApproved=day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무';
-    const _U0=cU(i,o,day.gbn);
+    const _U0=cU(i,o,day.gbn,tH(getConTimes(emp.사번,day.date).et),otApproved);
     const U=day.수기U!==undefined?day.수기U:_U0;
     const _V0=cV(emp,day.date,day.gbn,day.소정,i,o,U,day.bigo,day.주휴수기,otApproved);
     const _isHolW=day.gbn==='공휴일'&&typeof day.소정==='number'&&day.소정>0;
@@ -6434,9 +6447,9 @@ function _normalizeConfirmType(t){
 }
 // ── 소명내용 자동 연동: 확인사항(item.type) 기준으로 표시할 값을 결정
 //    - 출근/퇴근 기록 없음 → 직원이 슬랙소명요청서로 제출한 workerOut/workerIn 시간 표시
-//    - 연차/결근/지각 → 직원이 제출한 소명사유(workerType) 표시
+//    - 연차/월차/결근/지각 → 직원이 제출한 소명사유(workerType) 표시
 function _resolveSomyungContent(item){
-  if(item.workerType==='연차'||item.workerType==='결근'){
+  if(item.workerType==='연차'||item.workerType==='월차'||item.workerType==='결근'){
     return {text:item.workerType,filled:true};
   }
   if(item.type==='출근 기록 없음'){
@@ -6464,7 +6477,7 @@ function _isSomyungAutoDone(item){
 // ── 소명반영 결과가 현재 근태 데이터에 실제로 살아있는지 매번 새로 확인
 //    (근태관리에서 "기준시간 반영"/수기입력 등으로 값이 덮어써지면 자동으로 false가 되어 배지가 사라짐)
 function _somyungAppliedNow(item){
-  if(item.workerType==='연차'||item.workerType==='결근'){
+  if(item.workerType==='연차'||item.workerType==='월차'||item.workerType==='결근'){
     const row=hrAttRows.find(r=>r.emp.사번===item.eid);
     const day=row&&row.days.find(d=>d.date===item.date);
     return !!(day&&day.bigo===item.workerType);
@@ -6809,8 +6822,8 @@ function applySomyungToAtt(eid,ds,ck,type){
   const day=row.days.find(x=>x.date===ds);
   if(!day){alert('해당 날짜의 근태 데이터를 찾을 수 없습니다.');return;}
 
-  if(item.workerType==='연차'||item.workerType==='결근'){
-    // 연차/결근 → 확인사항(출근/퇴근 기록없음)과 무관하게 최우선 처리: 비고(day.bigo)에만 반영, 출퇴근시간은 건드리지 않음
+  if(item.workerType==='연차'||item.workerType==='월차'||item.workerType==='결근'){
+    // 연차/월차/결근 → 확인사항(출근/퇴근 기록없음)과 무관하게 최우선 처리: 비고(day.bigo)에만 반영, 출퇴근시간은 건드리지 않음
     if(!confirm(`[${item.name}] ${ds}\n소명사유: ${item.workerType}\n\n근태관리 비고에 "${item.workerType}"으로 반영하시겠습니까?\n(출근/퇴근 시간은 반영되지 않습니다)`))return;
     setDayBigo(eid,ds,item.workerType);
     item.status='소명완료';

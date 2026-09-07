@@ -493,7 +493,7 @@ const SomyungBtn = (function(){
       const bigo=bigoByDate[wds]||'';
       const att=_attGetAtt(wds, attByDate, slackByDate);
       const hasIn = att.in && att.in!=='';
-      if(bigo==='연차') continue;
+      if(bigo==='연차'||bigo==='월차') continue;
       if(bigo==='결근') return false;
       if(info.gbn==='공휴일' && !hasIn) continue;
       if(!hasIn) return false;
