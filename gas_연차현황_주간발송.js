@@ -28,7 +28,9 @@
 
 const YeonchaWeekly = (function(){
   const SB_URL = 'https://dcvitbydqidndwbqqprm.supabase.co';
-  const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjdml0YnlkcWlkbmR3YnFxcHJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDE1ODMsImV4cCI6MjA5Nzc3NzU4M30.xHDxj8-0jTTOrWTErOMPQB4EvyKhuOsgkPAjAB2txmc';
+  // ★ 보안: anon key를 소스에 하드코딩하지 않는다 — 스크립트 속성에 SUPABASE_ANON_KEY로 등록해서 쓴다
+  //   (다른 gas_*.js와 같은 값을 공유 — 이미 등록돼 있다면 새로 등록할 필요 없음).
+  const SB_KEY = PropertiesService.getScriptProperties().getProperty('SUPABASE_ANON_KEY');
   const DOW_KEYS = ['sun','mon','tue','wed','thu','fri','sat'];
   const TRIGGER_FN = 'YeonchaWeekly_send'; // 최상위 트리거 진입점(아래에서 export)
   function setSlackToken(token){

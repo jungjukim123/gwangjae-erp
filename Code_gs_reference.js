@@ -78,8 +78,10 @@ function doGet(e) {
 }
 
 // ── Supabase 설정
+// ★ 보안: anon key를 소스에 하드코딩하지 않는다 — 프로젝트 설정(⚙) → 스크립트 속성에
+//   키: SUPABASE_ANON_KEY, 값: Supabase anon key를 등록해야 한다(다른 gas_*.js와 공유하는 값과 동일하게).
 const SB_URL = 'https://dcvitbydqidndwbqqprm.supabase.co'
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjdml0YnlkcWlkbmR3YnFxcHJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDE1ODMsImV4cCI6MjA5Nzc3NzU4M30.xHDxj8-0jTTOrWTErOMPQB4EvyKhuOsgkPAjAB2txmc'
+const SB_KEY = PropertiesService.getScriptProperties().getProperty('SUPABASE_ANON_KEY')
 
 // ── 이름 정규화 (ERP와 동일)
 function cleanName(v) {
