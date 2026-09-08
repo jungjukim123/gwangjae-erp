@@ -5463,7 +5463,7 @@ function doSalConfirm(){
   if(!srcRows.length){alert('먼저 "💰 급여계산" 버튼으로 '+yr+'년 '+mo+'월 급여를 계산해주세요.');return;}
   if(!confirm(yr+'년 '+mo+'월 급여를 확정하시겠습니까?\n\n⚠️ 확정 후에는 근태·계약정보·4대보험 설정이 나중에 바뀌어도\n지금 계산된 금액이 그대로 고정되며, 어떤 경우에도 다시 계산되지 않습니다.\n수정이 필요하면 "확정해제" 후 다시 계산해야 합니다.'))return;
   const snapshot=srcRows
-    .filter(r=>contracts.some(c=>c.사번===r.emp.사번))
+    .filter(r=>isVisibleInMonth(r.emp.사번,yr+'-'+String(mo).padStart(2,'0')))
     .map(row=>_calcSalRow(row,yr,mo));
   _salSnapshot[key]=snapshot;
   _salConfirmed[key]=true;
