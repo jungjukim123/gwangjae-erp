@@ -7802,7 +7802,14 @@ function uploadConExcel(evt){
           const y=dd.getUTCFullYear(),m=String(dd.getUTCMonth()+1).padStart(2,'0'),d=String(dd.getUTCDate()).padStart(2,'0');
           return`${y}-${m}-${d}`;
         }
-        return String(v).slice(0,10);
+        // ★ 텍스트로 저장된 날짜(예: "2026-7-1", "2026.7.1")는 월/일이 0-padding 없이 들어올 수 있음 —
+        //   그대로 slice(0,10)만 하면 "YYYY-M-D" 형태가 되어 문자열 비교(퇴사일<월초 등) 기준이
+        //   전부 어긋나 퇴사자가 이후 달 급여/근태에 계속 나타나는 문제가 있었음. 항상 0-padding.
+        const s=String(v).trim();
+        if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+        const m=s.match(/(\d{4})[.\-/\s]+(\d{1,2})[.\-/\s]+(\d{1,2})/);
+        if(m)return`${m[1]}-${String(+m[2]).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`;
+        return s.slice(0,10);
       };
       const toTime=v=>{
         if(!v||v==='')return'';
