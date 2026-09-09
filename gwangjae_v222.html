@@ -7911,7 +7911,9 @@ function topDeleteSelectedCon(){
 }
 function renderCon(){
   const q=(document.getElementById('conQ')||{}).value||'',tf=(document.getElementById('conTypeQ')||{}).value||'all';
-  // 인라인 입력/편집 행이 열려있으면 닫기
+  // 인라인 입력/편집 행이 열려있으면 닫기 (재렌더로 지워지기 전에 입력하던 값을 스냅샷해 둔다 —
+  // 실시간 동기화 등으로 renderCon이 타이핑 도중 호출돼도 신규계약 입력행이 통째로 사라지지 않도록)
+  const _pendingConRowSnapshot=_pendingConRow?_captureConNewRowValues():null;
   _pendingConRow=null;
   // 편집 중이던 no 기억 (재렌더 후 다시 편집 상태 진입)
   const _prevEditNo=_editingConNo;
@@ -7980,8 +7982,8 @@ function renderCon(){
   applyFilter('conT');
   // ② 계약 변경 → ① 인원현황 자동 반영
   if(document.getElementById('empBody')&&document.getElementById('empBody').children.length)renderEmp();
-  // 인라인 입력 행이 대기중이면 다시 삽입
-  if(_pendingConRow)_insertConRow();
+  // 인라인 입력 행이 대기중이면 입력하던 값과 함께 다시 삽입
+  if(_pendingConRowSnapshot){_pendingConRow=true;_insertConRow(_pendingConRowSnapshot);}
   // 편집 중이던 행 복원
   if(_prevEditNo!==null)setTimeout(()=>startEditCon(_prevEditNo),0);
 }
@@ -8068,7 +8070,27 @@ function addConRow(){
   _insertConRow();
 }
 
-function _insertConRow(){
+// 재렌더(실시간 동기화 등)로 conBody가 통째로 다시 그려질 때 입력 중이던 신규계약 행이
+// 값째로 사라지지 않도록, 지워지기 직전 값을 읽어두고(_captureConNewRowValues) 재삽입 후
+// 그대로 되돌려 놓는다(_restoreConNewRowValues).
+function _captureConNewRowValues(){
+  const row=document.getElementById('conNewRow');
+  if(!row)return null;
+  const data={};
+  row.querySelectorAll('[id]').forEach(el=>{data[el.id]=el.value;});
+  return data;
+}
+function _restoreConNewRowValues(data){
+  if(!data)return;
+  Object.keys(data).forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.value=data[id];
+  });
+  const wrap=document.getElementById('cn2-name-wrap');
+  if(wrap)wrap.style.display=(data['cn2-emp']==='__NEW__')?'block':'none';
+}
+
+function _insertConRow(restoreData){
   const tbody=document.getElementById('conBody');
   if(!tbody)return;
   const old=document.getElementById('conNewRow');
@@ -8130,9 +8152,14 @@ function _insertConRow(){
     <td><input class="con-inp" id="cn2-slackid" placeholder="U0XXXXXXXXX" style="width:100px"></td>`;
 
   tbody.insertBefore(tr, tbody.firstChild);
-  tr.scrollIntoView({behavior:'smooth', block:'center'});
-  // 초기 상태: 신규 직접입력 → 이름 칸을 text input으로
-  onConEmpChange();
+  if(restoreData){
+    // 재렌더 전 입력하던 값 복원 (배경 동기화로 인한 재삽입 — 화면 스크롤은 건드리지 않음)
+    _restoreConNewRowValues(restoreData);
+  }else{
+    tr.scrollIntoView({behavior:'smooth', block:'center'});
+    // 초기 상태: 신규 직접입력 → 이름 칸을 text input으로
+    onConEmpChange();
+  }
 }
 
 // 이름 드롭다운 변경 시 호출
@@ -8216,6 +8243,32 @@ function buildNewHireSlackText(c){
     `- 근로시간 : ${dailyHours.toFixed(1)}H, 휴게시간 : ${Number(c.휴게||0).toFixed(1)}H`,
     `- 연락처 : ${c.phone||''}`,
     `- 이메일 : ${c.email||''}`,
+  ].join('\n');
+}
+
+// 계약연장/계약조건변경 공유 메시지(saveConRow 참고) — 입사안내와 동일한 근무조건 항목 구성.
+function buildConChangeSlackText(c){
+  const dayKeyLabel=[['mon','월'],['tue','화'],['wed','수'],['thu','목'],['fri','금'],['sat','토'],['sun','일']];
+  const workDays=[], offDays=[];
+  dayKeyLabel.forEach(([k,label])=>{
+    const v=c[k];
+    if(v===''||v==null||v===0||v==='0'||v==='주휴') offDays.push(label);
+    else workDays.push(label);
+  });
+  const wageLabel=c.임금==='시급직' ? `시급직 (${nFmt(c.시급)}원)` : `월급직 (${nFmt(c.기본)}원)`;
+  const firstWorkKey=(dayKeyLabel.find(([k,label])=>workDays.includes(label))||[])[0];
+  const dailyHours=firstWorkKey ? (Number(c[firstWorkKey])||0) : 0;
+  const title=c.구분==='계약연장' ? '✅ [계약연장안내]' : '✅ [계약조건변경안내]';
+
+  return [
+    title,
+    `- 임금구분 : ${wageLabel}`,
+    `- 성명 : ${c.이름||''}`,
+    `- 계약시작일 : ${c.cs||''}`,
+    `- 계약종료일 : ${c.ce||''}`,
+    `- 근무요일 : ${workDays.join(',')} (휴무일 ${offDays.join(',')})`,
+    `- 근무시간 : ${c.st||''} ~ ${c.et||''} / 주 ${c.소정||0}시간`,
+    `- 근로시간 : ${dailyHours.toFixed(1)}H, 휴게시간 : ${Number(c.휴게||0).toFixed(1)}H`,
   ].join('\n');
 }
 
@@ -8326,6 +8379,8 @@ function saveConRow(){
   if(typeof renderHrAtt==='function')renderHrAtt(); // 신규 인원을 월별 근태현황에 즉시 반영
   if(newCon.구분==='신규'){
     _sendSlackMsg(buildNewHireSlackText(newCon), HR_SHARE_SLACK_CHANNEL);
+  }else if(newCon.구분==='계약연장'||newCon.구분==='계약조건변경'){
+    _sendSlackMsg(buildConChangeSlackText(newCon), HR_SHARE_SLACK_CHANNEL);
   }
 }
 
