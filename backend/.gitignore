@@ -1,0 +1,8 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+npm-debug.log*
+# 실제 직원 개인정보/급여 데이터가 담긴 이관용 임시 export - 절대 커밋 금지
+db/_export/
