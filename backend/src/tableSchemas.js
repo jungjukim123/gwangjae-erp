@@ -41,6 +41,12 @@ const TABLES = {
     columns: ['key','emp_id','yr','mo','days_json','updated'],
     json: ['days_json'],
   },
+  overtime_requests: {
+    pk: 'id',
+    columns: ['id','emp_id','emp_name','work_date','req_type','start_time','end_time',
+      'hours','reason','status','reviewed_by','reviewed_at'],
+    json: [],
+  },
 };
 
 module.exports = { TABLES };

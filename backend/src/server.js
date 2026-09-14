@@ -11,6 +11,7 @@ const pool = require('./db');
 const tableRoutes = require('./routes/tables');
 const authRoutes = require('./routes/auth');
 const auditLogRoutes = require('./routes/auditLog');
+const mypageRoutes = require('./routes/mypage');
 const { attachRealtime } = require('./realtime');
 const { ipAllowlist } = require('./middleware/ipAllowlist');
 
@@ -67,6 +68,7 @@ app.get(['/', '/gwangjae_v222.html'], (req, res) => res.sendFile(ERP_HTML_PATH))
 
 app.use('/api/auth', authRoutes);
 app.use('/api/audit-log', auditLogRoutes);
+app.use('/api/mypage', mypageRoutes);
 app.use('/api', tableRoutes);
 
 // eslint-disable-next-line no-unused-vars

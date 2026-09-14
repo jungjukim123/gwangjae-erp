@@ -41,4 +41,23 @@ function requireAuthOrApiKey(req, res, next) {
   return res.status(401).json({ error: 'not logged in' });
 }
 
-module.exports = { requireAuth, requireHr, requireAuthOrApiKey };
+// MYPAGE(구성원 자가서비스) 도입으로 emp/field 세션도 로그인 상태를 갖게 되면서,
+// requireAuthOrApiKey(로그인만 하면 통과)를 제네릭 /api/:table에 그대로 두면 구성원 계정이
+// employees/contracts(시급·전화번호)/meta(계정 목록의 bcrypt 해시 포함) 등 전 테이블을
+// devtools로 직접 조회/수정할 수 있게 된다 — HR 세션 또는 GAS API 키만 통과시킨다.
+function requireHrOrApiKey(req, res, next) {
+  if (req.session && req.session.user && req.session.user.role === 'hr') return next();
+
+  const authHeader = req.headers.authorization || '';
+  const [scheme, token] = authHeader.split(' ');
+  const expected = process.env.GAS_API_KEY;
+  if (expected && scheme === 'Bearer' && token && safeEqual(token, expected)) {
+    req.isServiceCall = true;
+    return next();
+  }
+
+  if (req.session && req.session.user) return res.status(403).json({ error: 'forbidden' });
+  return res.status(401).json({ error: 'not logged in' });
+}
+
+module.exports = { requireAuth, requireHr, requireAuthOrApiKey, requireHrOrApiKey };

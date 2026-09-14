@@ -170,6 +170,40 @@ CREATE TRIGGER trg_sched_saved_updated_at BEFORE UPDATE ON sched_saved
  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- ------------------------------------------------------------
+-- overtime_requests (MYPAGE 연장/휴일근무요청서 — 구성원 신청, HR 승인/거절)
+-- ------------------------------------------------------------
+CREATE TABLE overtime_requests (
+ id BIGSERIAL PRIMARY KEY,
+ "emp_id" TEXT NOT NULL,
+ "emp_name" TEXT,
+ "work_date" TEXT NOT NULL,
+ "req_type" TEXT NOT NULL,
+ "start_time" TEXT,
+ "end_time" TEXT,
+ "hours" NUMERIC(4,2),
+ "reason" TEXT,
+ "status" TEXT NOT NULL DEFAULT '대기중',
+ "reviewed_by" TEXT,
+ "reviewed_at" TIMESTAMPTZ,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_overtime_requests_emp_id ON overtime_requests ("emp_id");
+CREATE TRIGGER trg_overtime_requests_updated_at BEFORE UPDATE ON overtime_requests
+ FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ------------------------------------------------------------
+-- login_fails (MYPAGE 사번+휴대폰 자가 로그인 계정 잠금 — 제네릭 /api/:table 화이트리스트에는
+-- 절대 추가하지 않는다. auth.js 내부에서만 조회/갱신)
+-- ------------------------------------------------------------
+CREATE TABLE login_fails (
+ "id" TEXT PRIMARY KEY,
+ "fail_count" INTEGER NOT NULL DEFAULT 0,
+ "locked_until" TIMESTAMPTZ,
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ------------------------------------------------------------
 -- audit_log (2단계 계획서 2-6절 — 급여확정/해제, 계정 추가/삭제/권한변경,
 -- 계약삭제, 근태확정/해제 최소 5개 액션 기록용)
 -- ------------------------------------------------------------

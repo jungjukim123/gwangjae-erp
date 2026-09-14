@@ -28,6 +28,58 @@ async function getAccounts() {
   return Array.isArray(list) ? list : [];
 }
 
+function todayKst() {
+  const kst = new Date(Date.now() + 9 * 3600 * 1000);
+  return kst.toISOString().slice(0, 10);
+}
+
+// ── 계정 잠금(무차별 대입 방지, 보안규칙 13) — IP당 요청 제한(loginLimiter)과 별개로
+//   "이 아이디"에 대한 연속 실패를 추적한다. 사번+휴대폰 뒷자리처럼 약한 조합을
+//   자가 로그인으로 새로 허용하면서 반드시 같이 넣어야 하는 방어선.
+const MAX_LOGIN_FAILS = 5;
+const LOGIN_LOCK_MS = 15 * 60 * 1000;
+
+async function getLoginLock(id) {
+  const { rows } = await pool.query('SELECT fail_count, locked_until FROM login_fails WHERE id = $1', [id]);
+  return rows[0] || null;
+}
+
+async function registerLoginFailure(id) {
+  const { rows } = await pool.query(
+    `INSERT INTO login_fails (id, fail_count, updated_at) VALUES ($1, 1, now())
+     ON CONFLICT (id) DO UPDATE SET fail_count = login_fails.fail_count + 1, updated_at = now()
+     RETURNING fail_count`,
+    [id]
+  );
+  if (rows[0].fail_count >= MAX_LOGIN_FAILS) {
+    await pool.query('UPDATE login_fails SET locked_until = $2 WHERE id = $1', [id, new Date(Date.now() + LOGIN_LOCK_MS)]);
+  }
+}
+
+async function clearLoginFailure(id) {
+  await pool.query('DELETE FROM login_fails WHERE id = $1', [id]);
+}
+
+// ── MYPAGE 자가 로그인 — 계정관리(meta.accounts)에 없는 아이디는 계약기간관리(contracts)의
+//   사번+휴대폰 뒷자리 4자리로 인증한다(계정 별도 생성 불필요). 동일 사번으로 계약이 여러 건
+//   있으면 재직중(퇴사일 없음) 건을 우선하고, 없으면 가장 최근 계약(no 내림차순)을 쓴다.
+//   employees 테이블엔 전화번호가 없어 contracts.phone만 본다.
+async function findSelfServiceAccount(id, pw) {
+  if (!/^\d{4}$/.test(pw)) return null;
+  const { rows } = await pool.query(
+    `SELECT "사번", "이름", "소속", "phone", "퇴사" FROM contracts
+     WHERE "사번" = $1
+     ORDER BY ("퇴사" IS NULL OR "퇴사" = '') DESC, "no" DESC`,
+    [id]
+  );
+  if (!rows.length) return null;
+  const con = rows[0];
+  if (con.퇴사 && con.퇴사 < todayKst()) return null; // 퇴사 처리된 사번은 로그인 불가
+  const digits = String(con.phone || '').replace(/\D/g, '');
+  if (digits.length < 4 || digits.slice(-4) !== pw) return null;
+  return { id: con.사번, name: con.이름, role: 'emp', info: con.소속 || '', av: (con.이름 || '?')[0] };
+}
+
 async function saveAccounts(list) {
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 3600 * 1000);
@@ -44,17 +96,32 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     const { id, pw } = req.body || {};
     if (!id || !pw) return res.status(400).json({ error: 'id/pw required' });
 
+    const lock = await getLoginLock(id);
+    if (lock && lock.locked_until && new Date(lock.locked_until) > new Date()) {
+      return res.status(429).json({ error: '로그인 시도가 너무 많아 잠시 잠겼습니다. 15분 후 다시 시도하세요.' });
+    }
+
     const accounts = await getAccounts();
     const acc = accounts.find((a) => a.id === id);
-    const ok = acc && acc.pw && (await bcrypt.compare(pw, acc.pw));
-    if (!ok) {
+    let sessionUser = null;
+
+    if (acc && acc.pw && (await bcrypt.compare(pw, acc.pw))) {
+      sessionUser = {
+        id: acc.id, name: acc.name, role: acc.role,
+        info: acc.info || '', av: acc.av || '', menus: acc.menus || null,
+      };
+    } else if (!acc) {
+      // 계정관리에 등록된 계정이 아니면 계약기간관리 사번+휴대폰 뒷자리 자가 로그인 시도
+      sessionUser = await findSelfServiceAccount(id, pw);
+    }
+
+    if (!sessionUser) {
+      await registerLoginFailure(id);
       return res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다.' });
     }
 
-    req.session.user = {
-      id: acc.id, name: acc.name, role: acc.role,
-      info: acc.info || '', av: acc.av || '', menus: acc.menus || null,
-    };
+    await clearLoginFailure(id);
+    req.session.user = sessionUser;
     res.json({ user: req.session.user });
   } catch (err) { next(err); }
 });

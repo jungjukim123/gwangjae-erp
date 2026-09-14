@@ -2,7 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { TABLES } = require('../tableSchemas');
 const { parseFilters } = require('../filters');
-const { requireAuthOrApiKey } = require('../middleware/requireAuth');
+const { requireHrOrApiKey } = require('../middleware/requireAuth');
 const realtimeBus = require('../realtimeBus');
 
 const router = express.Router();
@@ -46,7 +46,7 @@ function getSchemaOr404(req, res) {
 // GET /api/:table?col=eq.X&col2=like.Y*  → _sbSelect 대체
 // limit/offset 없이 조건에 맞는 전체 행을 한 번에 반환한다 — 클라이언트가 하던
 // 1000행 페이지네이션 루프를 서버가 대신 떠안는다(2단계 계획서 2-2절).
-router.get('/:table', requireAuthOrApiKey, async (req, res, next) => {
+router.get('/:table', requireHrOrApiKey, async (req, res, next) => {
   try {
     const ctx = getSchemaOr404(req, res);
     if (!ctx) return;
@@ -61,7 +61,7 @@ router.get('/:table', requireAuthOrApiKey, async (req, res, next) => {
 
 // POST /api/:table  body: 행 객체 또는 행 객체 배열 → _sbUpsert 대체
 // INSERT ... ON CONFLICT(pk) DO UPDATE — Supabase의 Prefer: resolution=merge-duplicates와 동일 동작.
-router.post('/:table', requireAuthOrApiKey, async (req, res, next) => {
+router.post('/:table', requireHrOrApiKey, async (req, res, next) => {
   try {
     const ctx = getSchemaOr404(req, res);
     if (!ctx) return;
@@ -104,7 +104,7 @@ router.post('/:table', requireAuthOrApiKey, async (req, res, next) => {
 // DELETE /api/:table?key=eq.X 또는 ?key=in.(a,b,c) 등 → 1단계에서 찾은 직접 fetch(DELETE) 10곳 대체
 // 필터 없는 전체삭제는 사고 방지를 위해 항상 거부한다(기존 _sbReplace가 쓰던 key=neq.NONE 방식은
 // 호출부가 없는 죽은 코드였으므로 지원하지 않음 — 1단계 분석 결과 참고).
-router.delete('/:table', requireAuthOrApiKey, async (req, res, next) => {
+router.delete('/:table', requireHrOrApiKey, async (req, res, next) => {
   try {
     const ctx = getSchemaOr404(req, res);
     if (!ctx) return;

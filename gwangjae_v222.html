@@ -386,6 +386,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
   <div class="ni hr-menu" style="display:none" onclick="nav('hr5',this)">근태소명관리</div>
   <div class="ni hr-menu" style="display:none" onclick="nav('hr12',this)">연차현황</div>
   <div class="ni hr-menu" style="display:none" onclick="nav('hr13',this)">연차사용현황</div>
+  <div class="ni hr-menu" style="display:none" onclick="nav('hr14',this)">연장·휴일근무 승인</div>
   <div class="nsec hr-menu" style="display:none">스케줄관리</div>
   <div class="ni hr-menu" style="display:none" onclick="nav('hr10',this)">월별 스케줄 등록</div>
   <div class="nsec hr-menu" style="display:none">급여관리</div>
@@ -394,6 +395,12 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
   <div class="ni hr-menu" style="display:none" onclick="nav('hr8',this)">퇴직정산</div>
   <div class="ni hr-menu" style="display:none" onclick="nav('hr9',this)">퇴직금 계산</div>
   <div class="ni hr-menu" style="display:none" onclick="nav('hr7',this)">계정관리</div>
+  <div class="nsec emp-menu" style="display:none">MYPAGE</div>
+  <div class="ni emp-menu" style="display:none" onclick="nav('my1',this)">나의 근태현황</div>
+  <div class="ni emp-menu" style="display:none" onclick="nav('my2',this)">근태소명요청서</div>
+  <div class="ni emp-menu" style="display:none" onclick="nav('my3',this)">연장/휴일근무요청서</div>
+  <div class="ni emp-menu" style="display:none" id="mypageClockInBtn" onclick="mypageClockIn()">🟢 출근</div>
+  <div class="ni emp-menu" style="display:none" id="mypageClockOutBtn" onclick="mypageClockOut()">🔴 퇴근</div>
   <!-- DB 상태바 -->
   <div id="sbDbBar" style="display:none;margin:0 8px 6px;padding:6px 10px;border-radius:6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)">
     <div style="display:flex;align-items:center;justify-content:space-between">
@@ -724,6 +731,97 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
   </div>
 </div>
 
+<!-- HR ⑭ 연장·휴일근무 승인 (MYPAGE 연장/휴일근무요청서 관리자 처리 화면) -->
+<div class="page" id="page-hr14">
+  <div class="ph">
+    <div class="ph-l"><div class="pt">연장·휴일근무 승인</div><div class="psub">MYPAGE에서 접수된 연장/휴일근무요청서 승인·거절 | 승인 시 월별 근태현황 연장승인에 자동 반영</div></div>
+    <div class="bg-row">
+      <select id="otReqStatusQ" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderOtReqApprovals()">
+        <option value="대기중">대기중만</option>
+        <option value="all">전체</option>
+      </select>
+      <button class="btn p" onclick="loadOtReqApprovals()">🔄 새로고침</button>
+    </div>
+  </div>
+  <div class="tw">
+    <table style="width:100%;min-width:900px">
+      <thead>
+        <tr style="background:#E8EDF6">
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">이름(사번)</th>
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">날짜</th>
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">구분</th>
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">시간</th>
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">사유</th>
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">상태</th>
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;white-space:nowrap">처리</th>
+        </tr>
+      </thead>
+      <tbody id="otReqBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- MYPAGE ① 나의 근태현황 -->
+<div class="page" id="page-my1">
+  <div class="ph">
+    <div class="ph-l"><div class="pt">나의 근태현황</div><div class="psub">본인 근태만 조회할 수 있는 읽기전용 화면입니다</div></div>
+    <div class="bg-row">
+      <select id="myAttYear" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderMyAtt()"><option value="2026">2026년</option></select>
+      <select id="myAttMonth" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderMyAtt()"><option value="12">12월</option><option value="11">11월</option><option value="10">10월</option><option value="9">09월</option><option value="8">08월</option><option value="7">07월</option><option value="6">06월</option><option value="5">05월</option><option value="4">04월</option><option value="3">03월</option><option value="2">02월</option><option value="1">01월</option></select>
+    </div>
+  </div>
+  <div class="tw" id="myAttTW">
+    <table id="myAttT">
+      <thead id="myAttHead"></thead>
+      <tbody id="myAttBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- MYPAGE ② 근태소명요청서 -->
+<div class="page" id="page-my2">
+  <div class="ph">
+    <div class="ph-l"><div class="pt">근태소명요청서</div><div class="psub">관리자가 확인사항으로 지정한 날짜에 대한 소명을 작성해 제출합니다</div></div>
+    <div class="bg-row">
+      <select id="myExpYear" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderMyExplanations()"><option value="2026">2026년</option></select>
+      <select id="myExpMonth" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderMyExplanations()"><option value="12">12월</option><option value="11">11월</option><option value="10">10월</option><option value="9">09월</option><option value="8">08월</option><option value="7">07월</option><option value="6">06월</option><option value="5">05월</option><option value="4">04월</option><option value="3">03월</option><option value="2">02월</option><option value="1">01월</option></select>
+    </div>
+  </div>
+  <div id="myExpList"></div>
+</div>
+
+<!-- MYPAGE ③ 연장/휴일근무요청서 -->
+<div class="page" id="page-my3">
+  <div class="ph">
+    <div class="ph-l"><div class="pt">연장/휴일근무요청서</div><div class="psub">연장·휴일근무를 신청하고 처리 상태를 확인합니다</div></div>
+  </div>
+  <div class="section" style="margin-bottom:14px">
+    <div class="shd"><span class="shd-t">새 신청서 작성</span></div>
+    <div class="sb" style="padding:14px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div class="fg"><label>날짜 *</label><input type="date" id="myOtDate"></div>
+      <div class="fg"><label>구분 *</label><select id="myOtType"><option value="연장">연장근무</option><option value="휴일">휴일근무</option></select></div>
+      <div class="fg"><label>시작시간</label><input type="time" id="myOtStart"></div>
+      <div class="fg"><label>종료시간</label><input type="time" id="myOtEnd"></div>
+      <div class="fg" style="flex:1;min-width:200px"><label>사유</label><input type="text" id="myOtReason" placeholder="사유를 입력하세요"></div>
+      <button class="btn p" onclick="submitMyOvertimeRequest()">제출</button>
+    </div>
+  </div>
+  <div class="tw">
+    <table style="width:100%;min-width:700px">
+      <thead>
+        <tr style="background:#E8EDF6">
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">날짜</th>
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">구분</th>
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">시간</th>
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">사유</th>
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;white-space:nowrap">상태</th>
+        </tr>
+      </thead>
+      <tbody id="myOtBody"></tbody>
+    </table>
+  </div>
+</div>
+
 <!-- HR ⑥ 급여설정관리 -->
 <div class="page" id="page-hr6">
   <div class="ph">
@@ -973,6 +1071,18 @@ async function doLoginInternal(id,pw,err){
   if(ls){ ls.style.display='flex'; ls.style.opacity='1'; ls.style.transition='none'; }
   _setLoadingMsg('잠시만 기다려 주세요...');
 
+  // ★ MYPAGE(구성원 자가서비스) 계정은 제네릭 /api/:table이 HR 전용으로 잠겨 있어
+  //   loadSaved()(전체 데이터 로드)를 호출할 수 없다 — 본인 데이터만 내려주는
+  //   /api/mypage/me로 가볍게 부트스트랩한다.
+  if(acc.role!=='hr'){
+    fetchMypageMe().then(()=>{
+      _hideLoading();
+      localStorage.setItem('gwangjae_last_page','my1');
+      applyUserAndInit(acc);
+    });
+    return;
+  }
+
   loadSaved().then(ok=>{
     if(hrAttRows.length>0){
       buildHrHead();
@@ -1045,6 +1155,7 @@ function applyUserAndInit(acc){
     }
   } else {
     document.querySelectorAll('.hr-menu').forEach(e=>e.style.display='none');
+    document.querySelectorAll('.emp-menu').forEach(e=>e.style.display='');
   }
   document.getElementById('loginScreen').style.display='none';
   // DB 상태바 표시
@@ -1071,8 +1182,8 @@ function applyUserAndInit(acc){
   // 첫 번째 nav 활성화 (마지막 방문 페이지 복원)
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
   const _lastPage=localStorage.getItem('gwangjae_last_page');
-  const _lastNi=_lastPage?document.querySelector(`.ni[onclick*="'${_lastPage}'"]`):null;
-  const firstNi=document.querySelector('.ni');
+  const _lastNi=_lastPage?document.querySelector(`.ni[onclick^="nav("][onclick*="'${_lastPage}'"]`):null;
+  const firstNi=Array.from(document.querySelectorAll('.ni[onclick^="nav("]')).find(n=>n.style.display!=='none');
   if(_lastNi&&_lastNi.style.display!=='none'){_lastNi.classList.add('on');_lastNi.click();}
   else if(firstNi){firstNi.classList.add('on');firstNi.click();}
 }
@@ -1100,6 +1211,345 @@ function doLogout(){
   document.getElementById('loginId').value='';
   document.getElementById('loginPw').value='';
   document.getElementById('loginErr').style.display='none';
+}
+
+// ============================================================
+// MYPAGE (구성원 자가서비스) — 나의 근태현황 / 근태소명요청서 / 연장·휴일근무요청서 / 출퇴근
+// 제네릭 /api/:table은 HR 전용으로 잠겨 있으므로, emp/field 세션은 아래 /api/mypage/* 로만
+// 본인 데이터를 주고받는다. employees/contracts 전역변수도 "본인 한 명" 데이터로만 채워서
+// 기존 계산 함수(cU/cV/.../getMergedEmp 등)를 그대로 재사용한다.
+// ============================================================
+async function fetchMypageMe(){
+  try{
+    const res=await fetch(`${API_BASE}/api/mypage/me`,{headers:API_HDR,credentials:'include'});
+    if(!res.ok)return;
+    const data=await res.json();
+    employees=data.employee?[data.employee]:[];
+    contracts=data.contracts||[];
+    refreshMypageClockButtons();
+  }catch(e){}
+}
+
+async function refreshMypageClockButtons(){
+  const inBtn=document.getElementById('mypageClockInBtn');
+  const outBtn=document.getElementById('mypageClockOutBtn');
+  if(!inBtn||!outBtn||currentRole==='hr')return;
+  const now=new Date();
+  try{
+    const res=await fetch(`${API_BASE}/api/mypage/attendance?yr=${now.getFullYear()}&mo=${now.getMonth()+1}`,{headers:API_HDR,credentials:'include'});
+    if(!res.ok)return;
+    const data=await res.json();
+    const ds=_localDate(now);
+    const today=(data.attData||[]).find(r=>r.date===ds&&r.source==='mypage');
+    inBtn.textContent=today&&today.in?`✅ 출근 ${today.in}`:'🟢 출근';
+    outBtn.textContent=today&&today.out?`✅ 퇴근 ${today.out}`:'🔴 퇴근';
+  }catch(e){}
+}
+
+async function mypageClockIn(){await _mypageClock('clock-in','출근');}
+async function mypageClockOut(){await _mypageClock('clock-out','퇴근');}
+async function _mypageClock(path,label){
+  try{
+    const res=await fetch(`${API_BASE}/api/mypage/${path}`,{method:'POST',headers:API_HDR,credentials:'include'});
+    const data=await res.json();
+    if(!res.ok){_toast(data.error||`${label} 기록에 실패했습니다.`,'error');return;}
+    _toast(`${label} 처리되었습니다 (${data.time})`,'ok');
+    refreshMypageClockButtons();
+    const my1=document.getElementById('page-my1');
+    if(my1&&my1.classList.contains('on'))renderMyAtt();
+  }catch(e){_toast(`${label} 기록에 실패했습니다.`,'error');}
+}
+
+// ── 나의 근태현황 (읽기전용 — 통상시급 컬럼 제외) ───────────────
+const MY_ATT_COLS=['NO','귀속년도','귀속월','사번','소속','급여종','이름','일자','요일','구분','연장승인',
+  '시업','종료','비고','소정','출근','퇴근','휴게','총근무','기본','주휴시간','근로장려','야간','연장','휴일','휴일연장','확인사항'];
+function buildMyAttHead(){
+  const thead=document.getElementById('myAttHead');
+  if(!thead)return;
+  thead.innerHTML=`<tr>${MY_ATT_COLS.map(c=>`<th style="padding:6px 8px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;white-space:nowrap;border-bottom:1px solid #CBD5E5;background:#E8EDF6">${c}</th>`).join('')}</tr>`;
+}
+
+async function renderMyAtt(){
+  buildMyAttHead();
+  const yr=parseInt(document.getElementById('myAttYear').value);
+  const mo=parseInt(document.getElementById('myAttMonth').value);
+  const tbody=document.getElementById('myAttBody');
+  if(!tbody)return;
+  tbody.innerHTML=`<tr><td colspan="${MY_ATT_COLS.length}" style="text-align:center;padding:30px;color:var(--tx3)">불러오는 중...</td></tr>`;
+  let data;
+  try{
+    const res=await fetch(`${API_BASE}/api/mypage/attendance?yr=${yr}&mo=${mo}`,{headers:API_HDR,credentials:'include'});
+    if(!res.ok)throw new Error();
+    data=await res.json();
+  }catch(e){
+    tbody.innerHTML=`<tr><td colspan="${MY_ATT_COLS.length}" style="text-align:center;padding:30px;color:var(--tx3)">근태 데이터를 불러오지 못했습니다.</td></tr>`;
+    return;
+  }
+  const emp=data.employee;
+  if(!emp){
+    tbody.innerHTML=`<tr><td colspan="${MY_ATT_COLS.length}" style="text-align:center;padding:30px;color:var(--tx3)">계약기간관리에 등록된 본인 정보를 찾을 수 없습니다.</td></tr>`;
+    return;
+  }
+  employees=[emp];
+  contracts=data.contracts||[];
+  attData={};
+  (data.attData||[]).forEach(r=>{attData[r.key]={in:r.in||'',out:r.out||'',source:r.source||'',locked:!!r.locked,updated:r.updated};});
+  slackData={};
+  (data.slackData||[]).forEach(r=>{if(!slackData[r.emp_id])slackData[r.emp_id]={};slackData[r.emp_id][r.date]={in:r.in||'',out:r.out||''};});
+  // 월별 스케줄 등록(sched_saved) 오버라이드 — 본인 것만 채움(_buildEmpMonthDays가 참조)
+  (data.schedDays||[]).forEach(d=>{if(d&&d.date)_schedSaved[emp.사번+'_'+d.date]={state:d.state,note:d.note||''};});
+  const me=getMergedEmp(emp);
+  const days=_buildEmpMonthDays(emp,yr,mo,data.daysJson||[]);
+  const _fullAtt=isFullAttendanceMonth(emp.사번,days)&&(yr+'-'+String(mo).padStart(2,'0'))>=GJ_START_YM;
+  const tdc='style="padding:5px 7px;font-size:11px;text-align:center;white-space:nowrap;border-bottom:1px solid #EDF0F7"';
+  let html='';
+  days.forEach(day=>{
+    const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
+    const otApproved=day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무';
+    const conTimes=getConTimes(emp.사번,day.date);
+    const _U0=cU(i,o,day.gbn,tH(conTimes.et),otApproved);
+    const U=day.수기U!==undefined?day.수기U:_U0;
+    const _V0=cV(me,day.date,day.gbn,day.소정,i,o,U,day.bigo,day.주휴수기,otApproved);
+    const _isHolW=day.gbn==='공휴일'&&typeof day.소정==='number'&&day.소정>0;
+    const V=day.수기V!==undefined?day.수기V:_V0;
+    const _W0=day.gbn==='주휴일'?0:_isHolW?day.소정:cW(V,day.소정);
+    const _X0=cX(i,o);
+    const _Y0=cY(day.gbn,V,day.소정,otApproved?'연장근무':day.확인);
+    const _AA0=cAA(i,o,U,_X0,day.gbn),_AB0=cAB(_AA0);
+    const W=day.수기W!==undefined?day.수기W:_W0;
+    const X=day.수기X!==undefined?day.수기X:_X0;
+    const Y=day.수기Y!==undefined?day.수기Y:_Y0;
+    const AA=day.수기AA!==undefined?day.수기AA:_AA0;
+    const AB=day.수기AB!==undefined?day.수기AB:_AB0;
+    const juhyuH=day.gbn==='주휴일'?calcJuhyu(me,day.date,day.주휴수기):0;
+    const dayJikchaek=getConJikchaek(emp.사번,day.date);
+    const gjH=(_fullAtt&&isGjDay(day.dow,day.gbn)&&isGjEligible({...me,직책구분:dayJikchaek},yr,mo))?gjWorkHours(day,W,me,i,o,U,otApproved):0;
+    const dayWage=getConWageType(emp.사번,day.date);
+    const gB=day.gbn==='주휴일'?'주휴':day.gbn==='무급휴일'?'무급':day.gbn==='공휴일'?'휴일':day.gbn==='계약기간 없음'?'계약외':'평일';
+    html+=`<tr>
+      <td ${tdc}></td><td ${tdc}>${yr}</td><td ${tdc}>${String(mo).padStart(2,'0')}</td>
+      <td ${tdc}>${emp.사번}</td><td ${tdc}>${emp.소속||''}</td><td ${tdc}>${dayWage||''}</td>
+      <td ${tdc}>${emp.이름||''}</td><td ${tdc}>${day.date}</td><td ${tdc}>${day.dow}</td>
+      <td ${tdc}>${gB}</td>
+      <td ${tdc}>${day.연장승인==='승인'?'승인':(day.연장인사==='승인'?'승인(인사)':'-')}</td>
+      <td ${tdc}>${conTimes.st||'-'}</td><td ${tdc}>${conTimes.et||'-'}</td>
+      <td ${tdc}>${day.bigo||'-'}</td>
+      <td ${tdc}>${typeof day.소정==='number'?day.소정:'-'}</td>
+      <td ${tdc}>${att.in||'-'}</td><td ${tdc}>${att.out||'-'}</td>
+      <td ${tdc}>${V>0?fw(U):'-'}</td><td ${tdc}>${V>0?fw(V):'-'}</td><td ${tdc}>${W>0?fw(W):'-'}</td>
+      <td ${tdc}>${juhyuH>0?fw(juhyuH):'-'}</td><td ${tdc}>${gjH>0?fw(gjH):'-'}</td>
+      <td ${tdc}>${X>0?fw(X):'-'}</td><td ${tdc}>${Y>0?fw(Y):'-'}</td>
+      <td ${tdc}>${AA>0?fw(AA):'-'}</td><td ${tdc}>${AB>0?fw(AB):'-'}</td>
+      <td ${tdc}>${day.확인||'-'}</td>
+    </tr>`;
+  });
+  tbody.innerHTML=html||`<tr><td colspan="${MY_ATT_COLS.length}" style="text-align:center;padding:30px;color:var(--tx3)">표시할 근태 데이터가 없습니다.</td></tr>`;
+}
+
+// ── 근태소명요청서 ────────────────────────────────────────────
+async function renderMyExplanations(){
+  const yr=parseInt(document.getElementById('myExpYear').value);
+  const mo=parseInt(document.getElementById('myExpMonth').value);
+  const box=document.getElementById('myExpList');
+  if(!box)return;
+  box.innerHTML='<div style="padding:20px;color:var(--tx3);font-size:12px">불러오는 중...</div>';
+  let items=[];
+  try{
+    const res=await fetch(`${API_BASE}/api/mypage/explanations?yr=${yr}&mo=${mo}`,{headers:API_HDR,credentials:'include'});
+    if(res.ok)items=(await res.json()).items||[];
+  }catch(e){}
+  if(!items.length){
+    box.innerHTML='<div style="padding:20px;color:var(--tx3);font-size:12px">해당 월에 소명이 필요한 항목이 없습니다. 관리자가 확인사항을 지정하면 여기에 표시됩니다.</div>';
+    return;
+  }
+  box.innerHTML=items.map((item,idx)=>{
+    const filled=!!(item.workerType||item.workerNote||item.workerIn||item.workerOut);
+    return `<div class="section" style="margin-bottom:10px">
+      <div class="shd"><span class="shd-t">${item.date} · ${item.type}</span>
+        <span class="bdg" style="font-size:10px;margin-left:8px;background:${filled?'#DCFCE7':'#FFFBEB'};color:${filled?'#15803D':'#92400E'};font-weight:700">${filled?'제출완료':'미제출'}</span>
+      </div>
+      <div class="sb" style="padding:12px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div class="fg"><label>소명사유</label>
+          <select id="myExpType_${idx}">
+            <option value="">선택</option>
+            <option value="연차" ${item.workerType==='연차'?'selected':''}>연차</option>
+            <option value="월차" ${item.workerType==='월차'?'selected':''}>월차</option>
+            <option value="지각" ${item.workerType==='지각'?'selected':''}>지각</option>
+            <option value="결근" ${item.workerType==='결근'?'selected':''}>결근</option>
+            <option value="기타" ${item.workerType==='기타'?'selected':''}>기타</option>
+          </select>
+        </div>
+        <div class="fg"><label>출근시간</label><input type="time" id="myExpIn_${idx}" value="${item.workerIn||''}"></div>
+        <div class="fg"><label>퇴근시간</label><input type="time" id="myExpOut_${idx}" value="${item.workerOut||''}"></div>
+        <div class="fg" style="flex:1;min-width:200px"><label>사유</label><input type="text" id="myExpNote_${idx}" value="${item.workerNote||''}" placeholder="사유를 입력하세요"></div>
+        <button class="btn p" onclick="submitMyExplanation(${yr},${mo},'${item.date}',${idx})">저장</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function submitMyExplanation(yr,mo,date,idx){
+  const body={
+    yr,mo,date,
+    workerType:document.getElementById(`myExpType_${idx}`).value,
+    workerNote:document.getElementById(`myExpNote_${idx}`).value,
+    workerIn:document.getElementById(`myExpIn_${idx}`).value,
+    workerOut:document.getElementById(`myExpOut_${idx}`).value,
+  };
+  try{
+    const res=await fetch(`${API_BASE}/api/mypage/explanations`,{method:'POST',headers:API_HDR,credentials:'include',body:JSON.stringify(body)});
+    const data=await res.json();
+    if(!res.ok){_toast(data.error||'저장에 실패했습니다.','error');return;}
+    _toast('소명 내용이 저장되었습니다.','ok');
+    renderMyExplanations();
+  }catch(e){_toast('저장에 실패했습니다.','error');}
+}
+
+// ── 연장/휴일근무요청서 ──────────────────────────────────────
+async function renderMyOvertimeRequests(){
+  const tbody=document.getElementById('myOtBody');
+  if(!tbody)return;
+  tbody.innerHTML='<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--tx3)">불러오는 중...</td></tr>';
+  let rows=[];
+  try{
+    const res=await fetch(`${API_BASE}/api/mypage/overtime-requests`,{headers:API_HDR,credentials:'include'});
+    if(res.ok)rows=await res.json();
+  }catch(e){}
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--tx3)">제출한 신청서가 없습니다.</td></tr>';
+    return;
+  }
+  const badge={대기중:['#FFFBEB','#92400E'],승인:['#DCFCE7','#15803D'],거절:['#FEE2E2','#991B1B']};
+  tbody.innerHTML=rows.map(r=>{
+    const bc=badge[r.status]||badge['대기중'];
+    const time=[r.start_time,r.end_time].filter(Boolean).join(' ~ ')||(r.hours?`${r.hours}시간`:'-');
+    return `<tr>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.work_date}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.req_type}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${time}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.reason||'-'}</td>
+      <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #EDF0F7"><span class="bdg" style="font-size:10px;background:${bc[0]};color:${bc[1]};font-weight:700">${r.status}</span></td>
+    </tr>`;
+  }).join('');
+}
+async function submitMyOvertimeRequest(){
+  const body={
+    work_date:document.getElementById('myOtDate').value,
+    req_type:document.getElementById('myOtType').value,
+    start_time:document.getElementById('myOtStart').value,
+    end_time:document.getElementById('myOtEnd').value,
+    reason:document.getElementById('myOtReason').value,
+  };
+  if(!body.work_date){_toast('날짜를 입력하세요.','error');return;}
+  try{
+    const res=await fetch(`${API_BASE}/api/mypage/overtime-requests`,{method:'POST',headers:API_HDR,credentials:'include',body:JSON.stringify(body)});
+    const data=await res.json();
+    if(!res.ok){_toast(data.error||'제출에 실패했습니다.','error');return;}
+    _toast('신청서가 제출되었습니다.','ok');
+    document.getElementById('myOtDate').value='';
+    document.getElementById('myOtStart').value='';
+    document.getElementById('myOtEnd').value='';
+    document.getElementById('myOtReason').value='';
+    renderMyOvertimeRequests();
+  }catch(e){_toast('제출에 실패했습니다.','error');}
+}
+
+// ── 관리자: 연장·휴일근무 승인 (hr14) ────────────────────────
+async function loadOtReqApprovals(){
+  const tbody=document.getElementById('otReqBody');
+  if(!tbody)return;
+  tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--tx3)">불러오는 중...</td></tr>';
+  try{
+    const res=await fetch(`${API_BASE}/api/overtime_requests`,{headers:API_HDR,credentials:'include'});
+    if(!res.ok)throw new Error();
+    window._otReqCache=await res.json();
+  }catch(e){
+    window._otReqCache=[];
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--tx3)">목록을 불러오지 못했습니다.</td></tr>';
+    return;
+  }
+  renderOtReqApprovals();
+}
+function renderOtReqApprovals(){
+  const tbody=document.getElementById('otReqBody');
+  if(!tbody)return;
+  const statusQ=document.getElementById('otReqStatusQ').value;
+  const rows=(window._otReqCache||[])
+    .filter(r=>statusQ==='all'||r.status===statusQ)
+    .sort((a,b)=>b.work_date.localeCompare(a.work_date));
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--tx3)">표시할 신청서가 없습니다.</td></tr>';
+    return;
+  }
+  const badge={대기중:['#FFFBEB','#92400E'],승인:['#DCFCE7','#15803D'],거절:['#FEE2E2','#991B1B']};
+  tbody.innerHTML=rows.map(r=>{
+    const bc=badge[r.status]||badge['대기중'];
+    const time=[r.start_time,r.end_time].filter(Boolean).join(' ~ ')||(r.hours?`${r.hours}시간`:'-');
+    const actions=r.status==='대기중'
+      ?`<button class="btn sm p" onclick="approveOtReq(${r.id})">승인</button>
+        <button class="btn sm d" onclick="rejectOtReq(${r.id})">거절</button>`
+      :`<span style="font-size:10px;color:var(--tx3)">${r.reviewed_by||''}</span>`;
+    return `<tr>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.emp_name||''}(${r.emp_id})</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.work_date}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.req_type}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${time}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.reason||'-'}</td>
+      <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #EDF0F7"><span class="bdg" style="font-size:10px;background:${bc[0]};color:${bc[1]};font-weight:700">${r.status}</span></td>
+      <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #EDF0F7">${actions}</td>
+    </tr>`;
+  }).join('');
+}
+async function rejectOtReq(id){
+  if(!confirm('이 신청서를 거절하시겠습니까?'))return;
+  await _updateOtReqStatus(id,'거절');
+}
+async function approveOtReq(id){
+  const req=(window._otReqCache||[]).find(r=>r.id===id);
+  if(!req)return;
+  if(!confirm(`${req.work_date} ${req.req_type}근무 신청을 승인하시겠습니까?\n해당 일자의 연장승인이 '승인'으로 자동 반영됩니다.`))return;
+  try{
+    await _applyOtApprovalToHrSaved(req);
+  }catch(e){
+    alert('월별 근태현황 반영에 실패했습니다: '+e.message);
+    return;
+  }
+  await _updateOtReqStatus(id,'승인');
+}
+// 승인된 연장/휴일근무를 해당 사번의 hr_saved(연장승인)에 반영 — syncOvertime()이 쓰는
+// 것과 동일한 값('승인')·경로(hr_saved.days_json)를 그대로 재사용
+async function _applyOtApprovalToHrSaved(req){
+  const [y,m]=req.work_date.split('-').map(Number);
+  const key=`${req.emp_id}_${y}_${String(m).padStart(2,'0')}`;
+  const res=await fetch(`${API_BASE}/api/hr_saved?key=eq.${encodeURIComponent(key)}`,{headers:API_HDR,credentials:'include'});
+  if(!res.ok)throw new Error('hr_saved 조회 실패');
+  const rows=await res.json();
+  let daysJson=rows[0]?(typeof rows[0].days_json==='string'?JSON.parse(rows[0].days_json):rows[0].days_json):[];
+  let day=daysJson.find(d=>d.date===req.work_date);
+  if(!day){day={date:req.work_date};daysJson.push(day);}
+  day.연장승인='승인';
+  const saveRes=await fetch(`${API_BASE}/api/hr_saved`,{method:'POST',headers:API_HDR,credentials:'include',
+    body:JSON.stringify({key,emp_id:req.emp_id,yr:y,mo:m,days_json:JSON.stringify(daysJson),updated:_kstNow()})});
+  if(!saveRes.ok)throw new Error('hr_saved 저장 실패');
+  // 현재 화면에 그 월 근태현황이 열려 있으면 즉시 재반영
+  const cacheKey=`${y}_${String(m).padStart(2,'0')}`;
+  const cached=_hrRowsCache[cacheKey];
+  if(cached){
+    const row=cached.find(r=>r.emp.사번===req.emp_id);
+    if(row){const d=row.days.find(x=>x.date===req.work_date);if(d)d.연장승인='승인';}
+  }
+}
+async function _updateOtReqStatus(id,status){
+  // ★ 제네릭 POST /api/:table은 전체 행 upsert(누락 컬럼은 null로 덮어씀)이므로,
+  //   status만 보내면 안 되고 캐시된 행 전체를 복사해 필요한 필드만 바꿔서 보내야 한다.
+  const req=(window._otReqCache||[]).find(r=>r.id===id);
+  if(!req)return;
+  const body={...req,status,reviewed_by:currentUser?currentUser.name:'',reviewed_at:new Date().toISOString()};
+  try{
+    const res=await fetch(`${API_BASE}/api/overtime_requests`,{method:'POST',headers:API_HDR,credentials:'include',body:JSON.stringify(body)});
+    if(!res.ok)throw new Error();
+    _toast(status==='승인'?'승인되었습니다.':'거절되었습니다.','ok');
+    loadOtReqApprovals();
+  }catch(e){_toast('처리에 실패했습니다.','error');}
 }
 
 function openAccModal(){renderAccList();openModal('modal-accounts');}
@@ -1745,70 +2195,9 @@ function _applyData(data) {
         } else { days = []; }
       }
       catch(e) { days = []; }
-      // days 재계산 (계약 정보 최신화)
-      const rebuilt = [];
-      for (let d = 1; d <= dim(yr, mo); d++) {
-        const ds = dStr(yr, mo, d);
-        const sched   = getSched(emp.사번, ds);
-        const sojeong = getSchedSojeong(emp.사번, ds);
-        let gbn, 소정;
-        const afterQuit = emp.퇴사 && emp.퇴사 !== '' && ds > emp.퇴사;
-        if (afterQuit) { gbn = '계약기간 없음'; 소정 = '계약기간 없음'; }
-        else if (sched === '계약기간 없음') { gbn = '계약기간 없음'; 소정 = '계약기간 없음'; }
-        else if (sched === '주휴' || sojeong === '주휴') { gbn = '주휴일'; 소정 = 0; }
-        else if (sched === 0) { gbn = '무급휴일'; 소정 = 0; }
-        else {
-          gbn = isPaidHolidayFor(emp.사번, ds) ? '공휴일' : '평일';
-          소정 = typeof sojeong === 'number' ? sojeong : sched;
-        }
-        // ★ 월별 스케줄 등록(sched_saved) override — contracts 기본값보다 우선, gbn수기보다 낮음
-        const _sov = _schedSaved[emp.사번 + '_' + ds];
-        if (_sov && _sov.state && gbn !== '계약기간 없음') {
-          if (_sov.state === '주휴일')       { gbn = '주휴일';  소정 = 0; }
-          else if (_sov.state === '무급휴일') { gbn = '무급휴일'; 소정 = 0; }
-          else if (_sov.state === '평일근무') {
-            gbn = isPaidHolidayFor(emp.사번, ds) ? '공휴일' : '평일';
-            소정 = typeof sojeong === 'number' ? sojeong : (typeof sched === 'number' ? sched : 0);
-          }
-        }
-        const sd = (days || []).find(x => x.date === ds) || {};
-        const _sojeong = (sd.소정수기 !== undefined && sd.소정수기 !== '') ? (sd.소정수기 === '0' ? 0 : sd.소정수기) : 소정;
-        let _gbn = gbn;
-        // ★ 수기로 지정한 구분(gbn수기)이 있으면 그 값을 그대로 신뢰 — isHoliday로 재계산하면
-        //   "평일"로 수기 지정해도 공휴일인 날짜는 재저장/재로드 시 다시 "휴일"로 되돌아가는 문제 발생
-        if (sd.gbn수기 !== undefined && sd.gbn수기 !== '' && gbn !== '계약기간 없음') {
-          _gbn = sd.gbn수기;
-        } else if (sd.소정수기 !== undefined && sd.소정수기 !== '') {
-          // (구버전 데이터 호환: gbn수기 없이 소정수기만 저장된 경우의 기존 로직)
-          if (sd.소정수기 === '주휴') {
-            _gbn = '주휴일';
-          } else if (gbn === '계약기간 없음') {
-            // 계약기간 없음은 수기로도 변경 불가
-          } else if (Number(sd.소정수기) === 0) {
-            _gbn = '무급휴일';
-          } else if (Number(sd.소정수기) > 0) {
-            _gbn = isPaidHolidayFor(emp.사번, ds) ? '공휴일' : '평일';
-          }
-        }
-        rebuilt.push({
-          date: ds, d, dow: DAYS[new Date(ds).getDay()],
-          gbn: _gbn, 소정: _sojeong,
-          bigo: sd.bigo||'', 확인: sd.확인||'', 연장승인: sd.연장승인||'', 연장인사: sd.연장인사||'',
-          bigo_locked: sd.bigo_locked||false, 연장승인_locked: sd.연장승인_locked||false,
-          주휴수기: sd.주휴수기 !== undefined ? sd.주휴수기 : '',
-          소정수기: sd.소정수기 !== undefined ? sd.소정수기 : '',
-          소정원본: sd.소정원본 !== undefined && sd.소정원본 !== '' ? sd.소정원본 : 소정,
-          gbn원본:  sd.gbn원본  !== undefined && sd.gbn원본  !== '' ? sd.gbn원본  : gbn,
-          gbn수기:  sd.gbn수기  !== undefined ? sd.gbn수기  : '',
-          수기U:  sd.수기U  !== undefined ? sd.수기U  : undefined,
-          수기V:  sd.수기V  !== undefined ? sd.수기V  : undefined,
-          수기W:  sd.수기W  !== undefined ? sd.수기W  : undefined,
-          수기X:  sd.수기X  !== undefined ? sd.수기X  : undefined,
-          수기Y:  sd.수기Y  !== undefined ? sd.수기Y  : undefined,
-          수기AA: sd.수기AA !== undefined ? sd.수기AA : undefined,
-          수기AB: sd.수기AB !== undefined ? sd.수기AB : undefined,
-        });
-      }
+      // days 재계산 (계약 정보 최신화) — MYPAGE "나의 근태현황"도 동일 규칙을 써야 하므로
+      // _buildEmpMonthDays()로 분리해 공유(로직 중복 시 두 화면이 서로 다르게 계산되는 사고 방지)
+      const rebuilt = _buildEmpMonthDays(emp, yr, mo, days);
       const cacheKey = yr + '_' + String(mo).padStart(2,'0');
       if (!_builtByMonth[cacheKey]) _builtByMonth[cacheKey] = [];
       _builtByMonth[cacheKey].push({ emp, yr, mo, days: rebuilt });
@@ -2092,6 +2481,75 @@ async function saveAll() {
     return ok;
   } catch(e) { console.warn('saveAll 오류:', e); return false; }
   finally { _saveInFlightCount--; }
+}
+
+// ── 특정 사번의 특정 월 근태 day 배열을 계약/스케줄 기준으로 재계산 + 저장된 수기값 병합.
+//   loadSaved()(전체 데이터 로드)와 MYPAGE "나의 근태현황"(본인만 로드) 양쪽에서 공유한다.
+function _buildEmpMonthDays(emp, yr, mo, days) {
+  const rebuilt = [];
+  for (let d = 1; d <= dim(yr, mo); d++) {
+    const ds = dStr(yr, mo, d);
+    const sched   = getSched(emp.사번, ds);
+    const sojeong = getSchedSojeong(emp.사번, ds);
+    let gbn, 소정;
+    const afterQuit = emp.퇴사 && emp.퇴사 !== '' && ds > emp.퇴사;
+    if (afterQuit) { gbn = '계약기간 없음'; 소정 = '계약기간 없음'; }
+    else if (sched === '계약기간 없음') { gbn = '계약기간 없음'; 소정 = '계약기간 없음'; }
+    else if (sched === '주휴' || sojeong === '주휴') { gbn = '주휴일'; 소정 = 0; }
+    else if (sched === 0) { gbn = '무급휴일'; 소정 = 0; }
+    else {
+      gbn = isPaidHolidayFor(emp.사번, ds) ? '공휴일' : '평일';
+      소정 = typeof sojeong === 'number' ? sojeong : sched;
+    }
+    // ★ 월별 스케줄 등록(sched_saved) override — contracts 기본값보다 우선, gbn수기보다 낮음
+    const _sov = _schedSaved[emp.사번 + '_' + ds];
+    if (_sov && _sov.state && gbn !== '계약기간 없음') {
+      if (_sov.state === '주휴일')       { gbn = '주휴일';  소정 = 0; }
+      else if (_sov.state === '무급휴일') { gbn = '무급휴일'; 소정 = 0; }
+      else if (_sov.state === '평일근무') {
+        gbn = isPaidHolidayFor(emp.사번, ds) ? '공휴일' : '평일';
+        소정 = typeof sojeong === 'number' ? sojeong : (typeof sched === 'number' ? sched : 0);
+      }
+    }
+    const sd = (days || []).find(x => x.date === ds) || {};
+    const _sojeong = (sd.소정수기 !== undefined && sd.소정수기 !== '') ? (sd.소정수기 === '0' ? 0 : sd.소정수기) : 소정;
+    let _gbn = gbn;
+    // ★ 수기로 지정한 구분(gbn수기)이 있으면 그 값을 그대로 신뢰 — isHoliday로 재계산하면
+    //   "평일"로 수기 지정해도 공휴일인 날짜는 재저장/재로드 시 다시 "휴일"로 되돌아가는 문제 발생
+    if (sd.gbn수기 !== undefined && sd.gbn수기 !== '' && gbn !== '계약기간 없음') {
+      _gbn = sd.gbn수기;
+    } else if (sd.소정수기 !== undefined && sd.소정수기 !== '') {
+      // (구버전 데이터 호환: gbn수기 없이 소정수기만 저장된 경우의 기존 로직)
+      if (sd.소정수기 === '주휴') {
+        _gbn = '주휴일';
+      } else if (gbn === '계약기간 없음') {
+        // 계약기간 없음은 수기로도 변경 불가
+      } else if (Number(sd.소정수기) === 0) {
+        _gbn = '무급휴일';
+      } else if (Number(sd.소정수기) > 0) {
+        _gbn = isPaidHolidayFor(emp.사번, ds) ? '공휴일' : '평일';
+      }
+    }
+    rebuilt.push({
+      date: ds, d, dow: DAYS[new Date(ds).getDay()],
+      gbn: _gbn, 소정: _sojeong,
+      bigo: sd.bigo||'', 확인: sd.확인||'', 연장승인: sd.연장승인||'', 연장인사: sd.연장인사||'',
+      bigo_locked: sd.bigo_locked||false, 연장승인_locked: sd.연장승인_locked||false,
+      주휴수기: sd.주휴수기 !== undefined ? sd.주휴수기 : '',
+      소정수기: sd.소정수기 !== undefined ? sd.소정수기 : '',
+      소정원본: sd.소정원본 !== undefined && sd.소정원본 !== '' ? sd.소정원본 : 소정,
+      gbn원본:  sd.gbn원본  !== undefined && sd.gbn원본  !== '' ? sd.gbn원본  : gbn,
+      gbn수기:  sd.gbn수기  !== undefined ? sd.gbn수기  : '',
+      수기U:  sd.수기U  !== undefined ? sd.수기U  : undefined,
+      수기V:  sd.수기V  !== undefined ? sd.수기V  : undefined,
+      수기W:  sd.수기W  !== undefined ? sd.수기W  : undefined,
+      수기X:  sd.수기X  !== undefined ? sd.수기X  : undefined,
+      수기Y:  sd.수기Y  !== undefined ? sd.수기Y  : undefined,
+      수기AA: sd.수기AA !== undefined ? sd.수기AA : undefined,
+      수기AB: sd.수기AB !== undefined ? sd.수기AB : undefined,
+    });
+  }
+  return rebuilt;
 }
 
 // ============================================================
@@ -9418,6 +9876,10 @@ function nav(pid,el){
   const pg=document.getElementById('page-'+pid);if(pg)pg.classList.add('on');if(el)el.classList.add('on');
   // ★ 마지막 방문 페이지 저장
   localStorage.setItem('gwangjae_last_page',pid);
+  if(pid==='hr14'){loadOtReqApprovals();}
+  if(pid==='my1'){renderMyAtt();}
+  if(pid==='my2'){renderMyExplanations();}
+  if(pid==='my3'){renderMyOvertimeRequests();}
   if(pid==='hr11'){buildDashExpHead();renderDashExpiring();dashSchedNav(0);}
   if(pid==='hr1'){
     buildEmpHead();
@@ -9948,10 +10410,11 @@ const MENU_LIST=[
   {id:'hr10',label:'월별 스케줄 등록'},
   {id:'hr12',label:'연차현황'},
   {id:'hr13',label:'연차사용현황'},
+  {id:'hr14',label:'연장·휴일근무 승인'},
 ];
 const ROLE_LABEL={hr:'HR 담당자',emp:'CX 직원',field:'현장운영자'};
 // 역할별 기본 메뉴 접근 허용
-const ROLE_DEFAULT_MENUS={hr:['hr11','hr1','hr2','hr3','hr4','hr5','hr6','hr7','hr8','hr9','hr10','hr12','hr13'],emp:['hr3'],field:['hr3']};
+const ROLE_DEFAULT_MENUS={hr:['hr11','hr1','hr2','hr3','hr4','hr5','hr6','hr7','hr8','hr9','hr10','hr12','hr13','hr14'],emp:['hr3'],field:['hr3']};
 
 // ★ 이 화면(renderAccPage 이하 pXxx 함수들)은 1단계/3단계(4)번 작업 때 놓쳤던 별도
 //   계정관리 화면 — modal-accounts(renderAccList 등)와 같은 계정 데이터를 다루므로 그쪽에서
@@ -10195,6 +10658,18 @@ async function _initInternal(){
     const meRes = await fetch(`${API_BASE}/api/auth/me`, { headers: API_HDR, credentials:'include' });
     if (meRes.ok) {
       const { user } = await meRes.json();
+      currentUser = user;
+      sessionStorage.setItem('gwangjae_session', JSON.stringify(user));
+
+      // ★ MYPAGE 계정은 제네릭 /api/:table이 HR 전용이라 loadSaved()를 쓸 수 없다
+      if (user.role !== 'hr') {
+        _setLoadingMsg('데이터 동기화 중...');
+        await fetchMypageMe();
+        _hideLoading();
+        applyUserAndInit(user);
+        return;
+      }
+
       _setLoadingMsg('데이터 동기화 중...');
       await loadSaved();
 
@@ -10207,8 +10682,6 @@ async function _initInternal(){
         if (moEl) moEl.value = String(r0.mo);
       }
 
-      currentUser = user;
-      sessionStorage.setItem('gwangjae_session', JSON.stringify(user));
       _hideLoading();
       applyUserAndInit(user);
       startPolling(); // ★ WebSocket 실시간 시작
