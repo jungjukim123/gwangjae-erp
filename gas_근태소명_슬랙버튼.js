@@ -40,15 +40,17 @@
 // gwangjae_v222.html의 ③근태관리 화면과 동일한 컬럼(S출근~AB휴일연장 포함)을 계산해서 보여줍니다.
 // 단, "월별 스케줄 등록(sched_saved)" 월단위 override는 이식하지 않았습니다 — 그 기능으로
 // 개별 조정된 날짜가 있다면 화면 숫자가 관제센터 프로그램과 다를 수 있습니다. 그 외(비고/연장승인/
-// 셀단위 수기입력/주휴 개근판정 등)는 화면과 동일한 로직으로, Supabase를 매번 직접 조회해서
+// 셀단위 수기입력/주휴 개근판정 등)는 화면과 동일한 로직으로, 사내 API 서버를 매번 직접 조회해서
 // 계산하므로 관제센터 프로그램에서 수정한 내용이 새로고침 즉시 반영됩니다.
 // ============================================================
 
 const SomyungBtn = (function(){
-  const SB_URL = 'https://dcvitbydqidndwbqqprm.supabase.co';
-  // ★ 보안: anon key를 소스에 하드코딩하지 않는다 — 스크립트 속성에 SUPABASE_ANON_KEY로 등록해서 쓴다
-  //   (다른 gas_*.js와 같은 값을 공유 — 이미 등록돼 있다면 새로 등록할 필요 없음).
-  const SB_KEY = PropertiesService.getScriptProperties().getProperty('SUPABASE_ANON_KEY');
+  // ★ Supabase 대체 — 사내 API 서버(backend/)를 호출한다. 주소/키는 소스에 하드코딩하지 않고
+  //   스크립트 속성에서 읽는다 (다른 gas_*.js와 같은 값을 공유 — 이미 등록돼 있다면 새로 등록할 필요 없음).
+  //   GWANGJAE_API_BASE 예: http://10.10.70.115:4000 (GAS는 구글 클라우드에서 호출하므로,
+  //   사내망 전용 주소가 아니라 인터넷에서 접근 가능한 주소/포트여야 한다 — README 참고).
+  const API_BASE = PropertiesService.getScriptProperties().getProperty('GWANGJAE_API_BASE');
+  const API_KEY = PropertiesService.getScriptProperties().getProperty('GAS_API_KEY');
   const DOW_KEYS = ['sun','mon','tue','wed','thu','fri','sat'];
   const DOW_LABEL = ['일','월','화','수','목','금','토'];
 
@@ -65,9 +67,9 @@ const SomyungBtn = (function(){
   }
 
   function sbSelect(table, params){
-    const url = SB_URL + '/rest/v1/' + table + '?' + (params||'') + '&limit=5000';
+    const url = API_BASE + '/api/' + table + '?' + (params||'');
     const res = UrlFetchApp.fetch(url, {
-      headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY },
+      headers: { Authorization: 'Bearer ' + API_KEY },
       muteHttpExceptions: true
     });
     return JSON.parse(res.getContentText());
@@ -616,7 +618,7 @@ const SomyungBtn = (function(){
   }
 
   // ── "나의 근태현황" 읽기전용 웹페이지 (사번 + 휴대폰 뒷자리 4자리 인증) ──
-  // ★ 관리자 메뉴 없음, 수정 폼 없음, 본인 데이터만 그때그때 Supabase에서 직접 조회해서 그리므로
+  // ★ 관리자 메뉴 없음, 수정 폼 없음, 본인 데이터만 그때그때 사내 API 서버에서 직접 조회해서 그리므로
   //   관제센터 프로그램에서 고친 내용이 새로고침 즉시 반영됩니다.
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function _loginAttemptsOk(eid){

@@ -27,10 +27,10 @@
 // ============================================================
 
 const YeonchaWeekly = (function(){
-  const SB_URL = 'https://dcvitbydqidndwbqqprm.supabase.co';
-  // ★ 보안: anon key를 소스에 하드코딩하지 않는다 — 스크립트 속성에 SUPABASE_ANON_KEY로 등록해서 쓴다
-  //   (다른 gas_*.js와 같은 값을 공유 — 이미 등록돼 있다면 새로 등록할 필요 없음).
-  const SB_KEY = PropertiesService.getScriptProperties().getProperty('SUPABASE_ANON_KEY');
+  // ★ Supabase 대체 — 사내 API 서버(backend/)를 호출한다. 주소/키는 소스에 하드코딩하지 않고
+  //   스크립트 속성에서 읽는다 (다른 gas_*.js와 같은 값을 공유 — 이미 등록돼 있다면 새로 등록할 필요 없음).
+  const API_BASE = PropertiesService.getScriptProperties().getProperty('GWANGJAE_API_BASE');
+  const API_KEY = PropertiesService.getScriptProperties().getProperty('GAS_API_KEY');
   const DOW_KEYS = ['sun','mon','tue','wed','thu','fri','sat'];
   const TRIGGER_FN = 'YeonchaWeekly_send'; // 최상위 트리거 진입점(아래에서 export)
   function setSlackToken(token){
@@ -43,9 +43,9 @@ const YeonchaWeekly = (function(){
   }
 
   function sbSelect(table, params){
-    const url = SB_URL + '/rest/v1/' + table + '?' + (params||'') + '&limit=5000';
+    const url = API_BASE + '/api/' + table + '?' + (params||'');
     const res = UrlFetchApp.fetch(url, {
-      headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY },
+      headers: { Authorization: 'Bearer ' + API_KEY },
       muteHttpExceptions: true
     });
     return JSON.parse(res.getContentText());
