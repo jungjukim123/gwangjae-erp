@@ -935,6 +935,62 @@ function doLogin(){
   const id=document.getElementById('loginId').value.trim();
   const pw=document.getElementById('loginPw').value;
   const err=document.getElementById('loginErr');
+  if (USE_INTERNAL_API) { doLoginInternal(id,pw,err); return; }
+  doLoginSupabase(id,pw,err);
+}
+
+// ── 사내 API 구현 — 서버가 bcrypt로 검증, 클라이언트는 더 이상 계정 목록(비밀번호 포함)을
+//   통째로 받아 비교하지 않는다(2단계 계획서 4절: 보안 취약 구조 폐기). ──
+async function doLoginInternal(id,pw,err){
+  if(!id||!pw){
+    err.style.display='block';
+    document.getElementById('loginPw').value='';
+    document.getElementById('loginPw').focus();
+    return;
+  }
+  let acc;
+  try{
+    const res=await fetch(`${API_BASE}/api/auth/login`,{
+      method:'POST', headers:API_HDR, credentials:'include',
+      body:JSON.stringify({id,pw})
+    });
+    if(!res.ok) throw new Error('로그인 실패');
+    acc=(await res.json()).user;
+  }catch(e){
+    err.style.display='block';
+    document.getElementById('loginPw').value='';
+    document.getElementById('loginPw').focus();
+    return;
+  }
+  err.style.display='none';
+  currentUser=acc;
+  // 서버 세션 쿠키(httpOnly)가 실제 인증을 담당 — sessionStorage는 새로고침 시 빠른 화면
+  // 복원용 캐시일 뿐이고, 여기엔 비밀번호가 애초에 들어있지 않다(서버 응답에 없음).
+  sessionStorage.setItem('gwangjae_session',JSON.stringify(acc));
+
+  document.getElementById('loginScreen').style.display='none';
+  const ls = document.getElementById('loadingScreen');
+  if(ls){ ls.style.display='flex'; ls.style.opacity='1'; ls.style.transition='none'; }
+  _setLoadingMsg('잠시만 기다려 주세요...');
+
+  loadSaved().then(ok=>{
+    if(hrAttRows.length>0){
+      buildHrHead();
+      const r0=hrAttRows[0];
+      const yrEl=document.getElementById('hrYear');
+      const moEl=document.getElementById('hrMonth');
+      if(yrEl)yrEl.value=String(r0.yr);
+      if(moEl)moEl.value=String(r0.mo);
+    }
+    _hideLoading();
+    localStorage.setItem('gwangjae_last_page','hr11');
+    applyUserAndInit(acc);
+    startPolling();
+  });
+}
+
+// ── Supabase 구현 (기존 코드 그대로) ──────────────────────────
+function doLoginSupabase(id,pw,err){
   // ★ id/pw가 비어있으면(예: pw:null인 기본계정) 절대 매칭되지 않도록 방어
   const acc=(id&&pw)?getAccounts().find(a=>a.id===id&&a.pw===pw):null;
   if(!acc){
@@ -1035,6 +1091,9 @@ function checkSession(){
 
 function doLogout(){
   stopPolling(); // 폴링 중지
+  if (USE_INTERNAL_API) {
+    fetch(`${API_BASE}/api/auth/logout`,{method:'POST',headers:API_HDR,credentials:'include'}).catch(()=>{});
+  }
   sessionStorage.removeItem('gwangjae_session');
   currentUser=null;
   document.getElementById('loginScreen').style.display='flex';
@@ -1045,6 +1104,37 @@ function doLogout(){
 
 function openAccModal(){renderAccList();openModal('modal-accounts');}
 function renderAccList(){
+  if (USE_INTERNAL_API) { renderAccListInternal(); return; }
+  renderAccListSupabase();
+}
+
+// ── 사내 API 구현 ──────────────────────────────────────────
+// deleteAccount(idx)가 기존과 동일하게 "화면에 그려진 순서(idx)"로 호출되므로, 방금 받아온
+// 목록을 캐시해뒀다가 idx로 실제 계정 id를 찾아 DELETE 요청에 쓴다(onclick 템플릿은 안 바꿈).
+let _accListCacheInternal = [];
+async function renderAccListInternal(){
+  const roleLabel={hr:'HR 담당자',emp:'CX 직원',field:'현장운영자'};
+  let list=[];
+  try{
+    const res=await fetch(`${API_BASE}/api/auth/accounts`,{headers:API_HDR,credentials:'include'});
+    if(res.ok) list=await res.json();
+  }catch(e){}
+  _accListCacheInternal=list;
+  const html=list.map((a,i)=>`
+    <div class="acc-row">
+      <div class="acc-av">${a.av||a.name[0]||'?'}</div>
+      <div class="acc-info">
+        <div class="acc-name">${a.name} <span style="font-size:10px;color:var(--tx3);font-weight:400">(${a.id})</span></div>
+        <div class="acc-meta">${roleLabel[a.role]||a.role} · ${a.info||'-'}</div>
+      </div>
+      ${a.id==='jungjukim'?'<span style="font-size:10px;color:var(--tx3)">최고관리자</span>':
+      '<button class="btn sm d" onclick="deleteAccount('+i+')">삭제</button>'}
+    </div>`).join('');
+  document.getElementById('accList').innerHTML=html||'<div style="color:var(--tx3);padding:8px">등록된 계정이 없습니다.</div>';
+}
+
+// ── Supabase 구현 (기존 코드 그대로) ──────────────────────────
+function renderAccListSupabase(){
   const roleLabel={hr:'HR 담당자',emp:'CX 직원',field:'현장운영자'};
   const html=getAccounts().map((a,i)=>`
     <div class="acc-row">
@@ -1058,6 +1148,7 @@ function renderAccList(){
     </div>`).join('');
   document.getElementById('accList').innerHTML=html||'<div style="color:var(--tx3);padding:8px">등록된 계정이 없습니다.</div>';
 }
+
 function addAccount(){
   const id=document.getElementById('newAccId').value.trim();
   const pw=document.getElementById('newAccPw').value;
@@ -1066,6 +1157,29 @@ function addAccount(){
   const info=document.getElementById('newAccInfo').value.trim();
   if(!id||!pw||!name){alert('아이디, 비밀번호, 이름은 필수입니다.');return;}
   if(pw.length<4){alert('비밀번호는 4자 이상이어야 합니다.');return;}
+  if (USE_INTERNAL_API) { addAccountInternal(id,pw,role,name,info); return; }
+  addAccountSupabase(id,pw,role,name,info);
+}
+
+async function addAccountInternal(id,pw,role,name,info){
+  try{
+    const listRes=await fetch(`${API_BASE}/api/auth/accounts`,{headers:API_HDR,credentials:'include'});
+    const list=listRes.ok?await listRes.json():[];
+    if(list.find(a=>a.id===id)){alert('이미 존재하는 아이디입니다.');return;}
+  }catch(e){}
+  try{
+    const res=await fetch(`${API_BASE}/api/auth/accounts`,{
+      method:'POST', headers:API_HDR, credentials:'include',
+      body:JSON.stringify({id,pw,role,name,info,av:name[0]})
+    });
+    if(!res.ok){alert('계정 저장에 실패했습니다.');return;}
+  }catch(e){alert('계정 저장 중 오류가 발생했습니다.');return;}
+  ['newAccId','newAccPw','newAccName','newAccInfo'].forEach(k=>document.getElementById(k).value='');
+  renderAccList();
+  _toast(`✅ "${name}" 계정 추가됨 — 모든 기기에서 로그인 가능`, 'ok');
+}
+
+function addAccountSupabase(id,pw,role,name,info){
   const list=getAccounts();
   if(list.find(a=>a.id===id)){alert('이미 존재하는 아이디입니다.');return;}
   list.push({id,pw,role,name,info,av:name[0]});
@@ -1074,7 +1188,27 @@ function addAccount(){
   renderAccList();
   _toast(`✅ "${name}" 계정 추가됨 — 모든 기기에서 로그인 가능`, 'ok');
 }
+
 function deleteAccount(idx){
+  if (USE_INTERNAL_API) { deleteAccountInternal(idx); return; }
+  deleteAccountSupabase(idx);
+}
+
+async function deleteAccountInternal(idx){
+  const a=_accListCacheInternal[idx];
+  if(!a||a.id==='jungjukim'){alert('최고관리자는 삭제할 수 없습니다.');return;}
+  if(!confirm('"'+a.name+'" ('+a.id+') 계정을 삭제하시겠습니까?'))return;
+  try{
+    const res=await fetch(`${API_BASE}/api/auth/accounts/${encodeURIComponent(a.id)}`,{
+      method:'DELETE', headers:API_HDR, credentials:'include'
+    });
+    if(!res.ok){alert('계정 삭제에 실패했습니다.');return;}
+  }catch(e){alert('계정 삭제 중 오류가 발생했습니다.');return;}
+  renderAccList();
+  _toast(`🗑 "${a.name}" 계정 삭제됨 — 모든 기기에 반영됨`, 'info');
+}
+
+function deleteAccountSupabase(idx){
   const list=getAccounts();
   const a=list[idx];
   if(!a||a.id==='jungjukim'){alert('최고관리자는 삭제할 수 없습니다.');return;}
@@ -1195,7 +1329,7 @@ let slackData={};
 let _schedSaved = {};
 
 // ============================================================
-// ★ SUPABASE 설정 ★
+// ★ SUPABASE 설정 ★ (롤백용으로 보존 — 2번 항목(직접 fetch 10곳)이 아직 이걸 씀)
 // ============================================================
 const SB_URL  = 'https://dcvitbydqidndwbqqprm.supabase.co';
 const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjdml0YnlkcWlkbmR3YnFxcHJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDE1ODMsImV4cCI6MjA5Nzc3NzU4M30.xHDxj8-0jTTOrWTErOMPQB4EvyKhuOsgkPAjAB2txmc';
@@ -1206,14 +1340,82 @@ let _dbOk = false;
 let _realtimeChannel = null;
 
 // ============================================================
-// Supabase 통신 레이어
+// ★ 사내 API 설정 ★ (Supabase 대체 — hr_cx_manage_de, 팀 전용 컴퓨터 10.10.70.115에서 서비스)
 // ============================================================
+// 이 페이지가 localhost(로컬 테스트 서버)에서 열렸으면 로컬 백엔드(4000)를, 그 외(실제
+// 팀 컴퓨터에서 서비스될 때)는 원래 주소를 쓴다 — 로컬 테스트 시 없는 주소로 20초씩
+// 타임아웃 나던 문제를 코드 수정 없이 두 환경 다 자동으로 맞게 동작하도록 해결.
+const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? 'http://localhost:4000'
+  : 'http://10.10.70.115:4000';
+const API_HDR  = { 'Content-Type':'application/json' };
+// ★ 롤백 스위치 — 문제 생기면 이 한 줄만 false로 바꾸고 재배포하면 즉시 Supabase로 복귀
+const USE_INTERNAL_API = true;
 
+// ============================================================
+// DB 통신 레이어 — _sbSelect/_sbUpsert/_sbReplace는 USE_INTERNAL_API에 따라
+// 사내 API 또는 Supabase 구현으로 분기한다. 함수 시그니처(이름·인자·반환값 형태)는
+// 기존과 동일하게 유지해서, 이 3개 함수를 호출하는 나머지 코드는 전혀 수정하지 않아도 된다.
+// ============================================================
+async function _sbSelect(table, params='') {
+  return USE_INTERNAL_API ? _sbSelectInternal(table, params) : _sbSelectSupabase(table, params);
+}
+async function _sbUpsert(table, rows) {
+  return USE_INTERNAL_API ? _sbUpsertInternal(table, rows) : _sbUpsertSupabase(table, rows);
+}
+async function _sbReplace(table, rows) {
+  return USE_INTERNAL_API ? _sbReplaceInternal(table, rows) : _sbReplaceSupabase(table, rows);
+}
+
+// ★ _sbSelect/_sbUpsert/_sbReplace를 거치지 않고 흩어져서 직접 fetch(SB_URL...)를 부르던
+//   10곳(1단계 분석에서 전수 확인)을 위한 공용 헬퍼 — PostgREST 호환 쿼리 문자열
+//   ("사번=eq.X", "key=in.(a,b)", "date=like.X-*" 등)은 그대로 재사용하고, URL 베이스와
+//   헤더만 USE_INTERNAL_API에 따라 자동으로 바뀐다. 호출부의 쿼리 문자열 로직은 무엇 하나
+//   바꾸지 않았다.
+function _dbFetch(pathAndQuery, opts={}) {
+  const base    = USE_INTERNAL_API ? API_BASE + '/api/'      : SB_URL + '/rest/v1/';
+  const baseHdr = USE_INTERNAL_API ? API_HDR                 : SB_HDR;
+  const init = { ...opts, headers: { ...baseHdr, ...(opts.headers||{}) } };
+  if (USE_INTERNAL_API) init.credentials = 'include';
+  return fetch(base + pathAndQuery, init);
+}
+
+// ── 사내 API 구현 ──────────────────────────────────────────
+// 서버가 PostgREST 호환 필터(eq/like/in)를 그대로 받아주고, 페이지네이션 없이
+// 조건에 맞는 전체 행을 한 번에 돌려주므로 클라이언트에서 1000행 루프를 돌 필요가 없다.
+async function _sbSelectInternal(table, params='') {
+  const res = await fetch(`${API_BASE}/api/${table}?${params}`, {
+    headers: API_HDR, credentials: 'include'
+  });
+  if (!res.ok) throw new Error(`SELECT ${table} 실패: ${res.status}`);
+  return res.json();
+}
+
+async function _sbUpsertInternal(table, rows) {
+  if (!rows || !rows.length) return true;
+  const res = await fetch(`${API_BASE}/api/${table}`, {
+    method: 'POST',
+    headers: API_HDR,
+    credentials: 'include',
+    body: JSON.stringify(rows)
+  });
+  return res.ok;
+}
+
+// ★ _sbReplace는 코드 전체에 호출부가 없는 죽은 코드(1단계 분석에서 확인) — 그래서 "전체 삭제"
+//   부분은 사내 API가 의도적으로 막아둔 안전장치(필터 없는 DELETE는 400 거부)와 충돌시키지 않고
+//   그냥 생략했다. 혹시 나중에 실제로 쓰이게 되면 그때 안전한 삭제 조건을 다시 설계해야 한다.
+async function _sbReplaceInternal(table, rows) {
+  if (rows && rows.length) return _sbUpsertInternal(table, rows);
+  return true;
+}
+
+// ── Supabase 구현 (기존 코드 그대로, 이름만 *Supabase로 변경) ──────────────
 /* 단일 테이블 전체 조회 — 페이지네이션으로 5000행 넘는 테이블도 전부 가져온다.
    ★ 예전엔 limit=5000 한 번만 요청해서, slack_data처럼 계속 쌓이는 테이블이 5000행을
    넘기면 그 뒤 행(대체로 최근에 추가된 행)이 조회할 때마다 통째로 잘려나가 사라지는
    문제가 있었다(예: 근태연동으로 방금 반영한 데이터가 새로고침/재로그인 후 사라짐). */
-async function _sbSelect(table, params='') {
+async function _sbSelectSupabase(table, params='') {
   const PAGE = 1000;
   let all = [];
   let offset = 0;
@@ -1231,7 +1433,7 @@ async function _sbSelect(table, params='') {
 }
 
 /* upsert (insert or update) — key 기반 */
-async function _sbUpsert(table, rows) {
+async function _sbUpsertSupabase(table, rows) {
   if (!rows || !rows.length) return true;
   const res = await fetch(`${SB_URL}/rest/v1/${table}`, {
     method: 'POST',
@@ -1242,11 +1444,11 @@ async function _sbUpsert(table, rows) {
 }
 
 /* 테이블 전체 교체 — delete all + upsert */
-async function _sbReplace(table, rows) {
+async function _sbReplaceSupabase(table, rows) {
   await fetch(`${SB_URL}/rest/v1/${table}?key=neq.NONE`, {
     method: 'DELETE', headers: SB_HDR
   });
-  if (rows && rows.length) return _sbUpsert(table, rows);
+  if (rows && rows.length) return _sbUpsertSupabase(table, rows);
   return true;
 }
 
@@ -1735,7 +1937,7 @@ async function saveAll() {
     // contracts에도 hr_saved에도 없는 사번 → DB employees 행 삭제
     empDedup.forEach((_, sabn) => {
       if(!_conSabnSet.has(sabn) && !_hrSabnSet.has(sabn)){
-        fetch(`${SB_URL}/rest/v1/employees?사번=eq.${encodeURIComponent(sabn)}`,{method:'DELETE',headers:SB_HDR}).catch(()=>{});
+        _dbFetch(`employees?사번=eq.${encodeURIComponent(sabn)}`,{method:'DELETE'}).catch(()=>{});
         empDedup.delete(sabn);
       }
     });
@@ -1878,7 +2080,7 @@ async function saveAll() {
       hrRows.length   ? _sbUpsert('hr_saved',    hrRows)   : Promise.resolve(true),
       _sbUpsert('meta', metaRows),
       _conOldKeysToDelete.length
-        ? fetch(`${SB_URL}/rest/v1/contracts?key=in.(${_conOldKeysToDelete.map(encodeURIComponent).join(',')})`, { method:'DELETE', headers: SB_HDR }).then(r=>r.ok).catch(()=>false)
+        ? _dbFetch(`contracts?key=in.(${_conOldKeysToDelete.map(encodeURIComponent).join(',')})`, { method:'DELETE' }).then(r=>r.ok).catch(()=>false)
         : Promise.resolve(true),
     ]);
 
@@ -1982,12 +2184,60 @@ async function manualSync() {
 }
 
 // ============================================================
-// Supabase Realtime — WebSocket 실시간 동기화
+// 실시간 동기화 — USE_INTERNAL_API에 따라 사내 WebSocket 또는 Supabase Realtime으로 분기
 // ============================================================
 function startPolling() { _startRealtime(); }
 function stopPolling()  { _stopRealtime();  }
 
 function _startRealtime() {
+  return USE_INTERNAL_API ? _startRealtimeInternal() : _startRealtimeSupabase();
+}
+function _stopRealtime() {
+  return USE_INTERNAL_API ? _stopRealtimeInternal() : _stopRealtimeSupabase();
+}
+
+// ── 사내 API 구현 ──────────────────────────────────────────
+// 서버(backend/src/realtime.js)가 att_data/slack_data/hr_saved 변경 시(Supabase Realtime이
+// 구독하던 것과 동일한 3개 테이블) {type:'change', table} 메시지를 브로드캐스트한다.
+// _onRealtimeChange(msg)는 아래 Supabase 버전과 완전히 동일한 함수를 그대로 공유해서 쓴다
+// (자기-에코 방지 타이머 로직은 백엔드가 뭐든 동일하게 필요 — 손대지 않음).
+function _startRealtimeInternal() {
+  if (_realtimeChannel) return; // 이미 연결됨
+  const wsUrl = API_BASE.replace(/^http/, 'ws') + '/ws';
+  const ws = new WebSocket(wsUrl);
+  let heartbeat;
+
+  ws.onopen = () => {
+    heartbeat = setInterval(() => ws.readyState === 1 && ws.send('ping'), 25000);
+  };
+
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'change') _onRealtimeChange(msg);
+    } catch(err) {}
+  };
+
+  ws.onclose = () => {
+    clearInterval(heartbeat);
+    _realtimeChannel = null;
+    // 3초 후 재연결
+    if (_dbOk) setTimeout(_startRealtimeInternal, 3000);
+  };
+
+  ws.onerror = () => ws.close();
+  _realtimeChannel = ws;
+}
+
+function _stopRealtimeInternal() {
+  if (_realtimeChannel) {
+    _realtimeChannel.close();
+    _realtimeChannel = null;
+  }
+}
+
+// ── Supabase 구현 (기존 코드 그대로, 이름만 *Supabase로 변경) ──────────────
+function _startRealtimeSupabase() {
   if (_realtimeChannel) return; // 이미 연결됨
   // Supabase Realtime WebSocket 연결
   const wsUrl = SB_URL.replace('https://', 'wss://') + '/realtime/v1/websocket?vsn=1.0.0&apikey=' + SB_KEY;
@@ -2014,14 +2264,14 @@ function _startRealtime() {
     clearInterval(heartbeat);
     _realtimeChannel = null;
     // 3초 후 재연결
-    if (_dbOk) setTimeout(_startRealtime, 3000);
+    if (_dbOk) setTimeout(_startRealtimeSupabase, 3000);
   };
 
   ws.onerror = () => ws.close();
   _realtimeChannel = ws;
 }
 
-function _stopRealtime() {
+function _stopRealtimeSupabase() {
   if (_realtimeChannel) {
     _realtimeChannel.close();
     _realtimeChannel = null;
@@ -2092,8 +2342,8 @@ function clearSaved() {
   // ── Supabase: 해당 년월만 삭제 — slack_data는 원본이므로 삭제하지 않음 ──
   _setDbStatus('syncing', '초기화 중...');
   Promise.all([
-    fetch(`${SB_URL}/rest/v1/att_data?date=like.${yr}-${moStr}-*`, {method:'DELETE',headers:SB_HDR}),
-    fetch(`${SB_URL}/rest/v1/hr_saved?yr=eq.${yr}&mo=eq.${mo}`, {method:'DELETE',headers:SB_HDR}),
+    _dbFetch(`att_data?date=like.${yr}-${moStr}-*`, {method:'DELETE'}),
+    _dbFetch(`hr_saved?yr=eq.${yr}&mo=eq.${mo}`, {method:'DELETE'}),
   ]).then(() => {
     _setDbStatus('ok', '초기화 완료');
     renderHrAtt();
@@ -6976,7 +7226,7 @@ function revertAtt(eid,ds){if(isMonthConfirmed()){alert("확정된 월은 수정
   const k=`${eid}_${ds}`;
   if(!attData[k]){alert('되돌릴 근태 기록이 없습니다.\n(수기입력/기준시간반영된 기록이 없습니다)');return;}
   delete attData[k];
-  fetch(`${SB_URL}/rest/v1/att_data?key=eq.${encodeURIComponent(k)}`,{method:'DELETE',headers:SB_HDR}).catch(()=>{});
+  _dbFetch(`att_data?key=eq.${encodeURIComponent(k)}`,{method:'DELETE'}).catch(()=>{});
   _patchHrAttRow(eid,ds);saveAll();
 }
 
@@ -7146,7 +7396,7 @@ function revertAtt(eid,ds){if(isMonthConfirmed()){alert("확정된 월은 수정
         if(attData[k]){delete attData[k];_delKeys.push(k);}
       });
       if(_delKeys.length){
-        fetch(`${SB_URL}/rest/v1/att_data?key=in.(${_delKeys.map(encodeURIComponent).join(',')})`,{method:'DELETE',headers:SB_HDR}).catch(()=>{});
+        _dbFetch(`att_data?key=in.(${_delKeys.map(encodeURIComponent).join(',')})`,{method:'DELETE'}).catch(()=>{});
       }
     }
     // 변경된 (eid,ds) 조합만 패치 (중복 제거)
@@ -8546,7 +8796,7 @@ function deleteCon(no){
   // Supabase contracts 테이블에서 해당 row 삭제 (key = 사번_cs 형식)
   const keyPrefix=(c.사번&&c.사번!=='')?c.사번:('no'+(c.no||0));
   const sbKey=keyPrefix+'_'+(c.cs||'');
-  fetch(`${SB_URL}/rest/v1/contracts?key=eq.${encodeURIComponent(sbKey)}`,{method:'DELETE',headers:SB_HDR}).catch(()=>{});
+  _dbFetch(`contracts?key=eq.${encodeURIComponent(sbKey)}`,{method:'DELETE'}).catch(()=>{});
   contracts=contracts.filter(x=>x.no!==no);
 
   // 방금 지운 계약의 사번을 참조하는 다른 계약·근태저장 기록이 더 이상 없으면 인원현황에서도
@@ -8557,7 +8807,7 @@ function deleteCon(no){
       || Object.values(_hrRowsCache).flat().some(r=>r.emp&&r.emp.사번===c.사번);
     if(!stillReferenced){
       employees=employees.filter(e=>e.사번!==c.사번);
-      fetch(`${SB_URL}/rest/v1/employees?사번=eq.${encodeURIComponent(c.사번)}`,{method:'DELETE',headers:SB_HDR}).catch(()=>{});
+      _dbFetch(`employees?사번=eq.${encodeURIComponent(c.사번)}`,{method:'DELETE'}).catch(()=>{});
     }
   }
 
@@ -9284,7 +9534,7 @@ function getScheduleState(empId,ds){
 async function loadSchedOverrides(yr,mo){
   schedOverrides={};
   try{
-    const res=await fetch(`${SB_URL}/rest/v1/sched_saved?yr=eq.${yr}&mo=eq.${mo}&limit=5000`,{headers:SB_HDR});
+    const res=await _dbFetch(`sched_saved?yr=eq.${yr}&mo=eq.${mo}&limit=5000`,{});
     if(!res.ok)return;
     const rows=await res.json();
     rows.forEach(r=>{
@@ -9468,7 +9718,7 @@ async function _dashLoadSchedOverridesForMonth(yr,mo){
   if(_dashSchedLoadedMonths.has(key))return;
   _dashSchedLoadedMonths.add(key);
   try{
-    const res=await fetch(`${SB_URL}/rest/v1/sched_saved?yr=eq.${yr}&mo=eq.${mo}&limit=5000`,{headers:SB_HDR});
+    const res=await _dbFetch(`sched_saved?yr=eq.${yr}&mo=eq.${mo}&limit=5000`,{});
     if(!res.ok)return;
     const rows=await res.json();
     rows.forEach(r=>{
@@ -9703,9 +9953,14 @@ const ROLE_LABEL={hr:'HR 담당자',emp:'CX 직원',field:'현장운영자'};
 // 역할별 기본 메뉴 접근 허용
 const ROLE_DEFAULT_MENUS={hr:['hr11','hr1','hr2','hr3','hr4','hr5','hr6','hr7','hr8','hr9','hr10','hr12','hr13'],emp:['hr3'],field:['hr3']};
 
+// ★ 이 화면(renderAccPage 이하 pXxx 함수들)은 1단계/3단계(4)번 작업 때 놓쳤던 별도
+//   계정관리 화면 — modal-accounts(renderAccList 등)와 같은 계정 데이터를 다루므로 그쪽에서
+//   쓰던 _accListCacheInternal 캐시를 그대로 공유해서 idx→실제 id를 찾는다.
 function renderAccPage(){
-  const list=getAccounts();
-  const rows=list.map((a,i)=>{
+  return USE_INTERNAL_API ? renderAccPageInternal() : renderAccPageSupabase();
+}
+function _renderAccPageRowsHtml(list){
+  return list.map((a,i)=>{
     const isSuperAdmin=a.id==='jungjukim';
     const menus=a.menus||(ROLE_DEFAULT_MENUS[a.role]||[]);
     const menuChecks=MENU_LIST.map(m=>`
@@ -9738,8 +9993,30 @@ function renderAccPage(){
       </div>
     </div>`;
   }).join('');
+}
+
+// ── 사내 API 구현 ──────────────────────────────────────────
+async function renderAccPageInternal(){
+  let list=[];
+  try{
+    const res=await fetch(`${API_BASE}/api/auth/accounts`,{headers:API_HDR,credentials:'include'});
+    if(res.ok) list=await res.json();
+  }catch(e){}
+  _accListCacheInternal=list;
+  const rows=_renderAccPageRowsHtml(list);
   const el=document.getElementById('accPageList');
   if(el)el.innerHTML=rows||'<div style="color:var(--tx3);padding:8px">등록된 계정이 없습니다.</div>';
+}
+
+async function _accPageSaveInternal(payload, errMsg){
+  try{
+    const res=await fetch(`${API_BASE}/api/auth/accounts`,{
+      method:'POST', headers:API_HDR, credentials:'include',
+      body:JSON.stringify(payload)
+    });
+    if(!res.ok){alert(errMsg);return false;}
+    return true;
+  }catch(e){alert(errMsg);return false;}
 }
 
 function pAddAccount(){
@@ -9750,6 +10027,94 @@ function pAddAccount(){
   const info=document.getElementById('pAccInfo').value.trim();
   if(!id||!pw||!name){alert('아이디, 비밀번호, 이름은 필수입니다.');return;}
   if(pw.length<4){alert('비밀번호는 4자 이상이어야 합니다.');return;}
+  if (USE_INTERNAL_API) { pAddAccountInternal(id,pw,role,name,info); return; }
+  pAddAccountSupabase(id,pw,role,name,info);
+}
+async function pAddAccountInternal(id,pw,role,name,info){
+  try{
+    const listRes=await fetch(`${API_BASE}/api/auth/accounts`,{headers:API_HDR,credentials:'include'});
+    const list=listRes.ok?await listRes.json():[];
+    if(list.find(a=>a.id===id)){alert('이미 존재하는 아이디입니다.');return;}
+  }catch(e){}
+  const menus=ROLE_DEFAULT_MENUS[role]||[];
+  const ok=await _accPageSaveInternal({id,pw,role,name,info,av:name[0],menus},'계정 저장에 실패했습니다.');
+  if(!ok)return;
+  ['pAccId','pAccPw','pAccName','pAccInfo'].forEach(k=>document.getElementById(k).value='');
+  renderAccPage();
+  _toast(`✅ "${name}" 계정 추가됨 — 모든 기기에서 로그인 가능`,'ok');
+}
+
+function pDeleteAccount(idx){
+  if (USE_INTERNAL_API) { pDeleteAccountInternal(idx); return; }
+  pDeleteAccountSupabase(idx);
+}
+async function pDeleteAccountInternal(idx){
+  const a=_accListCacheInternal[idx];
+  if(!a||a.id==='jungjukim'){alert('최고관리자는 삭제할 수 없습니다.');return;}
+  if(!confirm('"'+a.name+'" ('+a.id+') 계정을 삭제하시겠습니까?'))return;
+  try{
+    const res=await fetch(`${API_BASE}/api/auth/accounts/${encodeURIComponent(a.id)}`,{method:'DELETE',headers:API_HDR,credentials:'include'});
+    if(!res.ok){alert('계정 삭제에 실패했습니다.');return;}
+  }catch(e){alert('계정 삭제 중 오류가 발생했습니다.');return;}
+  renderAccPage();
+  _toast(`🗑 "${a.name}" 계정 삭제됨 — 모든 기기에 반영됨`,'info');
+}
+
+function pResetPw(idx){
+  if (USE_INTERNAL_API) { pResetPwInternal(idx); return; }
+  pResetPwSupabase(idx);
+}
+async function pResetPwInternal(idx){
+  const a=_accListCacheInternal[idx];
+  if(!a||a.id==='jungjukim'){alert('최고관리자 비밀번호는 여기서 초기화할 수 없습니다.');return;}
+  const newPw=prompt(`"${a.name}" (${a.id}) 의 새 비밀번호를 입력하세요 (4자 이상):`);
+  if(newPw===null)return;
+  if(newPw.length<4){alert('비밀번호는 4자 이상이어야 합니다.');return;}
+  const ok=await _accPageSaveInternal({id:a.id,pw:newPw,role:a.role,name:a.name,info:a.info,av:a.av,menus:a.menus},'비밀번호 초기화에 실패했습니다.');
+  if(!ok)return;
+  renderAccPage();
+  _toast(`🔑 "${a.name}" 비밀번호 초기화 완료`,'ok');
+}
+
+function pChangeRole(idx,newRole){
+  if (USE_INTERNAL_API) { pChangeRoleInternal(idx,newRole); return; }
+  pChangeRoleSupabase(idx,newRole);
+}
+async function pChangeRoleInternal(idx,newRole){
+  const a=_accListCacheInternal[idx];
+  if(!a||a.id==='jungjukim')return;
+  const menus=a.menus||ROLE_DEFAULT_MENUS[newRole]||[];
+  const ok=await _accPageSaveInternal({id:a.id,role:newRole,name:a.name,info:a.info,av:a.av,menus},'역할 변경에 실패했습니다.');
+  if(!ok)return;
+  renderAccPage();
+  _toast(`✅ "${a.name}" 역할이 ${ROLE_LABEL[newRole]||newRole}로 변경됨`,'ok');
+}
+
+function pToggleMenu(idx,menuId,enabled){
+  if (USE_INTERNAL_API) { pToggleMenuInternal(idx,menuId,enabled); return; }
+  pToggleMenuSupabase(idx,menuId,enabled);
+}
+async function pToggleMenuInternal(idx,menuId,enabled){
+  const a=_accListCacheInternal[idx];
+  if(!a||a.id==='jungjukim')return;
+  const menus=(a.menus||ROLE_DEFAULT_MENUS[a.role]||[]).slice();
+  if(enabled&&!menus.includes(menuId))menus.push(menuId);
+  else if(!enabled){const mi=menus.indexOf(menuId); if(mi>=0)menus.splice(mi,1);}
+  a.menus=menus;
+  const ok=await _accPageSaveInternal({id:a.id,role:a.role,name:a.name,info:a.info,av:a.av,menus},'권한 변경 저장 실패');
+  if(!ok)return;
+  _toast(`권한 변경 저장됨`,'ok');
+}
+
+// ── Supabase 구현 (기존 코드 그대로, 이름만 *Supabase로 변경) ──────────────
+function renderAccPageSupabase(){
+  const list=getAccounts();
+  const rows=_renderAccPageRowsHtml(list);
+  const el=document.getElementById('accPageList');
+  if(el)el.innerHTML=rows||'<div style="color:var(--tx3);padding:8px">등록된 계정이 없습니다.</div>';
+}
+
+function pAddAccountSupabase(id,pw,role,name,info){
   const list=getAccounts();
   if(list.find(a=>a.id===id)){alert('이미 존재하는 아이디입니다.');return;}
   const menus=ROLE_DEFAULT_MENUS[role]||[];
@@ -9760,7 +10125,7 @@ function pAddAccount(){
   _toast(`✅ "${name}" 계정 추가됨 — 모든 기기에서 로그인 가능`,'ok');
 }
 
-function pDeleteAccount(idx){
+function pDeleteAccountSupabase(idx){
   const list=getAccounts();
   const a=list[idx];
   if(!a||a.id==='jungjukim'){alert('최고관리자는 삭제할 수 없습니다.');return;}
@@ -9771,7 +10136,7 @@ function pDeleteAccount(idx){
   _toast(`🗑 "${a.name}" 계정 삭제됨 — 모든 기기에 반영됨`,'info');
 }
 
-function pResetPw(idx){
+function pResetPwSupabase(idx){
   const list=getAccounts();
   const a=list[idx];
   if(!a||a.id==='jungjukim'){alert('최고관리자 비밀번호는 여기서 초기화할 수 없습니다.');return;}
@@ -9784,7 +10149,7 @@ function pResetPw(idx){
   _toast(`🔑 "${a.name}" 비밀번호 초기화 완료`,'ok');
 }
 
-function pChangeRole(idx,newRole){
+function pChangeRoleSupabase(idx,newRole){
   const list=getAccounts();
   const a=list[idx];
   if(!a||a.id==='jungjukim')return;
@@ -9796,7 +10161,7 @@ function pChangeRole(idx,newRole){
   _toast(`✅ "${a.name}" 역할이 ${ROLE_LABEL[newRole]||newRole}로 변경됨`,'ok');
 }
 
-function pToggleMenu(idx,menuId,enabled){
+function pToggleMenuSupabase(idx,menuId,enabled){
   const list=getAccounts();
   const a=list[idx];
   if(!a||a.id==='jungjukim')return;
@@ -9815,9 +10180,55 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelec
 // 압정 팝업 외부 클릭 시 닫기
 document.addEventListener('mousedown',function(e){if(!e.target.closest('.confirm-pin-menu')&&!e.target.closest('button[onclick*="toggleConfirmPinMenu"]')){document.querySelectorAll('.confirm-pin-menu').forEach(m=>m.style.display='none');}});
 // ============================================================
-// INIT — 로딩 스피너 → Supabase 로드 → 로그인 화면 순서
+// INIT — 로딩 스피너 → 세션 확인 → 로그인 화면 순서 (USE_INTERNAL_API로 분기)
 // ============================================================
 (async function(){
+  if (USE_INTERNAL_API) { await _initInternal(); } else { await _initSupabase(); }
+})();
+
+// ── 사내 API 구현 ──────────────────────────────────────────
+// httpOnly 쿠키는 JS로 값을 읽을 수 없으므로, "로그인돼 있는지"는 로컬 캐시를 믿지 않고
+// 서버에 /api/auth/me로 직접 물어봐서 확인한다. 세션이 없을 때도 계정 목록(비밀번호 포함)을
+// 미리 통째로 받아오지 않는다 — 로그인 시점에 서버가 검증(2단계 계획서 4절).
+async function _initInternal(){
+  try {
+    const meRes = await fetch(`${API_BASE}/api/auth/me`, { headers: API_HDR, credentials:'include' });
+    if (meRes.ok) {
+      const { user } = await meRes.json();
+      _setLoadingMsg('데이터 동기화 중...');
+      await loadSaved();
+
+      if (hrAttRows.length > 0) {
+        buildHrHead();
+        const r0 = hrAttRows[0];
+        const yrEl = document.getElementById('hrYear');
+        const moEl = document.getElementById('hrMonth');
+        if (yrEl) yrEl.value = String(r0.yr);
+        if (moEl) moEl.value = String(r0.mo);
+      }
+
+      currentUser = user;
+      sessionStorage.setItem('gwangjae_session', JSON.stringify(user));
+      _hideLoading();
+      applyUserAndInit(user);
+      startPolling(); // ★ WebSocket 실시간 시작
+      return;
+    }
+  } catch(e) {}
+
+  _setLoadingMsg('연결 확인 중...');
+  try {
+    const hz = await fetch(`${API_BASE}/healthz`);
+    _setDbStatus(hz.ok ? 'ok' : 'offline', hz.ok ? '사내 API 연결됨' : '오프라인 모드');
+  } catch(e) {
+    _setDbStatus('offline', '오프라인 모드');
+  }
+  _hideLoading();
+  document.getElementById('loginScreen').style.display='flex';
+}
+
+// ── Supabase 구현 (기존 코드 그대로) ──────────────────────────
+async function _initSupabase(){
   // ① 세션 복원 시도 (이미 로그인 된 경우)
   const sessionRaw = sessionStorage.getItem('gwangjae_session');
   const cachedSession = sessionRaw ? (() => { try { return JSON.parse(sessionRaw); } catch(e) { return null; } })() : null;
@@ -9865,7 +10276,7 @@ document.addEventListener('mousedown',function(e){if(!e.target.closest('.confirm
   }
   _hideLoading();
   document.getElementById('loginScreen').style.display='flex';
-})();
+}
 </script>
 <script>
 // ── URL 파라미터로 토큰 자동 수신 (북마크릿에서 전달)
