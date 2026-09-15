@@ -401,6 +401,8 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
   <div class="ni emp-menu" style="display:none" onclick="nav('my3',this)">연장/휴일근무요청서</div>
   <div class="ni emp-menu" style="display:none" id="mypageClockInBtn" onclick="mypageClockIn()">🟢 출근</div>
   <div class="ni emp-menu" style="display:none" id="mypageClockOutBtn" onclick="mypageClockOut()">🔴 퇴근</div>
+  <div class="nsec field-menu" style="display:none">승인관리</div>
+  <div class="ni field-menu" style="display:none" onclick="nav('field1',this)">승인관리</div>
   <!-- DB 상태바 -->
   <div id="sbDbBar" style="display:none;margin:0 8px 6px;padding:6px 10px;border-radius:6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)">
     <div style="display:flex;align-items:center;justify-content:space-between">
@@ -757,6 +759,38 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
         </tr>
       </thead>
       <tbody id="otReqBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- FIELD ① 승인관리 (현장운영자용 — 근태소명요청서 + 연장/휴일근무요청서 통합 승인) -->
+<div class="page" id="page-field1">
+  <div class="ph">
+    <div class="ph-l"><div class="pt">승인관리</div><div class="psub">근태소명요청서·연장/휴일근무요청서 승인·거절 | 승인 시 월별 근태현황에 자동 반영</div></div>
+    <div class="bg-row">
+      <select id="fApprStatusQ" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderApprovalMgmt()">
+        <option value="대기중">대기중만</option>
+        <option value="all">전체</option>
+      </select>
+      <button class="btn p" onclick="loadApprovalMgmt()">🔄 새로고침</button>
+    </div>
+  </div>
+  <div class="tw">
+    <table style="width:100%;min-width:900px">
+      <thead>
+        <tr style="background:#E8EDF6">
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">요청자</th>
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">날짜</th>
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">신청양식</th>
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">구분</th>
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">시작시간</th>
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">종료시간</th>
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">사유</th>
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">상태</th>
+          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;white-space:nowrap">처리</th>
+        </tr>
+      </thead>
+      <tbody id="fApprBody"></tbody>
     </table>
   </div>
 </div>
@@ -1156,6 +1190,7 @@ function applyUserAndInit(acc){
   } else {
     document.querySelectorAll('.hr-menu').forEach(e=>e.style.display='none');
     document.querySelectorAll('.emp-menu').forEach(e=>e.style.display='');
+    document.querySelectorAll('.field-menu').forEach(e=>e.style.display=acc.role==='field'?'':'none');
   }
   document.getElementById('loginScreen').style.display='none';
   // DB 상태바 표시
@@ -1370,13 +1405,15 @@ async function renderMyExplanations(){
       </div>
       <div class="sb" style="padding:12px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
         <div class="fg"><label>소명사유</label>
-          <select id="myExpType_${idx}">
+          <select id="myExpType_${idx}" onchange="_toggleMyExpTimeFields(${idx})">
             <option value="">선택</option>
-            <option value="연차" ${item.workerType==='연차'?'selected':''}>연차</option>
-            <option value="월차" ${item.workerType==='월차'?'selected':''}>월차</option>
-            <option value="지각" ${item.workerType==='지각'?'selected':''}>지각</option>
+            <option value="출근누락" ${item.workerType==='출근누락'?'selected':''}>출근누락</option>
+            <option value="퇴근누락" ${item.workerType==='퇴근누락'?'selected':''}>퇴근누락</option>
+            <option value="전체근태누락" ${item.workerType==='전체근태누락'?'selected':''}>전체근태누락(출근+퇴근)</option>
             <option value="결근" ${item.workerType==='결근'?'selected':''}>결근</option>
-            <option value="기타" ${item.workerType==='기타'?'selected':''}>기타</option>
+            <option value="연차" ${item.workerType==='연차'?'selected':''}>연차</option>
+            <option value="조퇴" ${item.workerType==='조퇴'?'selected':''}>조퇴</option>
+            <option value="지각" ${item.workerType==='지각'?'selected':''}>지각</option>
           </select>
         </div>
         <div class="fg"><label>출근시간</label><input type="time" id="myExpIn_${idx}" value="${item.workerIn||''}"></div>
@@ -1386,6 +1423,18 @@ async function renderMyExplanations(){
       </div>
     </div>`;
   }).join('');
+  items.forEach((item,idx)=>_toggleMyExpTimeFields(idx));
+}
+// 소명사유에 따라 출근/퇴근시간 입력칸 활성화 여부를 정한다.
+// 출근누락/전체근태누락 → 출근시간 활성화, 퇴근누락/전체근태누락 → 퇴근시간 활성화, 그 외는 둘 다 비활성화.
+function _toggleMyExpTimeFields(idx){
+  const type=document.getElementById(`myExpType_${idx}`).value;
+  const inEl=document.getElementById(`myExpIn_${idx}`),outEl=document.getElementById(`myExpOut_${idx}`);
+  if(!inEl||!outEl)return;
+  const inOn=type==='출근누락'||type==='전체근태누락';
+  const outOn=type==='퇴근누락'||type==='전체근태누락';
+  inEl.disabled=!inOn;if(!inOn)inEl.value='';
+  outEl.disabled=!outOn;if(!outOn)outEl.value='';
 }
 async function submitMyExplanation(yr,mo,date,idx){
   const body={
@@ -1550,6 +1599,169 @@ async function _updateOtReqStatus(id,status){
     _toast(status==='승인'?'승인되었습니다.':'거절되었습니다.','ok');
     loadOtReqApprovals();
   }catch(e){_toast('처리에 실패했습니다.','error');}
+}
+
+// ── 현장운영자: 승인관리 (field1) — 근태소명요청서 + 연장/휴일근무요청서 통합 승인 ──
+// 연장/휴일근무는 approveOtReq/rejectOtReq를 그대로 재사용(로직 동일, window._otReqCache 공유).
+// 근태소명은 HR의 applySomyungToAtt와 달리 saveAll()/_hrRowsCache(관리자가 미리 로드해둔 전체
+// 데이터)에 의존하지 않고, 필요한 행만 API로 직접 읽고 쓴다 — 현장운영자 세션은 전체 직원 근태를
+// 미리 로드해두지 않기 때문(그래서도 안 됨 — saveAll()은 로드 안 된 다른 전역상태까지 통째로
+// 덮어써 버릴 위험이 있음).
+async function loadApprovalMgmt(){
+  const tbody=document.getElementById('fApprBody');
+  if(!tbody)return;
+  tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--tx3)">불러오는 중...</td></tr>';
+  try{
+    const [otRes,metaRes]=await Promise.all([
+      fetch(`${API_BASE}/api/overtime_requests`,{headers:API_HDR,credentials:'include'}),
+      fetch(`${API_BASE}/api/meta?key=eq.somyungData`,{headers:API_HDR,credentials:'include'}),
+    ]);
+    window._otReqCache=otRes.ok?await otRes.json():[];
+    const metaRows=metaRes.ok?await metaRes.json():[];
+    const rawVal=metaRows[0]?metaRows[0].value:null;
+    window._fSomyungData=rawVal?(typeof rawVal==='string'?JSON.parse(rawVal):rawVal):{};
+  }catch(e){
+    window._otReqCache=[];window._fSomyungData={};
+    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--tx3)">목록을 불러오지 못했습니다.</td></tr>';
+    return;
+  }
+  renderApprovalMgmt();
+}
+function renderApprovalMgmt(){
+  const tbody=document.getElementById('fApprBody');
+  if(!tbody)return;
+  const statusQ=document.getElementById('fApprStatusQ').value;
+  const rows=[];
+  (window._otReqCache||[]).forEach(r=>{
+    if(statusQ!=='all'&&r.status!==statusQ)return;
+    rows.push({kind:'ot',id:r.id,eid:r.emp_id,name:r.emp_name,date:r.work_date,
+      form:'연장(휴일)근무요청서',gubun:r.req_type+'근무',
+      start:r.start_time||'-',end:r.end_time||'-',reason:r.reason||'-',status:r.status});
+  });
+  const somy=window._fSomyungData||{};
+  Object.keys(somy).forEach(ck=>{
+    (somy[ck]||[]).forEach(item=>{
+      if(!(item.workerType||item.workerIn||item.workerOut||item.workerNote))return; // 직원 미작성 건 제외
+      const st=item.status==='소명완료'?'승인':(item.status||'대기중');
+      if(statusQ!=='all'&&st!==statusQ)return;
+      rows.push({kind:'somyung',ck,eid:item.eid,name:item.name,date:item.date,
+        form:'근태소명요청서',gubun:item.workerType||item.type||'-',
+        start:item.workerIn||'-',end:item.workerOut||'-',reason:item.workerNote||'-',status:st});
+    });
+  });
+  rows.sort((a,b)=>b.date.localeCompare(a.date));
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--tx3)">표시할 요청서가 없습니다.</td></tr>';
+    return;
+  }
+  const badge={대기중:['#FFFBEB','#92400E'],승인:['#DCFCE7','#15803D'],거절:['#FEE2E2','#991B1B']};
+  tbody.innerHTML=rows.map(r=>{
+    const bc=badge[r.status]||badge['대기중'];
+    const actions=r.status==='대기중'
+      ?(r.kind==='ot'
+        ?`<button class="btn sm p" onclick="_fApproveOt(${r.id})">승인</button> <button class="btn sm d" onclick="_fRejectOt(${r.id})">거절</button>`
+        :`<button class="btn sm p" onclick="_fApproveSomyung('${r.ck}','${r.eid}','${r.date}')">승인</button> <button class="btn sm d" onclick="_fRejectSomyung('${r.ck}','${r.eid}','${r.date}')">거절</button>`)
+      :`<span style="font-size:10px;color:var(--tx3)">-</span>`;
+    return `<tr>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.name||''}(${r.eid})</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.date}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.form}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.gubun}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.start}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.end}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.reason}</td>
+      <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #EDF0F7"><span class="bdg" style="font-size:10px;background:${bc[0]};color:${bc[1]};font-weight:700">${r.status}</span></td>
+      <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #EDF0F7">${actions}</td>
+    </tr>`;
+  }).join('');
+}
+async function _fApproveOt(id){ await approveOtReq(id); loadApprovalMgmt(); }
+async function _fRejectOt(id){ await rejectOtReq(id); loadApprovalMgmt(); }
+async function _fApproveSomyung(ck,eid,date){
+  const somy=window._fSomyungData||{};
+  const item=(somy[ck]||[]).find(x=>x.eid===eid&&x.date===date);
+  if(!item){_toast('소명 항목을 찾을 수 없습니다.','error');return;}
+  if(!confirm(`[${item.name}] ${date}\n소명사유: ${item.workerType||item.type||'-'}\n\n승인하고 월별 근태현황에 반영하시겠습니까?`))return;
+  try{
+    await _applySomyungApprovalDirect(item,ck);
+  }catch(e){_toast('근태 반영에 실패했습니다: '+e.message,'error');return;}
+  item.status='소명완료';
+  item.applied=true;
+  try{ await _saveSomyungDataDirect(somy); }
+  catch(e){_toast('저장에 실패했습니다: '+e.message,'error');return;}
+  _toast('승인 및 근태 반영이 완료되었습니다.','ok');
+  loadApprovalMgmt();
+}
+async function _fRejectSomyung(ck,eid,date){
+  if(!confirm('이 소명 요청을 거절하시겠습니까?'))return;
+  const somy=window._fSomyungData||{};
+  const item=(somy[ck]||[]).find(x=>x.eid===eid&&x.date===date);
+  if(!item)return;
+  item.status='거절';
+  try{ await _saveSomyungDataDirect(somy); }
+  catch(e){_toast('저장에 실패했습니다: '+e.message,'error');return;}
+  _toast('거절 처리되었습니다.','ok');
+  loadApprovalMgmt();
+}
+async function _saveSomyungDataDirect(data){
+  const res=await fetch(`${API_BASE}/api/meta`,{method:'POST',headers:API_HDR,credentials:'include',
+    body:JSON.stringify({key:'somyungData',value:JSON.stringify(data),updated:_kstNow()})});
+  if(!res.ok)throw new Error('저장 실패');
+}
+// 근태소명 승인 → 근태 반영. HR의 applySomyungToAtt와 동일한 사유별 매핑이지만, 관리자가
+// 미리 로드해둔 캐시 대신 필요한 행만 API로 직접 조회·저장한다.
+async function _applySomyungApprovalDirect(item,ck){
+  const [yr,mo]=ck.split('_').map(Number);
+  const type=item.workerType||item.type||'';
+  if(type==='연차'||type==='월차'||type==='결근'){
+    await _patchHrSavedBigo(item.eid,yr,mo,item.date,type);
+    return;
+  }
+  if(type==='출근누락'||type==='출근 기록 없음'){
+    if(!item.workerIn)throw new Error('출근시간 정보가 없습니다.');
+    await _patchAttDirect(item.eid,item.date,{in:item.workerIn});
+    return;
+  }
+  if(type==='퇴근누락'||type==='퇴근 기록 없음'){
+    if(!item.workerOut)throw new Error('퇴근시간 정보가 없습니다.');
+    await _patchAttDirect(item.eid,item.date,{out:item.workerOut});
+    return;
+  }
+  if(type==='전체근태누락'||type==='출근/퇴근 기록 없음'){
+    const patch={};
+    if(item.workerIn)patch.in=item.workerIn;
+    if(item.workerOut)patch.out=item.workerOut;
+    await _patchAttDirect(item.eid,item.date,patch);
+    return;
+  }
+  // 지각/조퇴 등: 근태관리에 자동 반영되는 필드가 없어 상태만 소명완료로 처리(호출부에서 이미 처리)
+}
+async function _patchAttDirect(eid,date,patch){
+  const key=`${eid}_${date}`;
+  const res=await fetch(`${API_BASE}/api/att_data?key=eq.${encodeURIComponent(key)}`,{headers:API_HDR,credentials:'include'});
+  const rows=res.ok?await res.json():[];
+  const cur=rows[0]||{in:'',out:''};
+  const body={
+    key,emp_id:eid,date,
+    in:patch.in!==undefined?patch.in:(cur.in||''),
+    out:patch.out!==undefined?patch.out:(cur.out||''),
+    source:'somyung',locked:true,updated:_kstNow(),
+  };
+  const saveRes=await fetch(`${API_BASE}/api/att_data`,{method:'POST',headers:API_HDR,credentials:'include',body:JSON.stringify(body)});
+  if(!saveRes.ok)throw new Error('근태 저장 실패');
+}
+async function _patchHrSavedBigo(eid,yr,mo,date,bigoVal){
+  const key=`${eid}_${yr}_${String(mo).padStart(2,'0')}`;
+  const res=await fetch(`${API_BASE}/api/hr_saved?key=eq.${encodeURIComponent(key)}`,{headers:API_HDR,credentials:'include'});
+  if(!res.ok)throw new Error('근태 데이터 조회 실패');
+  const rows=await res.json();
+  let daysJson=rows[0]?(typeof rows[0].days_json==='string'?JSON.parse(rows[0].days_json):rows[0].days_json):[];
+  let day=daysJson.find(d=>d.date===date);
+  if(!day){day={date};daysJson.push(day);}
+  day.bigo=bigoVal;
+  const saveRes=await fetch(`${API_BASE}/api/hr_saved`,{method:'POST',headers:API_HDR,credentials:'include',
+    body:JSON.stringify({key,emp_id:eid,yr,mo,days_json:JSON.stringify(daysJson),updated:_kstNow()})});
+  if(!saveRes.ok)throw new Error('근태 저장 실패');
 }
 
 function openAccModal(){renderAccList();openModal('modal-accounts');}
@@ -7548,8 +7760,8 @@ function applySomyungToAtt(eid,ds,ck,type){
     return;
   }
 
-  if(item.type==='출근 기록 없음'){
-    // 출근 기록 없음 → 출근시간만 반영 (퇴근은 건드리지 않음)
+  if(item.workerType==='출근누락'||item.type==='출근 기록 없음'){
+    // 출근누락(신규 소명사유) 또는 출근 기록 없음(구버전 admin 플래그) → 출근시간만 반영 (퇴근은 건드리지 않음)
     if(!item.workerIn){alert('출근시간 정보가 없습니다.');return;}
     if(!confirm(`[${item.name}] ${ds}\n출근시간: ${item.workerIn}\n\n소명내용을 근태에 반영하시겠습니까?`))return;
     const rec=_ensureAtt(eid,ds,'somyung');
@@ -7563,8 +7775,8 @@ function applySomyungToAtt(eid,ds,ck,type){
     return;
   }
 
-  if(item.type==='퇴근 기록 없음'){
-    // 퇴근 기록 없음 → 퇴근시간만 반영 (출근은 건드리지 않음)
+  if(item.workerType==='퇴근누락'||item.type==='퇴근 기록 없음'){
+    // 퇴근누락(신규 소명사유) 또는 퇴근 기록 없음(구버전 admin 플래그) → 퇴근시간만 반영 (출근은 건드리지 않음)
     if(!item.workerOut){alert('퇴근시간 정보가 없습니다.');return;}
     if(!confirm(`[${item.name}] ${ds}\n퇴근시간: ${item.workerOut}\n\n소명내용을 근태에 반영하시겠습니까?`))return;
     const rec=_ensureAtt(eid,ds,'somyung');
@@ -7578,8 +7790,8 @@ function applySomyungToAtt(eid,ds,ck,type){
     return;
   }
 
-  if(item.type==='출근/퇴근 기록 없음'){
-    // 출/퇴근 기록 없음 → 직원이 제출한 시간으로 자동 반영
+  if(item.workerType==='전체근태누락'||item.type==='출근/퇴근 기록 없음'){
+    // 전체근태누락(신규 소명사유) 또는 출/퇴근 기록 없음(구버전 admin 플래그) → 직원이 제출한 시간으로 자동 반영
     const lines=[];
     if(item.workerIn)lines.push(`출근시간: ${item.workerIn}`);
     if(item.workerOut)lines.push(`퇴근시간: ${item.workerOut}`);
@@ -7596,9 +7808,9 @@ function applySomyungToAtt(eid,ds,ck,type){
     return;
   }
 
-  if(item.workerType==='지각'){
-    // 지각: 근태관리에 대응하는 별도 필드가 없어 소명완료 처리만 진행
-    if(!confirm(`[${item.name}] ${ds}\n소명사유: 지각\n\n확인을 누르면 소명완료로 처리됩니다.\n(지각은 근태관리에 자동 반영되는 항목이 없어 출퇴근 시간은 직접 확인해주세요.)`))return;
+  if(item.workerType==='지각'||item.workerType==='조퇴'){
+    // 지각/조퇴: 근태관리에 대응하는 별도 필드가 없어 소명완료 처리만 진행
+    if(!confirm(`[${item.name}] ${ds}\n소명사유: ${item.workerType}\n\n확인을 누르면 소명완료로 처리됩니다.\n(${item.workerType}은(는) 근태관리에 자동 반영되는 항목이 없어 출퇴근 시간은 직접 확인해주세요.)`))return;
     item.status='소명완료';
     item.applied=true;
     renderSomyung();
@@ -9834,6 +10046,7 @@ function nav(pid,el){
   // ★ 마지막 방문 페이지 저장
   localStorage.setItem('gwangjae_last_page',pid);
   if(pid==='hr14'){loadOtReqApprovals();}
+  if(pid==='field1'){loadApprovalMgmt();}
   if(pid==='my1'){renderMyAtt();}
   if(pid==='my2'){renderMyExplanations();}
   if(pid==='my3'){renderMyOvertimeRequests();}
