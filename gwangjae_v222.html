@@ -386,7 +386,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
   <div class="ni hr-menu" style="display:none" onclick="nav('hr5',this)">근태소명관리</div>
   <div class="ni hr-menu" style="display:none" onclick="nav('hr12',this)">연차현황</div>
   <div class="ni hr-menu" style="display:none" onclick="nav('hr13',this)">연차사용현황</div>
-  <div class="ni hr-menu" style="display:none" onclick="nav('hr14',this)">연장·휴일근무 승인</div>
+  <div class="ni hr-menu" style="display:none" onclick="nav('hr14',this)">승인요청서 관리</div>
   <div class="nsec hr-menu" style="display:none">스케줄관리</div>
   <div class="ni hr-menu" style="display:none" onclick="nav('hr10',this)">월별 스케줄 등록</div>
   <div class="nsec hr-menu" style="display:none">급여관리</div>
@@ -669,6 +669,9 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
               <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;letter-spacing:.04em;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">확인사항</th>
               <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;letter-spacing:.04em;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">소명 사유</th>
               <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;letter-spacing:.04em;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">소명내용</th>
+              <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;letter-spacing:.04em;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">소명내용(출근)</th>
+              <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;letter-spacing:.04em;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">소명내용(퇴근)</th>
+              <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;letter-spacing:.04em;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">관리자 승인</th>
               <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;letter-spacing:.04em;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">소명상태</th>
               <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;letter-spacing:.04em;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">소명반영</th>
               <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;letter-spacing:.04em;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">삭제</th>
@@ -734,29 +737,26 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
 <!-- HR ⑭ 연장·휴일근무 승인 (MYPAGE 연장/휴일근무요청서 관리자 처리 화면) -->
 <div class="page" id="page-hr14">
   <div class="ph">
-    <div class="ph-l"><div class="pt">연장·휴일근무 승인</div><div class="psub">MYPAGE에서 접수된 연장/휴일근무요청서 승인·거절 | 승인 시 월별 근태현황 연장승인에 자동 반영</div></div>
+    <div class="ph-l"><div class="pt">승인요청서 관리</div><div class="psub">근태소명요청서·연장/휴일근무요청서 승인·거절 | 승인 시 월별 근태현황에 자동 반영</div></div>
     <div class="bg-row">
-      <select id="otReqStatusQ" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderOtReqApprovals()">
+      <select id="apprYear" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderApprovalRequests()">
+        <option value="2027">2027년</option><option value="2026">2026년</option><option value="2025">2025년</option>
+      </select>
+      <select id="apprMonth" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderApprovalRequests()">
+        <option value="12">12월</option><option value="11">11월</option><option value="10">10월</option><option value="9">09월</option><option value="8">08월</option><option value="7">07월</option><option value="6">06월</option><option value="5">05월</option><option value="4">04월</option><option value="3">03월</option><option value="2">02월</option><option value="1">01월</option>
+      </select>
+      <div class="swrap"><input type="text" class="sinp" id="apprQ" placeholder="이름·사번" oninput="renderApprovalRequests()" onkeydown="if(event.key==='Enter'){renderApprovalRequests();this.blur();}" style="width:120px"></div>
+      <select id="apprStatusQ" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderApprovalRequests()">
         <option value="대기중">대기중만</option>
         <option value="all">전체</option>
       </select>
-      <button class="btn p" onclick="loadOtReqApprovals()">🔄 새로고침</button>
+      <button class="btn p" onclick="loadApprovalRequests()">🔄 새로고침</button>
     </div>
   </div>
   <div class="tw">
-    <table style="width:100%;min-width:900px">
-      <thead>
-        <tr style="background:#E8EDF6">
-          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">이름(사번)</th>
-          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">날짜</th>
-          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">구분</th>
-          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">시간</th>
-          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">사유</th>
-          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">상태</th>
-          <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;white-space:nowrap">처리</th>
-        </tr>
-      </thead>
-      <tbody id="otReqBody"></tbody>
+    <table id="apprReqT" style="width:100%;min-width:900px">
+      <thead><tr id="apprReqHead"></tr></thead>
+      <tbody id="apprReqBody"></tbody>
     </table>
   </div>
 </div>
@@ -855,7 +855,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <div class="fg"><label>구분 *</label><select id="myOtType"><option value="연장">연장근무</option><option value="휴일">휴일근무</option></select></div>
       <div class="fg"><label>시작시간</label><input type="time" id="myOtStart" lang="en-GB"></div>
       <div class="fg"><label>종료시간</label><input type="time" id="myOtEnd" lang="en-GB"></div>
-      <div class="fg" style="flex:1;min-width:200px"><label>사유</label><input type="text" id="myOtReason" placeholder="사유를 입력하세요"></div>
+      <div class="fg"><label>사유</label><select id="myOtReason"><option value="연장근무신청">연장근무신청</option><option value="휴일근무신청">휴일근무신청</option></select></div>
       <button class="btn p" onclick="submitMyOvertimeRequest()">제출</button>
     </div>
   </div>
@@ -1637,56 +1637,96 @@ async function submitMyOvertimeRequest(){
     document.getElementById('myOtDate').value='';
     document.getElementById('myOtStart').value='';
     document.getElementById('myOtEnd').value='';
-    document.getElementById('myOtReason').value='';
     renderMyOvertimeRequests();
   }catch(e){_toast('제출에 실패했습니다.','error');}
 }
 
-// ── 관리자: 연장·휴일근무 승인 (hr14) ────────────────────────
-async function loadOtReqApprovals(){
-  const tbody=document.getElementById('otReqBody');
+// ── 관리자: 승인요청서 관리 (hr14) — 근태소명요청서 + 연장/휴일근무요청서 통합 ──
+const APPR_REQ_COLS=['이름','사번','날짜','구분','사유','시작(출근)시간','종료(퇴근)시간','상태','처리'];
+function buildApprReqHead(){
+  const head=document.getElementById('apprReqHead');
+  if(!head)return;
+  head.innerHTML=APPR_REQ_COLS.map((t,i)=>th(t,'apprReqT',i)).join('');
+}
+async function loadApprovalRequests(){
+  buildApprReqHead();
+  const tbody=document.getElementById('apprReqBody');
   if(!tbody)return;
-  tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--tx3)">불러오는 중...</td></tr>';
+  tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--tx3)">불러오는 중...</td></tr>';
   try{
     const res=await fetch(`${API_BASE}/api/overtime_requests`,{headers:API_HDR,credentials:'include'});
     if(!res.ok)throw new Error();
     window._otReqCache=await res.json();
   }catch(e){
     window._otReqCache=[];
-    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--tx3)">목록을 불러오지 못했습니다.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--tx3)">목록을 불러오지 못했습니다.</td></tr>';
     return;
   }
-  renderOtReqApprovals();
+  renderApprovalRequests();
 }
-function renderOtReqApprovals(){
-  const tbody=document.getElementById('otReqBody');
+function renderApprovalRequests(){
+  const tbody=document.getElementById('apprReqBody');
   if(!tbody)return;
-  const statusQ=document.getElementById('otReqStatusQ').value;
-  const rows=(window._otReqCache||[])
-    .filter(r=>statusQ==='all'||r.status===statusQ)
-    .sort((a,b)=>b.work_date.localeCompare(a.work_date));
-  if(!rows.length){
-    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--tx3)">표시할 신청서가 없습니다.</td></tr>';
+  const yr=parseInt(document.getElementById('apprYear').value);
+  const mo=parseInt(document.getElementById('apprMonth').value);
+  const ck=`${yr}_${String(mo).padStart(2,'0')}`;
+  const ymPrefix=`${yr}-${String(mo).padStart(2,'0')}`;
+  const q=(document.getElementById('apprQ').value||'').trim().toLowerCase();
+  const statusQ=document.getElementById('apprStatusQ').value;
+  const rows=[];
+  (window._otReqCache||[]).forEach(r=>{
+    if(!r.work_date||!r.work_date.startsWith(ymPrefix))return;
+    rows.push({kind:'ot',id:r.id,eid:r.emp_id,name:r.emp_name,date:r.work_date,
+      gubun:'연장휴일근무요청서',reason:r.reason||'-',start:r.start_time||'-',end:r.end_time||'-',status:r.status});
+  });
+  (_somyungData[ck]||[]).forEach(item=>{
+    if(!(item.workerType||item.workerIn||item.workerOut||item.workerNote))return; // 직원 미작성 건 제외
+    const st=item.status==='소명완료'?'승인':(item.status||'대기중');
+    rows.push({kind:'somyung',ck,eid:item.eid,name:item.name,date:item.date,type:item.type,
+      gubun:'근태소명요청서',reason:item.workerType||item.type||'-',start:item.workerIn||'-',end:item.workerOut||'-',status:st});
+  });
+  const filtered=rows.filter(r=>{
+    if(statusQ!=='all'&&r.status!==statusQ)return false;
+    if(q&&!((r.name&&r.name.toLowerCase().includes(q))||(r.eid&&r.eid.toLowerCase().includes(q))))return false;
+    return true;
+  }).sort((a,b)=>b.date.localeCompare(a.date));
+  if(!filtered.length){
+    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--tx3)">표시할 요청서가 없습니다.</td></tr>';
     return;
   }
   const badge={대기중:['#FFFBEB','#92400E'],승인:['#DCFCE7','#15803D'],거절:['#FEE2E2','#991B1B']};
-  tbody.innerHTML=rows.map(r=>{
+  tbody.innerHTML=filtered.map(r=>{
     const bc=badge[r.status]||badge['대기중'];
-    const time=[r.start_time,r.end_time].filter(Boolean).join(' ~ ')||(r.hours?`${r.hours}시간`:'-');
     const actions=r.status==='대기중'
-      ?`<button class="btn sm p" onclick="approveOtReq(${r.id})">승인</button>
-        <button class="btn sm d" onclick="rejectOtReq(${r.id})">거절</button>`
-      :`<span style="font-size:10px;color:var(--tx3)">${r.reviewed_by||''}</span>`;
+      ?(r.kind==='ot'
+        ?`<button class="btn sm p" onclick="_apprOtApprove(${r.id})">승인</button> <button class="btn sm d" onclick="_apprOtReject(${r.id})">거절</button>`
+        :`<button class="btn sm p" onclick="_apprSomyungApprove('${r.eid}','${r.date}','${r.ck}','${(r.type||'').replace(/'/g,"\\'")}')">승인</button> <button class="btn sm d" onclick="_apprSomyungReject('${r.eid}','${r.date}','${r.ck}')">거절</button>`)
+      :`<span style="font-size:10px;color:var(--tx3)">-</span>`;
     return `<tr>
-      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.emp_name||''}(${r.emp_id})</td>
-      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.work_date}</td>
-      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.req_type}</td>
-      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${time}</td>
-      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.reason||'-'}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.name||''}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.eid||''}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.date}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.gubun}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.reason}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.start}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.end}</td>
       <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #EDF0F7"><span class="bdg" style="font-size:10px;background:${bc[0]};color:${bc[1]};font-weight:700">${r.status}</span></td>
       <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #EDF0F7">${actions}</td>
     </tr>`;
   }).join('');
+  applyFilter('apprReqT');
+}
+async function _apprOtApprove(id){ await approveOtReq(id); renderApprovalRequests(); }
+async function _apprOtReject(id){ await rejectOtReq(id); renderApprovalRequests(); }
+// 근태소명 승인 — 기존 근태소명관리(hr5)의 소명반영과 동일 로직(applySomyungToAtt) 재사용
+function _apprSomyungApprove(eid,date,ck,type){
+  applySomyungToAtt(eid,date,ck,type);
+  renderApprovalRequests();
+}
+function _apprSomyungReject(eid,date,ck){
+  if(!confirm('이 소명 요청을 거절하시겠습니까?'))return;
+  setSomyungStatus(eid,date,ck,'거절');
+  renderApprovalRequests();
 }
 async function rejectOtReq(id){
   if(!confirm('이 신청서를 거절하시겠습니까?'))return;
@@ -1737,7 +1777,6 @@ async function _updateOtReqStatus(id,status){
     const res=await fetch(`${API_BASE}/api/overtime_requests`,{method:'POST',headers:API_HDR,credentials:'include',body:JSON.stringify(body)});
     if(!res.ok)throw new Error();
     _toast(status==='승인'?'승인되었습니다.':'거절되었습니다.','ok');
-    loadOtReqApprovals();
   }catch(e){_toast('처리에 실패했습니다.','error');}
 }
 
@@ -7579,7 +7618,7 @@ function renderSomyung(){
   const tbody=document.getElementById('somBody');
   if(!tbody)return;
   if(!list.length){
-    tbody.innerHTML=`<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--tx3);font-size:13px">해당 월에 등록된 소명 항목이 없습니다.<br><span style="font-size:11px;margin-top:4px;display:block">③ 근태관리 → 확인사항(J)열 클릭 후 항목 선택 시 자동 적재됩니다.</span></td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="12" style="text-align:center;padding:30px;color:var(--tx3);font-size:13px">해당 월에 등록된 소명 항목이 없습니다.<br><span style="font-size:11px;margin-top:4px;display:block">③ 근태관리 → 확인사항(J)열 클릭 후 항목 선택 시 자동 적재됩니다.</span></td></tr>`;
     return;
   }
   // 이름별 그룹
@@ -7602,7 +7641,7 @@ function renderSomyung(){
     const total=grp.items.length;
     const done=grp.items.filter(x=>_isSomyungAutoDone(x)).length;
     html+=`<tr style="background:#F6F8FC">
-      <td colspan="9" style="padding:7px 14px;border-bottom:1px solid #EDF0F7">
+      <td colspan="12" style="padding:7px 14px;border-bottom:1px solid #EDF0F7">
         <strong style="font-size:13px;color:var(--tx)">${grp.name}</strong>
         <span style="font-size:11px;color:var(--tx3);margin-left:8px">${total}건</span>
         <span style="font-size:11px;color:#15803D;margin-left:6px;font-weight:700">${done}건 완료</span>
@@ -7612,9 +7651,7 @@ function renderSomyung(){
     </tr>`;
     grp.items.forEach(item=>{
       const isDone=_isSomyungAutoDone(item);
-      const typeBg=item.type.includes('출근')||item.type.includes('퇴근')
-        ? 'background:#FEE2E2;color:#991B1B'
-        : 'background:#FFF4EC;color:#C05621';
+      const isApproved=item.status==='소명완료';
       const content=_resolveSomyungContent(item);
       const memoBadgeStyle=MEMO_BADGES[content.text]||'background:#F1F5F9;color:#475569';
       // 직원이 슬랙 "근태소명요청서"로 작성한 내용 (syncSomyungWorkflow로 연동됨)
@@ -7624,10 +7661,15 @@ function renderSomyung(){
       html+=`<tr>
         <td style="padding:7px 14px;color:var(--tx2);font-weight:600">${item.name}</td>
         <td style="padding:7px 14px;color:var(--tx2);text-align:center">${item.date}</td>
-        <td style="padding:7px 14px;text-align:center"><span class="bdg" style="font-size:10px;${typeBg};font-weight:700">${item.type}</span></td>
+        <td style="padding:7px 14px;text-align:center;color:var(--tx2)">${item.type}</td>
         <td style="padding:7px 10px;text-align:center;max-width:160px">${wkHtml}</td>
         <td style="padding:7px 10px;text-align:center">
           ${content.text?`<span class="bdg" style="font-size:10px;${memoBadgeStyle};font-weight:700;white-space:pre-line;text-align:left;display:inline-block">${content.text}</span>`:`<span style="font-size:10px;color:var(--tx3)">미작성</span>`}
+        </td>
+        <td style="padding:7px 14px;text-align:center;color:var(--tx2)">${item.workerIn||'-'}</td>
+        <td style="padding:7px 14px;text-align:center;color:var(--tx2)">${item.workerOut||'-'}</td>
+        <td style="padding:7px 14px;text-align:center">
+          <span class="bdg" style="font-size:11px;padding:3px 9px;background:${isApproved?'#DCFCE7':'#FFFBEB'};color:${isApproved?'#15803D':'#92400E'};font-weight:700">${isApproved?'승인':'대기중'}</span>
         </td>
         <td style="padding:7px 14px;text-align:center">
           <span class="bdg" style="font-size:11px;padding:3px 9px;background:${isDone?'#DCFCE7':'#FFFBEB'};color:${isDone?'#15803D':'#92400E'};font-weight:700">${isDone?'✅ 소명완료':'⏳ 대기중'}</span>
@@ -10179,7 +10221,13 @@ function nav(pid,el){
   const pg=document.getElementById('page-'+pid);if(pg)pg.classList.add('on');if(el)el.classList.add('on');
   // ★ 마지막 방문 페이지 저장
   localStorage.setItem('gwangjae_last_page',pid);
-  if(pid==='hr14'){loadOtReqApprovals();}
+  if(pid==='hr14'){
+    // ★ 승인요청서 관리는 항상 오늘 날짜 기준 년/월을 기본값으로 표시
+    const _now=new Date(),_apprYEl=document.getElementById('apprYear'),_apprMEl=document.getElementById('apprMonth');
+    if(_apprYEl)_apprYEl.value=String(_now.getFullYear());
+    if(_apprMEl)_apprMEl.value=String(_now.getMonth()+1);
+    loadApprovalRequests();
+  }
   if(pid==='field1'){loadApprovalMgmt();}
   if(pid==='my1'){
     // ★ 나의 근태현황은 항상 오늘 날짜 기준 년/월을 기본값으로 표시 (이전에 다른 월을 보고 있었어도 재진입 시 초기화)
@@ -10720,7 +10768,7 @@ const MENU_LIST=[
   {id:'hr10',label:'월별 스케줄 등록'},
   {id:'hr12',label:'연차현황'},
   {id:'hr13',label:'연차사용현황'},
-  {id:'hr14',label:'연장·휴일근무 승인'},
+  {id:'hr14',label:'승인요청서 관리'},
 ];
 const ROLE_LABEL={hr:'HR 담당자',emp:'CX 직원',field:'현장운영자'};
 // 역할별 기본 메뉴 접근 허용
