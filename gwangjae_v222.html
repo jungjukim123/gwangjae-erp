@@ -7650,13 +7650,6 @@ function renderSomyung(){
     grouped[item.eid].items.push(item);
   });
 
-  // 소명내용 뱃지 색상 매핑
-  const MEMO_BADGES={
-    '연차':'background:#DCFCE7;color:#15803D',
-    '결근':'background:#FEE2E2;color:#991B1B',
-    '지각':'background:#FFF7ED;color:#C05621',
-  };
-
   let html='';
   Object.values(grouped).forEach(grp=>{
     grp.items.sort((a,b)=>a.date.localeCompare(b.date));
@@ -7675,30 +7668,34 @@ function renderSomyung(){
       const isDone=_isSomyungAutoDone(item);
       const isApproved=item.status==='소명완료';
       const content=_resolveSomyungContent(item);
-      const memoBadgeStyle=MEMO_BADGES[content.text]||'background:#F1F5F9;color:#475569';
+      // ★ 소명내용은 이제 출근/퇴근 시간 전용 열이 따로 있어서, 결근·연차(월차)일 때만
+      //   의미가 있다 — 그 외(출근누락 등 시간 기반 항목)는 "-"만 표시.
+      const isLeaveType=item.workerType==='결근'||item.workerType==='연차'||item.workerType==='월차';
       // 직원이 슬랙 "근태소명요청서"로 작성한 내용 (syncSomyungWorkflow로 연동됨)
+      // 소명사유 색상: 결근=빨강, 연차=파랑, 그 외에는 기본 텍스트색(확인사항 열과 같은 일반 표시)
+      const wkColor=item.workerType==='결근'?'var(--red)':item.workerType==='연차'?'var(--blue)':'var(--tx2)';
       const wkHtml=item.workerType
-        ?`<span class="bdg" style="font-size:9px;background:#F1F5F9;color:#475569;font-weight:700">${item.workerType}</span>`
+        ?`<span style="color:${wkColor}">${item.workerType}</span>`
         :`<span style="font-size:10px;color:var(--tx3)">미작성</span>`;
       html+=`<tr>
         <td style="padding:7px 14px;color:var(--tx2);font-weight:600">${item.name}</td>
         <td style="padding:7px 14px;color:var(--tx2);text-align:center">${item.date}</td>
         <td style="padding:7px 14px;text-align:center;color:var(--tx2)">${item.type}</td>
         <td style="padding:7px 10px;text-align:center;max-width:160px">${wkHtml}</td>
-        <td style="padding:7px 10px;text-align:center">
-          ${content.text?`<span class="bdg" style="font-size:10px;${memoBadgeStyle};font-weight:700;white-space:pre-line;text-align:left;display:inline-block">${content.text}</span>`:`<span style="font-size:10px;color:var(--tx3)">미작성</span>`}
+        <td style="padding:7px 10px;text-align:center;color:var(--tx2)">
+          ${isLeaveType?(content.text?`<span style="white-space:pre-line">${content.text}</span>`:`<span style="font-size:10px;color:var(--tx3)">미작성</span>`):'-'}
         </td>
         <td style="padding:7px 14px;text-align:center;color:var(--tx2)">${item.workerIn||'-'}</td>
         <td style="padding:7px 14px;text-align:center;color:var(--tx2)">${item.workerOut||'-'}</td>
         <td style="padding:7px 14px;text-align:center">
-          <span class="bdg" style="font-size:11px;padding:3px 9px;background:${isApproved?'#DCFCE7':'#FFFBEB'};color:${isApproved?'#15803D':'#92400E'};font-weight:700">${isApproved?'승인':'대기중'}</span>
+          <span style="font-size:11px;font-weight:700;color:${isApproved?'#15803D':'var(--tx3)'}">${isApproved?'승인':'대기중'}</span>
         </td>
         <td style="padding:7px 14px;text-align:center">
-          <span class="bdg" style="font-size:11px;padding:3px 9px;background:${isDone?'#DCFCE7':'#FFFBEB'};color:${isDone?'#15803D':'#92400E'};font-weight:700">${isDone?'✅ 소명완료':'⏳ 대기중'}</span>
+          <span style="font-size:11px;font-weight:700;color:${isDone?'#15803D':'var(--tx3)'}">${isDone?'소명완료':'대기중'}</span>
         </td>
         <td style="padding:7px 14px;text-align:center">
           <button class="btn sm ${isDone?'p':''}" onclick="applySomyungToAtt('${item.eid}','${item.date}','${ck}','${item.type}')" ${isDone?'':'disabled'} title="소명 내용을 근태에 반영 (다시 눌러 재반영 가능)">📋 소명반영</button>
-          ${_somyungAppliedNow(item)?'<span class="bdg" style="font-size:9px;background:#DCFCE7;color:#15803D;font-weight:700;margin-left:4px">✅ 반영완료</span>':''}
+          ${_somyungAppliedNow(item)?'<span style="font-size:10px;color:#15803D;font-weight:700;margin-left:4px">반영완료</span>':''}
         </td>
         <td style="padding:7px 14px;text-align:center">
           <button class="btn sm d" onclick="deleteSomyungItem('${item.eid}','${item.date}','${ck}')" title="이 소명 항목 삭제">🗑 삭제</button>
