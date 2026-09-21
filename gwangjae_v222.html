@@ -835,8 +835,8 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
         </select>
       </div>
       <div class="fg"><label>날짜 선택 *</label><input type="date" id="myExpNewDate"></div>
-      <div class="fg"><label>출근시간</label><input type="time" id="myExpNewIn" disabled></div>
-      <div class="fg"><label>퇴근시간</label><input type="time" id="myExpNewOut" disabled></div>
+      <div class="fg"><label>출근시간</label><input type="time" id="myExpNewIn" lang="en-GB" disabled></div>
+      <div class="fg"><label>퇴근시간</label><input type="time" id="myExpNewOut" lang="en-GB" disabled></div>
       <button class="btn p" onclick="submitNewMyExplanation()">제출</button>
     </div>
   </div>
@@ -853,8 +853,8 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
     <div class="sb" style="padding:14px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
       <div class="fg"><label>날짜 *</label><input type="date" id="myOtDate"></div>
       <div class="fg"><label>구분 *</label><select id="myOtType"><option value="연장">연장근무</option><option value="휴일">휴일근무</option></select></div>
-      <div class="fg"><label>시작시간</label><input type="time" id="myOtStart"></div>
-      <div class="fg"><label>종료시간</label><input type="time" id="myOtEnd"></div>
+      <div class="fg"><label>시작시간</label><input type="time" id="myOtStart" lang="en-GB"></div>
+      <div class="fg"><label>종료시간</label><input type="time" id="myOtEnd" lang="en-GB"></div>
       <div class="fg" style="flex:1;min-width:200px"><label>사유</label><input type="text" id="myOtReason" placeholder="사유를 입력하세요"></div>
       <button class="btn p" onclick="submitMyOvertimeRequest()">제출</button>
     </div>
@@ -1046,6 +1046,34 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
     <input type="hidden" id="req-date"><input type="hidden" id="req-empid">
     <div class="divider"></div>
     <div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn" onclick="closeModal('modal-attreq')">취소</button><button class="btn p" onclick="submitAttReq()">요청 제출</button></div>
+  </div>
+</div>
+<div class="ov" id="modal-expitem">
+  <div class="modal" style="width:440px">
+    <div class="mh"><h3>근태소명 제출</h3><button class="btn sm" onclick="closeModal('modal-expitem')">✕</button></div>
+    <div class="ibox" id="expModalConfirmLabel" style="font-size:13px;font-weight:600"></div>
+    <div class="fr2">
+      <div class="fg"><label>소명사유 *</label>
+        <select id="expModalType" onchange="_toggleMyExpModalTimeFields()">
+          <option value="">선택</option>
+          <option value="출근누락">출근누락</option>
+          <option value="퇴근누락">퇴근누락</option>
+          <option value="전체근태누락">출퇴근 누락</option>
+          <option value="결근">결근</option>
+          <option value="연차">연차</option>
+          <option value="조퇴">조퇴</option>
+          <option value="지각">지각</option>
+        </select>
+      </div>
+    </div>
+    <div class="fr2">
+      <div class="fg"><label>출근시간</label><input type="time" id="expModalIn" lang="en-GB"></div>
+      <div class="fg"><label>퇴근시간</label><input type="time" id="expModalOut" lang="en-GB"></div>
+    </div>
+    <div class="fg"><label>사유</label><input type="text" id="expModalNote" placeholder="사유를 입력하세요"></div>
+    <input type="hidden" id="expModalYr"><input type="hidden" id="expModalMo"><input type="hidden" id="expModalDate"><input type="hidden" id="expModalIdx">
+    <div class="divider"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn" onclick="closeModal('modal-expitem')">취소</button><button class="btn p" onclick="submitMyExpModal()">제출</button></div>
   </div>
 </div>
 </div><!-- /app -->
@@ -1344,8 +1372,14 @@ async function renderMyAtt(){
     tbody.innerHTML=`<tr><td colspan="${MY_ATT_COLS.length}" style="text-align:center;padding:30px;color:var(--tx3)">계약기간관리에 등록된 본인 정보를 찾을 수 없습니다.</td></tr>`;
     return;
   }
+  // ★ employees/contracts 전역을 "본인 한 명"으로 임시 교체해 기존 계산 함수(cU/cV/getMergedEmp 등)를
+  //   재사용한다. 이 함수가 끝나면(HR 세션이 실수로 이 화면을 렌더링하게 되는 경우를 포함해)
+  //   반드시 원래 값으로 되돌려서, 관리자 화면(계약기간관리/월별 근태현황 등)이 참조하는 전체
+  //   데이터셋이 절대 이 한 명짜리 데이터로 영구히 덮어써지지 않도록 한다.
+  const _prevEmployees=employees, _prevContracts=contracts;
   employees=[emp];
   contracts=data.contracts||[];
+  try{
   attData={};
   (data.attData||[]).forEach(r=>{attData[r.key]={in:r.in||'',out:r.out||'',source:r.source||'',locked:!!r.locked,updated:r.updated};});
   slackData={};
@@ -1416,6 +1450,10 @@ async function renderMyAtt(){
     </tr>`;
   }
   tbody.innerHTML=html||`<tr><td colspan="${MY_ATT_COLS.length}" style="text-align:center;padding:30px;color:var(--tx3)">표시할 근태 데이터가 없습니다.</td></tr>`;
+  }finally{
+    employees=_prevEmployees;
+    contracts=_prevContracts;
+  }
 }
 
 // ── 근태소명요청서 ────────────────────────────────────────────
@@ -1430,62 +1468,72 @@ async function renderMyExplanations(){
     const res=await fetch(`${API_BASE}/api/mypage/explanations?yr=${yr}&mo=${mo}`,{headers:API_HDR,credentials:'include'});
     if(res.ok)items=(await res.json()).items||[];
   }catch(e){}
+  window._myExpItemsCache={yr,mo,items};
   if(!items.length){
     box.innerHTML='<div style="padding:20px;color:var(--tx3);font-size:12px">해당 월에 소명이 필요한 항목이 없습니다. 관리자가 확인사항을 지정하면 여기에 표시됩니다.</div>';
     return;
   }
-  box.innerHTML=items.map((item,idx)=>{
-    const filled=!!(item.workerType||item.workerNote||item.workerIn||item.workerOut);
-    return `<div class="section" style="margin-bottom:10px">
-      <div class="shd"><span class="shd-t">${item.date} · ${item.type}</span>
-        <span class="bdg" style="font-size:10px;margin-left:8px;background:${filled?'#DCFCE7':'#FFFBEB'};color:${filled?'#15803D':'#92400E'};font-weight:700">${filled?'제출완료':'미제출'}</span>
-      </div>
-      <div class="sb" style="padding:12px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
-        <div class="fg"><label>소명사유</label>
-          <select id="myExpType_${idx}" onchange="_toggleMyExpTimeFields(${idx})">
-            <option value="">선택</option>
-            <option value="출근누락" ${item.workerType==='출근누락'?'selected':''}>출근누락</option>
-            <option value="퇴근누락" ${item.workerType==='퇴근누락'?'selected':''}>퇴근누락</option>
-            <option value="전체근태누락" ${item.workerType==='전체근태누락'?'selected':''}>출퇴근 누락</option>
-            <option value="결근" ${item.workerType==='결근'?'selected':''}>결근</option>
-            <option value="연차" ${item.workerType==='연차'?'selected':''}>연차</option>
-            <option value="조퇴" ${item.workerType==='조퇴'?'selected':''}>조퇴</option>
-            <option value="지각" ${item.workerType==='지각'?'selected':''}>지각</option>
-          </select>
-        </div>
-        <div class="fg"><label>출근시간</label><input type="time" id="myExpIn_${idx}" value="${item.workerIn||''}"></div>
-        <div class="fg"><label>퇴근시간</label><input type="time" id="myExpOut_${idx}" value="${item.workerOut||''}"></div>
-        <div class="fg" style="flex:1;min-width:200px"><label>사유</label><input type="text" id="myExpNote_${idx}" value="${item.workerNote||''}" placeholder="사유를 입력하세요"></div>
-        <button class="btn p" onclick="submitMyExplanation(${yr},${mo},'${item.date}',${idx})">저장</button>
-      </div>
-    </div>`;
-  }).join('');
-  items.forEach((item,idx)=>_toggleMyExpTimeFields(idx));
+  const th='style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap"';
+  const td='style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7;border-right:1px solid #EDF0F7"';
+  box.innerHTML=`<div class="tw"><table style="width:100%;min-width:600px">
+    <thead><tr style="background:#E8EDF6">
+      <th ${th}>일자</th><th ${th}>확인사항</th><th ${th}>상태</th>
+      <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;white-space:nowrap">제출</th>
+    </tr></thead>
+    <tbody>${items.map((item,idx)=>{
+      const filled=!!(item.workerType||item.workerNote||item.workerIn||item.workerOut);
+      return `<tr>
+        <td ${td}>${item.date}</td>
+        <td ${td}>${item.type||'-'}</td>
+        <td ${td}><span class="bdg" style="font-size:10px;background:${filled?'#DCFCE7':'#FFFBEB'};color:${filled?'#15803D':'#92400E'};font-weight:700">${filled?'제출완료':'미제출'}</span></td>
+        <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #EDF0F7"><button class="btn sm p" onclick="openMyExpModal(${idx})">제출</button></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
 }
-// 소명사유에 따라 출근/퇴근시간 입력칸 활성화 여부를 정한다.
-// 출근누락/전체근태누락 → 출근시간 활성화, 퇴근누락/전체근태누락 → 퇴근시간 활성화, 그 외는 둘 다 비활성화.
-function _toggleMyExpTimeFields(idx){
-  const type=document.getElementById(`myExpType_${idx}`).value;
-  const inEl=document.getElementById(`myExpIn_${idx}`),outEl=document.getElementById(`myExpOut_${idx}`);
-  if(!inEl||!outEl)return;
+// "제출" 버튼 → 관리자가 지정한 확인사항 항목 하나를 팝업(모달)으로 열어 소명사유/시간을 입력받는다.
+function openMyExpModal(idx){
+  const cache=window._myExpItemsCache;
+  const item=cache&&cache.items[idx];
+  if(!item)return;
+  document.getElementById('expModalConfirmLabel').textContent=item.date+' · '+(item.type||'-');
+  document.getElementById('expModalType').value=item.workerType||'';
+  document.getElementById('expModalIn').value=item.workerIn||'';
+  document.getElementById('expModalOut').value=item.workerOut||'';
+  document.getElementById('expModalNote').value=item.workerNote||'';
+  document.getElementById('expModalYr').value=cache.yr;
+  document.getElementById('expModalMo').value=cache.mo;
+  document.getElementById('expModalDate').value=item.date;
+  document.getElementById('expModalIdx').value=idx;
+  _toggleMyExpModalTimeFields();
+  openModal('modal-expitem');
+}
+// 모달 안 소명사유에 따라 출근/퇴근시간 입력칸 활성화 여부를 정한다.
+function _toggleMyExpModalTimeFields(){
+  const type=document.getElementById('expModalType').value;
+  const inEl=document.getElementById('expModalIn'),outEl=document.getElementById('expModalOut');
   const inOn=type==='출근누락'||type==='전체근태누락';
   const outOn=type==='퇴근누락'||type==='전체근태누락';
   inEl.disabled=!inOn;if(!inOn)inEl.value='';
   outEl.disabled=!outOn;if(!outOn)outEl.value='';
 }
-async function submitMyExplanation(yr,mo,date,idx){
+async function submitMyExpModal(){
+  const yr=parseInt(document.getElementById('expModalYr').value);
+  const mo=parseInt(document.getElementById('expModalMo').value);
+  const date=document.getElementById('expModalDate').value;
   const body={
     yr,mo,date,
-    workerType:document.getElementById(`myExpType_${idx}`).value,
-    workerNote:document.getElementById(`myExpNote_${idx}`).value,
-    workerIn:document.getElementById(`myExpIn_${idx}`).value,
-    workerOut:document.getElementById(`myExpOut_${idx}`).value,
+    workerType:document.getElementById('expModalType').value,
+    workerNote:document.getElementById('expModalNote').value,
+    workerIn:document.getElementById('expModalIn').value,
+    workerOut:document.getElementById('expModalOut').value,
   };
   try{
     const res=await fetch(`${API_BASE}/api/mypage/explanations`,{method:'POST',headers:API_HDR,credentials:'include',body:JSON.stringify(body)});
     const data=await res.json();
     if(!res.ok){_toast(data.error||'저장에 실패했습니다.','error');return;}
     _toast('소명 내용이 저장되었습니다.','ok');
+    closeModal('modal-expitem');
     renderMyExplanations();
   }catch(e){_toast('저장에 실패했습니다.','error');}
 }
@@ -1504,6 +1552,17 @@ async function submitNewMyExplanation(){
   if(!date){_toast('날짜를 선택하세요.','error');return;}
   if(!workerType){_toast('소명사유를 선택하세요.','error');return;}
   const [yr,mo]=date.split('-').map(Number);
+  // ★ 이미 관리자가 지정했거나(확인사항) 본인이 이미 신청한 날짜와 중복 제출 방지
+  try{
+    const chkRes=await fetch(`${API_BASE}/api/mypage/explanations?yr=${yr}&mo=${mo}`,{headers:API_HDR,credentials:'include'});
+    if(chkRes.ok){
+      const chk=await chkRes.json();
+      if((chk.items||[]).some(x=>x.date===date)){
+        alert('해당일자가 이미 존재합니다.');
+        return;
+      }
+    }
+  }catch(e){}
   const body={
     yr,mo,date,workerType,workerNote:'',
     workerIn:document.getElementById('myExpNewIn').value,
@@ -2601,18 +2660,14 @@ async function saveAll() {
     const _now = _kstNow();
     const _ATT_BUILD_RE = /^([A-Z][0-9]+)_(\d{4}-\d{2}-\d{2})$/;
 
-    // ① employees upsert — 사번 기준 중복 제거 + contracts·hr_saved 모두 없는 사번은 DB에서도 삭제
-    const _conSabnSet = new Set(contracts.map(c=>c.사번).filter(Boolean));
-    const _hrSabnSet  = new Set(Object.values(_hrRowsCache).flat().map(r=>r.emp&&r.emp.사번).filter(Boolean));
+    // ① employees upsert — 사번 기준 중복 제거만 수행한다.
+    // ★ 예전에는 "이번 세션 메모리(contracts/_hrRowsCache)에 없는 사번은 DB에서도 삭제"하는
+    //   자동 정리 로직이 있었으나, _hrRowsCache는 로그인 직후·새로고침 직후엔 항상 비어있어(그
+    //   달의 월별 근태 현황을 한 번도 안 열어봤으면 채워지지 않음) 정상적으로 존재하는 직원도
+    //   특정 타이밍에 saveAll()이 호출되면 조용히 DB에서 지워지는 심각한 데이터 유실 버그였다.
+    //   employees 삭제는 반드시 명시적인 관리자 액션(계약 삭제 등)에서만 일어나야 한다.
     const empDedup = new Map();
     employees.forEach(e => { if(e.사번) empDedup.set(e.사번, { ...e, updated: _now }); });
-    // contracts에도 hr_saved에도 없는 사번 → DB employees 행 삭제
-    empDedup.forEach((_, sabn) => {
-      if(!_conSabnSet.has(sabn) && !_hrSabnSet.has(sabn)){
-        _dbFetch(`employees?사번=eq.${encodeURIComponent(sabn)}`,{method:'DELETE'}).catch(()=>{});
-        empDedup.delete(sabn);
-      }
-    });
     const empRows = Array.from(empDedup.values());
 
     // ② contracts upsert — key = "사번_cs" (사번 없으면 "no숫자_cs"로 대체)
@@ -3208,14 +3263,12 @@ function syncContractsToEmployees(){
     if(!contracts.some(c=>c.사번===e.사번))return;
     e.퇴사=getQuitDate(e.사번);
   });
-  // 3) ★ contracts에도 hr_saved(근태)에도 없는 사번은 employees에서 제거
-  //    (계약 전체 삭제 + 근태 초기화가 완료된 직원은 인원현황에서도 제거)
-  const conSabn=new Set(contracts.map(c=>c.사번).filter(Boolean));
-  const hrSabn=new Set(Object.values(_hrRowsCache).flat().map(r=>r.emp&&r.emp.사번).filter(Boolean));
-  employees=employees.filter(e=>{
-    if(!e.사번)return true; // 사번 없는 직원은 유지
-    return conSabn.has(e.사번)||hrSabn.has(e.사번);
-  });
+  // 3) ★ (제거됨) 예전엔 "contracts에도 _hrRowsCache(이번 세션에서 열어본 월별근태 캐시)에도
+  //    없는 사번은 employees에서 제거"하는 로직이 있었다. 그런데 _hrRowsCache는 로그인 직후·
+  //    새로고침 직후엔 항상 비어있어서(그 달 월별 근태 현황을 아직 한 번도 안 열어봤으면 채워지지
+  //    않음), 실제로는 재직중인 직원도 로그인할 때마다 인원현황/월별근태현황에서 사라졌다 보였다
+  //    사라졌다 하는 심각한 버그였다. 직원 제거는 반드시 계약 삭제 같은 명시적 관리자 액션에서만
+  //    일어나야 하므로, 이 자동 정리 단계는 완전히 제거했다.
   // 4) no(순번) 재정렬
   employees.forEach((e,i)=>e.no=i+1);
 }
@@ -10118,7 +10171,13 @@ function nav(pid,el){
   localStorage.setItem('gwangjae_last_page',pid);
   if(pid==='hr14'){loadOtReqApprovals();}
   if(pid==='field1'){loadApprovalMgmt();}
-  if(pid==='my1'){renderMyAtt();}
+  if(pid==='my1'){
+    // ★ 나의 근태현황은 항상 오늘 날짜 기준 년/월을 기본값으로 표시 (이전에 다른 월을 보고 있었어도 재진입 시 초기화)
+    const _now=new Date(),_myAttYEl=document.getElementById('myAttYear'),_myAttMEl=document.getElementById('myAttMonth');
+    if(_myAttYEl)_myAttYEl.value=String(_now.getFullYear());
+    if(_myAttMEl)_myAttMEl.value=String(_now.getMonth()+1);
+    renderMyAtt();
+  }
   if(pid==='my2'){renderMyExplanations();}
   if(pid==='my3'){renderMyOvertimeRequests();}
   if(pid==='hr11'){buildDashExpHead();renderDashExpiring();dashSchedNav(0);}
