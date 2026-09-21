@@ -835,8 +835,8 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
         </select>
       </div>
       <div class="fg"><label>날짜 선택 *</label><input type="date" id="myExpNewDate"></div>
-      <div class="fg"><label>출근시간</label><input type="time" id="myExpNewIn" lang="en-GB" disabled></div>
-      <div class="fg"><label>퇴근시간</label><input type="time" id="myExpNewOut" lang="en-GB" disabled></div>
+      <div class="fg"><label>출근시간</label><input type="text" id="myExpNewIn" inputmode="numeric" maxlength="5" placeholder="13:00" oninput="_maskTimeInput(this)" onblur="_clampTimeInput(this)" disabled></div>
+      <div class="fg"><label>퇴근시간</label><input type="text" id="myExpNewOut" inputmode="numeric" maxlength="5" placeholder="18:00" oninput="_maskTimeInput(this)" onblur="_clampTimeInput(this)" disabled></div>
       <button class="btn p" onclick="submitNewMyExplanation()">제출</button>
     </div>
   </div>
@@ -853,8 +853,8 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
     <div class="sb" style="padding:14px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
       <div class="fg"><label>날짜 *</label><input type="date" id="myOtDate"></div>
       <div class="fg"><label>구분 *</label><select id="myOtType"><option value="연장">연장근무</option><option value="휴일">휴일근무</option></select></div>
-      <div class="fg"><label>시작시간</label><input type="time" id="myOtStart" lang="en-GB"></div>
-      <div class="fg"><label>종료시간</label><input type="time" id="myOtEnd" lang="en-GB"></div>
+      <div class="fg"><label>시작시간</label><input type="text" id="myOtStart" inputmode="numeric" maxlength="5" placeholder="13:00" oninput="_maskTimeInput(this)" onblur="_clampTimeInput(this)"></div>
+      <div class="fg"><label>종료시간</label><input type="text" id="myOtEnd" inputmode="numeric" maxlength="5" placeholder="18:00" oninput="_maskTimeInput(this)" onblur="_clampTimeInput(this)"></div>
       <div class="fg"><label>사유</label><select id="myOtReason"><option value="연장근무신청">연장근무신청</option><option value="휴일근무신청">휴일근무신청</option></select></div>
       <button class="btn p" onclick="submitMyOvertimeRequest()">제출</button>
     </div>
@@ -1067,8 +1067,8 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       </div>
     </div>
     <div class="fr2">
-      <div class="fg"><label>출근시간</label><input type="time" id="expModalIn" lang="en-GB"></div>
-      <div class="fg"><label>퇴근시간</label><input type="time" id="expModalOut" lang="en-GB"></div>
+      <div class="fg"><label>출근시간</label><input type="text" id="expModalIn" inputmode="numeric" maxlength="5" placeholder="13:00" oninput="_maskTimeInput(this)" onblur="_clampTimeInput(this)"></div>
+      <div class="fg"><label>퇴근시간</label><input type="text" id="expModalOut" inputmode="numeric" maxlength="5" placeholder="18:00" oninput="_maskTimeInput(this)" onblur="_clampTimeInput(this)"></div>
     </div>
     <div class="fg"><label>사유</label><input type="text" id="expModalNote" placeholder="사유를 입력하세요"></div>
     <input type="hidden" id="expModalYr"><input type="hidden" id="expModalMo"><input type="hidden" id="expModalDate"><input type="hidden" id="expModalIdx">
@@ -1454,6 +1454,28 @@ async function renderMyAtt(){
     employees=_prevEmployees;
     contracts=_prevContracts;
   }
+}
+
+// ── 시간 입력(HH:MM) 마스킹 — 브라우저 기본 <input type="time">는 OS 지역설정에 따라
+//   오전/오후 12시간제 휠 피커로 뜨는 경우가 있어(lang 속성으로도 못 막는 환경이 있음),
+//   일반 텍스트 입력에 자동 포맷팅을 걸어 항상 "13:00" 같은 24시간제 표기로 통일한다.
+function _maskTimeInput(el){
+  let digits=el.value.replace(/\D/g,'').slice(0,4);
+  if(digits.length>2){
+    let hh=digits.slice(0,2),mm=digits.slice(2);
+    if(parseInt(hh,10)>23)hh='23';
+    el.value=hh+':'+mm;
+  }else{
+    if(digits.length===2&&parseInt(digits,10)>23)digits='23';
+    el.value=digits;
+  }
+}
+function _clampTimeInput(el){
+  const m=el.value.match(/^(\d{1,2}):?(\d{0,2})$/);
+  if(!m||!el.value){el.value='';return;}
+  const hh=Math.min(23,parseInt(m[1],10)||0);
+  const mm=Math.min(59,parseInt(m[2]||'0',10)||0);
+  el.value=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');
 }
 
 // ── 근태소명요청서 ────────────────────────────────────────────
@@ -2321,7 +2343,7 @@ async function _mergeMetaArrayByKey(metaKey, localArr, keyField, deletedKeys) {
 // ============================================================
 function _setDbStatus(state, sub) {
   const colors = { ok:'#22C55E', syncing:'#F59E0B', error:'#EF4444', offline:'#6B7280' };
-  const labels = { ok:'Supabase 연동', syncing:'동기화 중...', error:'연동 오류 (로컬 저장)', offline:'오프라인' };
+  const labels = { ok:'PostgreSQL 연동', syncing:'동기화 중...', error:'연동 오류 (로컬 저장)', offline:'오프라인' };
   const dot = document.getElementById('sbDbDot');
   const txt = document.getElementById('sbDbTxt');
   const sb  = document.getElementById('sbDbSub');
@@ -2331,7 +2353,7 @@ function _setDbStatus(state, sub) {
   const ldot = document.getElementById('loginDbDot');
   const ltxt = document.getElementById('loginDbTxt');
   if(ldot) ldot.style.background = colors[state] || '#6B7280';
-  if(ltxt) ltxt.textContent = state === 'ok' ? '✅ Supabase 연결됨' : state === 'syncing' ? '연결 확인 중...' : '⚠️ 오프라인 — 로컬 캐시로 동작';
+  if(ltxt) ltxt.textContent = state === 'ok' ? '✅ PostgreSQL 연결됨' : state === 'syncing' ? '연결 확인 중...' : '⚠️ 오프라인 — 로컬 캐시로 동작';
 }
 
 function _toast(msg, type) {
@@ -2944,7 +2966,7 @@ function _buildEmpMonthDays(emp, yr, mo, days) {
 // ============================================================
 async function loadSaved() {
   _setDbStatus('syncing', '불러오는 중...');
-  _setLoadingMsg('Supabase에서 데이터 불러오는 중...');
+  _setLoadingMsg('PostgreSQL에서 데이터 불러오는 중...');
   try {
     // ★ Promise.all이 아닌 allSettled 사용 — 테이블 하나가 없거나 일시 오류여도
     //   (예: sched_saved 테이블 미생성) 나머지 테이블 동기화까지 통째로 오프라인 폴백되지 않도록 함
@@ -8099,6 +8121,8 @@ function revertAtt(eid,ds){if(isMonthConfirmed()){alert("확정된 월은 수정
     },0);
   };
 
+  let _lastDragCell=null;
+
   window.attDragStart=function(e,td){
     if(e.button!==0)return;
     if(isMonthConfirmed())return;
@@ -8109,8 +8133,11 @@ function revertAtt(eid,ds){if(isMonthConfirmed()){alert("확정된 월은 수정
     _closeActive();
     _dragging=true;
     _cells=[];
+    _lastDragCell=null;
     document.body.classList.add('att-dragging');
     _addCell(td);
+    _lastDragCell=td;
+    document.addEventListener('mousemove',_onDragMove);
     document.addEventListener('mouseup',_onUp,{once:true});
     document.addEventListener('mouseleave',_onUp,{once:true});
   };
@@ -8118,7 +8145,36 @@ function revertAtt(eid,ds){if(isMonthConfirmed()){alert("확정된 월은 수정
   window.attDragOver=function(e,td){
     if(!_dragging)return;
     _addCell(td);
+    _lastDragCell=td;
   };
+
+  // ★ 드래그를 빠르게 하면 마우스가 지나간 셀에서 mouseover가 아예 안 붙는(스킵되는)
+  //   브라우저 특성 때문에 중간에 선택이 끊기는 문제가 있었다. mousemove마다 실제 커서
+  //   아래 요소(elementFromPoint)를 다시 확인해서, 직전 선택 셀과 같은 열인데 사이에
+  //   건너뛴 행이 있으면 그 사이 셀까지 전부 채워 선택한다.
+  function _onDragMove(e){
+    if(!_dragging)return;
+    const el=document.elementFromPoint(e.clientX,e.clientY);
+    const td=el&&el.closest&&el.closest('.att-drag-cell');
+    if(!td||td===_lastDragCell)return;
+    if(_lastDragCell&&td.cellIndex===_lastDragCell.cellIndex){
+      const lastTr=_lastDragCell.closest('tr'), curTr=td.closest('tr');
+      if(lastTr&&curTr&&lastTr!==curTr&&lastTr.parentNode===curTr.parentNode){
+        let p=lastTr.nextElementSibling,goingDown=false;
+        while(p){if(p===curTr){goingDown=true;break;}p=p.nextElementSibling;}
+        let row=lastTr;
+        while(row){
+          row=goingDown?row.nextElementSibling:row.previousElementSibling;
+          if(!row)break;
+          const cell=row.cells&&row.cells[td.cellIndex];
+          if(cell&&cell.classList&&cell.classList.contains('att-drag-cell'))_addCell(cell);
+          if(row===curTr)break;
+        }
+      }
+    }
+    _addCell(td);
+    _lastDragCell=td;
+  }
 
   function _addCell(td){
     const eid=td.dataset.eid, ds=td.dataset.ds, field=td.dataset.field;
@@ -8131,6 +8187,8 @@ function revertAtt(eid,ds){if(isMonthConfirmed()){alert("확정된 월은 수정
 
   function _onUp(e){
     _dragging=false;
+    _lastDragCell=null;
+    document.removeEventListener('mousemove',_onDragMove);
     document.body.classList.remove('att-dragging'); // hover 메뉴 복원
     if(_cells.length===0)return;
     // 1개 셀: 단일 클릭으로 메뉴 표시
