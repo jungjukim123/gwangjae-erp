@@ -667,7 +667,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
               <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;letter-spacing:.04em;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">이름</th>
               <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;letter-spacing:.04em;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">일자</th>
               <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;letter-spacing:.04em;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">확인사항</th>
-              <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;letter-spacing:.04em;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">직원작성내용</th>
+              <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;letter-spacing:.04em;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">소명 사유</th>
               <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;letter-spacing:.04em;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">소명내용</th>
               <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;letter-spacing:.04em;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">소명상태</th>
               <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;letter-spacing:.04em;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">소명반영</th>
@@ -1475,18 +1475,28 @@ async function renderMyExplanations(){
   }
   const th='style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap"';
   const td='style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7;border-right:1px solid #EDF0F7"';
-  box.innerHTML=`<div class="tw"><table style="width:100%;min-width:600px">
+  box.innerHTML=`<div class="tw"><table style="width:100%;min-width:760px">
     <thead><tr style="background:#E8EDF6">
-      <th ${th}>일자</th><th ${th}>확인사항</th><th ${th}>상태</th>
+      <th ${th}>구분</th><th ${th}>일자</th><th ${th}>확인사항</th><th ${th}>소명사유</th>
+      <th ${th}>출근시간</th><th ${th}>퇴근시간</th>
       <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;white-space:nowrap">제출</th>
     </tr></thead>
     <tbody>${items.map((item,idx)=>{
+      // 구분: 관리자(피플팀)가 확인사항으로 먼저 지정한 항목 vs "새 신청서 작성"으로 구성원이 직접 접수한 항목
+      const isEmployeeSource=item.source==='employee';
       const filled=!!(item.workerType||item.workerNote||item.workerIn||item.workerOut);
+      const gubunBg=isEmployeeSource?'background:#EFF6FF;color:#1D4ED8':'background:#FFF4EC;color:#C05621';
+      const submitCell=(isEmployeeSource||filled)
+        ?`<span class="bdg" style="font-size:10px;background:#DCFCE7;color:#15803D;font-weight:700">제출완료</span>`
+        :`<button class="btn sm p" onclick="openMyExpModal(${idx})">제출</button>`;
       return `<tr>
+        <td ${td}><span class="bdg" style="font-size:10px;${gubunBg};font-weight:700">${isEmployeeSource?'구성원 접수':'피플팀 요청'}</span></td>
         <td ${td}>${item.date}</td>
         <td ${td}>${item.type||'-'}</td>
-        <td ${td}><span class="bdg" style="font-size:10px;background:${filled?'#DCFCE7':'#FFFBEB'};color:${filled?'#15803D':'#92400E'};font-weight:700">${filled?'제출완료':'미제출'}</span></td>
-        <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #EDF0F7"><button class="btn sm p" onclick="openMyExpModal(${idx})">제출</button></td>
+        <td ${td}>${item.workerType||'-'}</td>
+        <td ${td}>${item.workerIn||'-'}</td>
+        <td ${td}>${item.workerOut||'-'}</td>
+        <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #EDF0F7">${submitCell}</td>
       </tr>`;
     }).join('')}</tbody>
   </table></div>`;

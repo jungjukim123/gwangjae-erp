@@ -172,7 +172,9 @@ router.post('/explanations', async (req, res, next) => {
       else if (workerOut) autoType = '퇴근 기록 없음';
       else if (workerType) autoType = workerType;
       if (!autoType) return res.status(400).json({ error: '소명사유 또는 출퇴근시간을 입력하세요.' });
-      item = { eid: empId, name: (emp && emp.이름) || '', date, type: autoType, status: '대기중', memo: '' };
+      // ★ source: 'employee' — "새 신청서 작성"으로 구성원이 직접 만든 항목 표시(구분 헤더열용).
+      //   관리자가 확인사항으로 먼저 지정한 항목은 이 분기를 타지 않으므로 source가 없다(=피플팀 요청).
+      item = { eid: empId, name: (emp && emp.이름) || '', date, type: autoType, status: '대기중', memo: '', source: 'employee' };
       data[ck].push(item);
     }
     item.workerType = workerType || '';
