@@ -399,8 +399,6 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
   <div class="ni emp-menu" style="display:none" onclick="nav('my1',this)">나의 근태현황</div>
   <div class="ni emp-menu" style="display:none" onclick="nav('my2',this)">근태소명요청서</div>
   <div class="ni emp-menu" style="display:none" onclick="nav('my3',this)">연장/휴일근무요청서</div>
-  <div class="ni emp-menu" style="display:none" id="mypageClockInBtn" onclick="mypageClockIn()">🟢 출근</div>
-  <div class="ni emp-menu" style="display:none" id="mypageClockOutBtn" onclick="mypageClockOut()">🔴 퇴근</div>
   <div class="nsec field-menu" style="display:none">승인관리</div>
   <div class="ni field-menu" style="display:none" onclick="nav('field1',this)">승인관리</div>
   <!-- DB 상태바 -->
@@ -815,10 +813,31 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
 <!-- MYPAGE ② 근태소명요청서 -->
 <div class="page" id="page-my2">
   <div class="ph">
-    <div class="ph-l"><div class="pt">근태소명요청서</div><div class="psub">관리자가 확인사항으로 지정한 날짜에 대한 소명을 작성해 제출합니다</div></div>
+    <div class="ph-l"><div class="pt">근태소명요청서</div><div class="psub">관리자가 확인사항으로 지정한 날짜에 대한 소명을 작성해 제출하거나, 새 소명을 직접 신청합니다</div></div>
     <div class="bg-row">
       <select id="myExpYear" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderMyExplanations()"><option value="2026">2026년</option></select>
       <select id="myExpMonth" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderMyExplanations()"><option value="12">12월</option><option value="11">11월</option><option value="10">10월</option><option value="9">09월</option><option value="8">08월</option><option value="7">07월</option><option value="6">06월</option><option value="5">05월</option><option value="4">04월</option><option value="3">03월</option><option value="2">02월</option><option value="1">01월</option></select>
+    </div>
+  </div>
+  <div class="section" style="margin-bottom:14px">
+    <div class="shd"><span class="shd-t">새 신청서 작성</span></div>
+    <div class="sb" style="padding:14px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div class="fg"><label>소명사유 *</label>
+        <select id="myExpNewType" onchange="_toggleMyExpNewTimeFields()">
+          <option value="">선택</option>
+          <option value="출근누락">출근누락</option>
+          <option value="퇴근누락">퇴근누락</option>
+          <option value="전체근태누락">출퇴근 누락</option>
+          <option value="결근">결근</option>
+          <option value="연차">연차</option>
+          <option value="조퇴">조퇴</option>
+          <option value="지각">지각</option>
+        </select>
+      </div>
+      <div class="fg"><label>날짜 선택 *</label><input type="date" id="myExpNewDate"></div>
+      <div class="fg"><label>출근시간</label><input type="time" id="myExpNewIn" disabled></div>
+      <div class="fg"><label>퇴근시간</label><input type="time" id="myExpNewOut" disabled></div>
+      <button class="btn p" onclick="submitNewMyExplanation()">제출</button>
     </div>
   </div>
   <div id="myExpList"></div>
@@ -1297,7 +1316,7 @@ async function _mypageClock(path,label){
 
 // ── 나의 근태현황 (읽기전용 — 통상시급 컬럼 제외) ───────────────
 const MY_ATT_COLS=['NO','귀속년도','귀속월','사번','소속','급여종','이름','일자','요일','구분','연장승인',
-  '시업','종료','비고','소정','출근','퇴근','휴게','총근무','기본','주휴시간','근로장려','야간','연장','휴일','휴일연장','확인사항'];
+  '시업','종료','비고','소정','출근','퇴근','휴게','총근무','기본','주휴시간','근로장려','야간','연장','휴일','휴일연장'];
 function buildMyAttHead(){
   const thead=document.getElementById('myAttHead');
   if(!thead)return;
@@ -1338,6 +1357,7 @@ async function renderMyAtt(){
   const _fullAtt=isFullAttendanceMonth(emp.사번,days)&&(yr+'-'+String(mo).padStart(2,'0'))>=GJ_START_YM;
   const tdc='style="padding:5px 7px;font-size:11px;text-align:center;white-space:nowrap;border-bottom:1px solid #EDF0F7"';
   let html='';
+  let mU=0,mV=0,mW=0,mJH=0,mGJ=0,mX=0,mY=0,mAA=0,mAB=0;
   days.forEach(day=>{
     const att=getAtt(emp.사번,day.date),i=tH(att.in),o=tH(att.out);
     const otApproved=day.연장승인==='승인'||day.연장인사==='승인'||day.확인==='연장근무';
@@ -1361,7 +1381,9 @@ async function renderMyAtt(){
     const gjH=(_fullAtt&&isGjDay(day.dow,day.gbn)&&isGjEligible({...me,직책구분:dayJikchaek},yr,mo))?gjWorkHours(day,W,me,i,o,U,otApproved):0;
     const dayWage=getConWageType(emp.사번,day.date);
     const gB=day.gbn==='주휴일'?'주휴':day.gbn==='무급휴일'?'무급':day.gbn==='공휴일'?'휴일':day.gbn==='계약기간 없음'?'계약외':'평일';
-    html+=`<tr>
+    if(V>0&&day.gbn!=='주휴일'){mU+=U;mV+=V;mW+=W;}else if(_isHolW){mU+=U;mV+=V;mW+=W;}
+    mJH+=juhyuH;mGJ+=gjH;mX+=X;mY+=Y;mAA+=AA;mAB+=AB;
+    html+=`<tr${day.gbn==='주휴일'?' class="juhyu"':''}>
       <td ${tdc}></td><td ${tdc}>${yr}</td><td ${tdc}>${String(mo).padStart(2,'0')}</td>
       <td ${tdc}>${emp.사번}</td><td ${tdc}>${emp.소속||''}</td><td ${tdc}>${dayWage||''}</td>
       <td ${tdc}>${emp.이름||''}</td><td ${tdc}>${day.date}</td><td ${tdc}>${day.dow}</td>
@@ -1375,9 +1397,24 @@ async function renderMyAtt(){
       <td ${tdc}>${juhyuH>0?fw(juhyuH):'-'}</td><td ${tdc}>${gjH>0?fw(gjH):'-'}</td>
       <td ${tdc}>${X>0?fw(X):'-'}</td><td ${tdc}>${Y>0?fw(Y):'-'}</td>
       <td ${tdc}>${AA>0?fw(AA):'-'}</td><td ${tdc}>${AB>0?fw(AB):'-'}</td>
-      <td ${tdc}>${day.확인||'-'}</td>
     </tr>`;
   });
+  if(html){
+    const tdcT='style="padding:5px 7px;font-size:11px;text-align:center;white-space:nowrap;font-weight:700;background:#F9FAFB"';
+    const _lastActiveDay=[...days].reverse().find(d=>d.gbn!=='계약기간 없음');
+    const _summaryWage=_lastActiveDay?getConWageType(emp.사번,_lastActiveDay.date):emp.임금;
+    html+=`<tr class="total">
+      <td ${tdcT}></td><td ${tdcT}>${yr}</td><td ${tdcT}>${String(mo).padStart(2,'0')}</td>
+      <td ${tdcT}>${emp.사번}</td><td ${tdcT}>${emp.소속||''}</td><td ${tdcT}>${_summaryWage||''}</td>
+      <td ${tdcT}>${emp.이름||''}</td><td ${tdcT}></td><td ${tdcT}></td>
+      <td ${tdcT}>합계</td><td ${tdcT}></td><td ${tdcT}></td><td ${tdcT}></td><td ${tdcT}></td><td ${tdcT}></td>
+      <td ${tdcT}></td><td ${tdcT}></td>
+      <td ${tdcT}>${fw(mU)}</td><td ${tdcT}>${fw(mV)}</td><td ${tdcT}>${fw(mW)}</td>
+      <td ${tdcT}>${mJH>0?fw(mJH):'-'}</td><td ${tdcT}>${mGJ>0?fw(mGJ):'-'}</td>
+      <td ${tdcT}>${mX>0?fw(mX):'-'}</td><td ${tdcT}>${mY>0?fw(mY):'-'}</td>
+      <td ${tdcT}>${mAA>0?fw(mAA):'-'}</td><td ${tdcT}>${mAB>0?fw(mAB):'-'}</td>
+    </tr>`;
+  }
   tbody.innerHTML=html||`<tr><td colspan="${MY_ATT_COLS.length}" style="text-align:center;padding:30px;color:var(--tx3)">표시할 근태 데이터가 없습니다.</td></tr>`;
 }
 
@@ -1409,7 +1446,7 @@ async function renderMyExplanations(){
             <option value="">선택</option>
             <option value="출근누락" ${item.workerType==='출근누락'?'selected':''}>출근누락</option>
             <option value="퇴근누락" ${item.workerType==='퇴근누락'?'selected':''}>퇴근누락</option>
-            <option value="전체근태누락" ${item.workerType==='전체근태누락'?'selected':''}>전체근태누락(출근+퇴근)</option>
+            <option value="전체근태누락" ${item.workerType==='전체근태누락'?'selected':''}>출퇴근 누락</option>
             <option value="결근" ${item.workerType==='결근'?'selected':''}>결근</option>
             <option value="연차" ${item.workerType==='연차'?'selected':''}>연차</option>
             <option value="조퇴" ${item.workerType==='조퇴'?'selected':''}>조퇴</option>
@@ -1451,6 +1488,40 @@ async function submitMyExplanation(yr,mo,date,idx){
     _toast('소명 내용이 저장되었습니다.','ok');
     renderMyExplanations();
   }catch(e){_toast('저장에 실패했습니다.','error');}
+}
+// 새 소명 신청(관리자가 확인사항으로 지정하지 않은 날짜도 직접 신청 가능) — 소명사유에 따라 출근/퇴근시간 입력칸 활성화
+function _toggleMyExpNewTimeFields(){
+  const type=document.getElementById('myExpNewType').value;
+  const inEl=document.getElementById('myExpNewIn'),outEl=document.getElementById('myExpNewOut');
+  const inOn=type==='출근누락'||type==='전체근태누락';
+  const outOn=type==='퇴근누락'||type==='전체근태누락';
+  inEl.disabled=!inOn;if(!inOn)inEl.value='';
+  outEl.disabled=!outOn;if(!outOn)outEl.value='';
+}
+async function submitNewMyExplanation(){
+  const date=document.getElementById('myExpNewDate').value;
+  const workerType=document.getElementById('myExpNewType').value;
+  if(!date){_toast('날짜를 선택하세요.','error');return;}
+  if(!workerType){_toast('소명사유를 선택하세요.','error');return;}
+  const [yr,mo]=date.split('-').map(Number);
+  const body={
+    yr,mo,date,workerType,workerNote:'',
+    workerIn:document.getElementById('myExpNewIn').value,
+    workerOut:document.getElementById('myExpNewOut').value,
+  };
+  try{
+    const res=await fetch(`${API_BASE}/api/mypage/explanations`,{method:'POST',headers:API_HDR,credentials:'include',body:JSON.stringify(body)});
+    const data=await res.json();
+    if(!res.ok){_toast(data.error||'제출에 실패했습니다.','error');return;}
+    _toast('신청서가 제출되었습니다.','ok');
+    document.getElementById('myExpNewDate').value='';
+    document.getElementById('myExpNewType').value='';
+    document.getElementById('myExpNewIn').value='';document.getElementById('myExpNewIn').disabled=true;
+    document.getElementById('myExpNewOut').value='';document.getElementById('myExpNewOut').disabled=true;
+    document.getElementById('myExpYear').value=String(yr);
+    document.getElementById('myExpMonth').value=String(mo);
+    renderMyExplanations();
+  }catch(e){_toast('제출에 실패했습니다.','error');}
 }
 
 // ── 연장/휴일근무요청서 ──────────────────────────────────────
