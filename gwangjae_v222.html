@@ -3014,8 +3014,19 @@ async function loadSaved() {
       meta, ver: 5
     };
 
-    // 로컬 캐시 갱신
-    try { localStorage.setItem(STORE_KEY, JSON.stringify({ ...data, ts: Date.now() })); } catch(e) {}
+    // 로컬 캐시 갱신 — ★ 이번 호출에서 실패한 테이블은 빈 배열로 캐시를 덮어쓰지 않고
+    //   직전에 저장해둔 값을 그대로 유지한다. 예전엔 실패 여부와 상관없이 항상 덮어써서,
+    //   일시적으로 전체(또는 일부) 테이블 fetch가 실패하는 순간(예: 서버 재배포로 잠깐
+    //   내려가 있는 타이밍)이 있으면 오프라인 폴백용 로컬 캐시까지 텅 빈 데이터로 오염돼,
+    //   그 다음에 또 한번 조회가 실패했을 때 실제로는 멀쩡한 사람이 화면에서 통째로
+    //   사라져 보이는 사고로 이어질 수 있었다.
+    try {
+      let _prevCache = {};
+      try { _prevCache = JSON.parse(localStorage.getItem(STORE_KEY) || '{}') || {}; } catch(e) {}
+      const _cacheData = { ...data };
+      _failed.forEach(t => { if (_prevCache[t] !== undefined) _cacheData[t] = _prevCache[t]; });
+      localStorage.setItem(STORE_KEY, JSON.stringify({ ..._cacheData, ts: Date.now() }));
+    } catch(e) {}
 
     _applyData(data);
     const t = new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
