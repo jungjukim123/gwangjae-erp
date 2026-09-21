@@ -67,6 +67,12 @@ body{font-family:var(--fn);font-size:13px;background:var(--bg);color:var(--tx);-
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .bg-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 
+/* ──── 구분 탭(세그먼트 컨트롤) ──── */
+.seg-tabs{display:inline-flex;background:#EEF1F6;border-radius:9px;padding:3px;gap:2px}
+.seg-tab{padding:6px 14px;border:none;background:transparent;border-radius:6px;font-size:12px;font-weight:600;color:var(--tx3);cursor:pointer;font-family:var(--fn);white-space:nowrap;transition:all .12s}
+.seg-tab:hover{color:var(--tx2)}
+.seg-tab.on{background:#fff;color:var(--g);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+
 /* ──── SECTION ──── */
 .section{background:var(--card);border:1px solid var(--bd);border-radius:var(--r);margin-bottom:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 .shd{padding:11px 16px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;background:#F6F8FC}
@@ -739,6 +745,11 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
   <div class="ph">
     <div class="ph-l"><div class="pt">승인요청서 관리</div><div class="psub">근태소명요청서·연장/휴일근무요청서 승인·거절 | 승인 시 월별 근태현황에 자동 반영</div></div>
     <div class="bg-row">
+      <div class="seg-tabs" id="apprGubunTabs">
+        <button type="button" class="seg-tab on" data-val="all" onclick="_setApprGubunTab('all')">전체</button>
+        <button type="button" class="seg-tab" data-val="근태소명요청서" onclick="_setApprGubunTab('근태소명요청서')">근태소명요청서</button>
+        <button type="button" class="seg-tab" data-val="연장휴일근무요청서" onclick="_setApprGubunTab('연장휴일근무요청서')">연장휴일근무요청서</button>
+      </div>
       <select id="apprYear" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderApprovalRequests()">
         <option value="2027">2027년</option><option value="2026">2026년</option><option value="2025">2025년</option>
       </select>
@@ -837,7 +848,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <div class="fg"><label>날짜 선택 *</label><input type="date" id="myExpNewDate"></div>
       <div class="fg"><label>출근시간</label><input type="text" id="myExpNewIn" inputmode="numeric" maxlength="5" placeholder="13:00" oninput="_maskTimeInput(this)" onblur="_clampTimeInput(this)" disabled></div>
       <div class="fg"><label>퇴근시간</label><input type="text" id="myExpNewOut" inputmode="numeric" maxlength="5" placeholder="18:00" oninput="_maskTimeInput(this)" onblur="_clampTimeInput(this)" disabled></div>
-      <button class="btn p" onclick="submitNewMyExplanation()">제출</button>
+      <div class="fg"><label style="visibility:hidden">제출</label><button class="btn p" onclick="submitNewMyExplanation()">제출</button></div>
     </div>
   </div>
   <div id="myExpList"></div>
@@ -856,7 +867,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <div class="fg"><label>시작시간</label><input type="text" id="myOtStart" inputmode="numeric" maxlength="5" placeholder="13:00" oninput="_maskTimeInput(this)" onblur="_clampTimeInput(this)"></div>
       <div class="fg"><label>종료시간</label><input type="text" id="myOtEnd" inputmode="numeric" maxlength="5" placeholder="18:00" oninput="_maskTimeInput(this)" onblur="_clampTimeInput(this)"></div>
       <div class="fg"><label>사유</label><select id="myOtReason"><option value="연장근무신청">연장근무신청</option><option value="휴일근무신청">휴일근무신청</option></select></div>
-      <button class="btn p" onclick="submitMyOvertimeRequest()">제출</button>
+      <div class="fg"><label style="visibility:hidden">제출</label><button class="btn p" onclick="submitMyOvertimeRequest()">제출</button></div>
     </div>
   </div>
   <div class="tw">
@@ -1389,7 +1400,7 @@ async function renderMyAtt(){
   const me=getMergedEmp(emp);
   const days=_buildEmpMonthDays(emp,yr,mo,data.daysJson||[]);
   const _fullAtt=isFullAttendanceMonth(emp.사번,days)&&(yr+'-'+String(mo).padStart(2,'0'))>=GJ_START_YM;
-  const tdc='style="padding:5px 7px;font-size:11px;text-align:center;white-space:nowrap;border-bottom:1px solid #EDF0F7"';
+  const tdc='style="padding:9px 7px;font-size:11px;text-align:center;white-space:nowrap;border-bottom:1px solid #EDF0F7"';
   let html='';
   let mU=0,mV=0,mW=0,mJH=0,mGJ=0,mX=0,mY=0,mAA=0,mAB=0;
   days.forEach(day=>{
@@ -1417,7 +1428,8 @@ async function renderMyAtt(){
     const gB=day.gbn==='주휴일'?'주휴':day.gbn==='무급휴일'?'무급':day.gbn==='공휴일'?'휴일':day.gbn==='계약기간 없음'?'계약외':'평일';
     if(V>0&&day.gbn!=='주휴일'){mU+=U;mV+=V;mW+=W;}else if(_isHolW){mU+=U;mV+=V;mW+=W;}
     mJH+=juhyuH;mGJ+=gjH;mX+=X;mY+=Y;mAA+=AA;mAB+=AB;
-    html+=`<tr${day.gbn==='주휴일'?' class="juhyu"':''}>
+    const _trCls=day.gbn==='주휴일'?' class="juhyu"':day.gbn==='계약기간 없음'?' class="we"':'';
+    html+=`<tr${_trCls}>
       <td ${tdc}></td><td ${tdc}>${yr}</td><td ${tdc}>${String(mo).padStart(2,'0')}</td>
       <td ${tdc}>${emp.사번}</td><td ${tdc}>${emp.소속||''}</td><td ${tdc}>${dayWage||''}</td>
       <td ${tdc}>${emp.이름||''}</td><td ${tdc}>${day.date}</td><td ${tdc}>${day.dow}</td>
@@ -1434,7 +1446,7 @@ async function renderMyAtt(){
     </tr>`;
   });
   if(html){
-    const tdcT='style="padding:5px 7px;font-size:11px;text-align:center;white-space:nowrap;font-weight:700;background:#F9FAFB"';
+    const tdcT='style="padding:9px 7px;font-size:11px;text-align:center;white-space:nowrap;font-weight:700;background:#F9FAFB"';
     const _lastActiveDay=[...days].reverse().find(d=>d.gbn!=='계약기간 없음');
     const _summaryWage=_lastActiveDay?getConWageType(emp.사번,_lastActiveDay.date):emp.임금;
     html+=`<tr class="total">
@@ -1491,19 +1503,11 @@ async function renderMyExplanations(){
     if(res.ok)items=(await res.json()).items||[];
   }catch(e){}
   window._myExpItemsCache={yr,mo,items};
-  if(!items.length){
-    box.innerHTML='<div style="padding:20px;color:var(--tx3);font-size:12px">해당 월에 소명이 필요한 항목이 없습니다. 관리자가 확인사항을 지정하면 여기에 표시됩니다.</div>';
-    return;
-  }
   const th='style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap"';
   const td='style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7;border-right:1px solid #EDF0F7"';
-  box.innerHTML=`<div class="tw"><table style="width:100%;min-width:760px">
-    <thead><tr style="background:#E8EDF6">
-      <th ${th}>구분</th><th ${th}>일자</th><th ${th}>확인사항</th><th ${th}>소명사유</th>
-      <th ${th}>출근시간</th><th ${th}>퇴근시간</th>
-      <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;white-space:nowrap">제출</th>
-    </tr></thead>
-    <tbody>${items.map((item,idx)=>{
+  const bodyHtml=!items.length
+    ?'<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--tx3)">제출한 신청서가 없습니다.</td></tr>'
+    :items.map((item,idx)=>{
       // 구분: 관리자(피플팀)가 확인사항으로 먼저 지정한 항목 vs "새 신청서 작성"으로 구성원이 직접 접수한 항목
       const isEmployeeSource=item.source==='employee';
       const filled=!!(item.workerType||item.workerNote||item.workerIn||item.workerOut);
@@ -1520,7 +1524,14 @@ async function renderMyExplanations(){
         <td ${td}>${item.workerOut||'-'}</td>
         <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #EDF0F7">${submitCell}</td>
       </tr>`;
-    }).join('')}</tbody>
+    }).join('');
+  box.innerHTML=`<div class="tw"><table style="width:100%;min-width:760px">
+    <thead><tr style="background:#E8EDF6">
+      <th ${th}>구분</th><th ${th}>일자</th><th ${th}>확인사항</th><th ${th}>소명사유</th>
+      <th ${th}>출근시간</th><th ${th}>퇴근시간</th>
+      <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;white-space:nowrap">제출</th>
+    </tr></thead>
+    <tbody>${bodyHtml}</tbody>
   </table></div>`;
 }
 // "제출" 버튼 → 관리자가 지정한 확인사항 항목 하나를 팝업(모달)으로 열어 소명사유/시간을 입력받는다.
@@ -1668,7 +1679,14 @@ const APPR_REQ_COLS=['이름','사번','날짜','구분','사유','시작(출근
 function buildApprReqHead(){
   const head=document.getElementById('apprReqHead');
   if(!head)return;
-  head.innerHTML=APPR_REQ_COLS.map((t,i)=>th(t,'apprReqT',i)).join('');
+  head.innerHTML=APPR_REQ_COLS.map((t,i)=>th(t,'apprReqT',i,'c')).join('');
+}
+// 구분 탭(전체/근태소명요청서/연장휴일근무요청서) 상태
+let _apprGubunTab='all';
+function _setApprGubunTab(val){
+  _apprGubunTab=val;
+  document.querySelectorAll('#apprGubunTabs .seg-tab').forEach(b=>b.classList.toggle('on',b.dataset.val===val));
+  renderApprovalRequests();
 }
 async function loadApprovalRequests(){
   buildApprReqHead();
@@ -1708,6 +1726,7 @@ function renderApprovalRequests(){
       gubun:'근태소명요청서',reason:item.workerType||item.type||'-',start:item.workerIn||'-',end:item.workerOut||'-',status:st});
   });
   const filtered=rows.filter(r=>{
+    if(_apprGubunTab!=='all'&&r.gubun!==_apprGubunTab)return false;
     if(statusQ!=='all'&&r.status!==statusQ)return false;
     if(q&&!((r.name&&r.name.toLowerCase().includes(q))||(r.eid&&r.eid.toLowerCase().includes(q))))return false;
     return true;
@@ -2359,10 +2378,10 @@ function _setDbStatus(state, sub) {
 function _toast(msg, type) {
   const c = { ok:'#2563EB', error:'#DC2626', info:'#3B82F6' };
   const t = document.createElement('div');
-  t.style.cssText = `position:fixed;bottom:20px;right:20px;z-index:99999;background:${c[type]||'#1C2035'};color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25);font-family:var(--fn)`;
+  t.style.cssText = `position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:${c[type]||'#1C2035'};color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25);font-family:var(--fn)`;
   t.textContent = msg;
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 3000);
+  setTimeout(() => t.remove(), 2000);
 }
 
 // ============================================================
@@ -4699,7 +4718,11 @@ async function syncSomyungWorkflow(silent){
         else if(퇴근시간)autoType='퇴근 기록 없음';
         else if(소명사유)autoType=소명사유;
         if(!autoType){noRequest++;pushDetail('noRequest',`${이름}(${eid}) ${dateStr} (확인사항·소명사유·출퇴근시간이 모두 비어 있어 항목을 만들 수 없음)`);return;}
-        const newItem={eid,name:empRow.이름||이름,date:dateStr,type:autoType,status:'대기중',memo:''};
+        // ★ 이 함수는 맨 위(승인처리.includes('승인'))에서 이미 슬랙 워크플로우 승인을 거친 행만
+        //   여기까지 내려온다 — 그래서 새로 만드는 항목도 처음부터 "소명완료"(=관리자 승인)로
+        //   생성한다. 근태관리 확인사항에서 관리자가 직접 만든 항목(이 분기를 안 타는 항목)은
+        //   여전히 '대기중'으로 남아 별도 검토가 필요하다.
+        const newItem={eid,name:empRow.이름||이름,date:dateStr,type:autoType,status:'소명완료',memo:''};
         _somyungData[ck].push(newItem);
         items=[newItem];
         autoCreated++;
@@ -4714,6 +4737,9 @@ async function syncSomyungWorkflow(silent){
         item.workerNote=사유;
         item.workerIn=출근시간;
         item.workerOut=퇴근시간;
+        // ★ 관리자가 근태관리 확인사항에서 먼저 만들어둔 항목이라도, 이 행 자체가 이미
+        //   슬랙 워크플로우에서 승인된 제출이므로 관리자 승인 상태로 맞춘다.
+        item.status='소명완료';
       });
       matched++;
     });
@@ -7688,7 +7714,7 @@ function renderSomyung(){
         <td style="padding:7px 14px;text-align:center;color:var(--tx2)">${item.workerIn||'-'}</td>
         <td style="padding:7px 14px;text-align:center;color:var(--tx2)">${item.workerOut||'-'}</td>
         <td style="padding:7px 14px;text-align:center">
-          <span style="font-size:11px;font-weight:700;color:${isApproved?'#15803D':'var(--tx3)'}">${isApproved?'승인':'대기중'}</span>
+          <span style="font-size:11px;font-weight:700;color:${isApproved?'#15803D':'var(--tx3)'}">${isApproved?'✅ 승인':'대기중'}</span>
         </td>
         <td style="padding:7px 14px;text-align:center">
           <span style="font-size:11px;font-weight:700;color:${isDone?'#15803D':'var(--tx3)'}">${isDone?'소명완료':'대기중'}</span>
