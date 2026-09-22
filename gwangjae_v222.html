@@ -159,6 +159,11 @@ tr.ghd .sk{background:#EFF6FF!important}
 .fg label{font-size:10px;color:var(--tx3);font-weight:700;letter-spacing:.04em;text-transform:uppercase}
 .fg-lbl-big label{font-size:13px;font-weight:700;color:var(--tx);text-align:center;letter-spacing:normal;text-transform:none}
 .fg input,.fg select,.fg textarea{padding:7px 10px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:13px;font-family:var(--fn);color:var(--tx);background:#fff;outline:none;transition:border-color .12s}
+/* 날짜 텍스트입력 옆 "달력 아이콘만" 보여주는 보조 input[type=date] — 폭이 좁아 기본 yyyy-mm-dd 표시가
+   아이콘과 겹쳐 보이던 문제를, 내부 날짜 텍스트(datetime-edit)를 숨겨서 해결 */
+.date-icon-btn{width:30px!important;padding:6px 2px!important;text-align:center;cursor:pointer}
+.date-icon-btn::-webkit-datetime-edit,.date-icon-btn::-webkit-inner-spin-button{display:none}
+.date-icon-btn::-webkit-calendar-picker-indicator{margin:0;opacity:1;cursor:pointer}
 .fg input:focus,.fg select:focus,.fg textarea:focus{border-color:#3B82F6;box-shadow:0 0 0 3px rgba(59,130,246,.12)}
 .fr2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .fr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
@@ -654,8 +659,8 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
   <div class="ph">
     <div class="ph-l"><div class="pt">근태소명관리</div><div class="psub">근태 확인사항 소명 현황 관리 | 월별 데이터 보존</div></div>
     <div class="bg-row">
-      <select id="somYear" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="localStorage.setItem('gwangjae_som_yr',this.value);renderSomyung()"><option value="2026">2026년</option></select>
-      <select id="somMonth" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="localStorage.setItem('gwangjae_som_mo',this.value);renderSomyung()"><option value="12">12월</option><option value="11">11월</option><option value="10">10월</option><option value="9">09월</option><option value="8">08월</option><option value="7">07월</option><option value="6">06월</option><option value="5">05월</option><option value="4">04월</option><option value="3">03월</option><option value="2">02월</option><option value="1">01월</option></select>
+      <select id="somYear" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderSomyung()"><option value="2026">2026년</option></select>
+      <select id="somMonth" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderSomyung()"><option value="12">12월</option><option value="11">11월</option><option value="10">10월</option><option value="9">09월</option><option value="8">08월</option><option value="7">07월</option><option value="6">06월</option><option value="5">05월</option><option value="4">04월</option><option value="3">03월</option><option value="2">02월</option><option value="1">01월</option></select>
       <div class="swrap"><input type="text" class="sinp" id="somQ" placeholder="이름·사번" oninput="renderSomyung()" onkeydown="if(event.key==='Enter'){renderSomyung();this.blur();}" style="width:120px"></div>
       <button class="btn p" id="btnSomyungSync" onclick="syncSomyungWorkflow(false)">📝 근태소명연동</button>
       <button class="btn p" onclick="sendAllSomyungToSlack()">💬 Slack 전체발송</button>
@@ -751,7 +756,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <div class="seg-tabs" id="apprGubunTabs">
         <button type="button" class="seg-tab on" data-val="all" onclick="_setApprGubunTab('all')">전체</button>
         <button type="button" class="seg-tab" data-val="근태소명요청서" onclick="_setApprGubunTab('근태소명요청서')">근태소명요청서</button>
-        <button type="button" class="seg-tab" data-val="연장휴일근무요청서" onclick="_setApprGubunTab('연장휴일근무요청서')">연장휴일근무요청서</button>
+        <button type="button" class="seg-tab" data-val="연장/휴일근무요청서" onclick="_setApprGubunTab('연장/휴일근무요청서')">연장/휴일근무요청서</button>
       </div>
       <select id="apprYear" style="padding:6px 9px;border:1px solid var(--bd2);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--tx);font-family:var(--fn);outline:none" onchange="renderApprovalRequests()">
         <option value="2027">2027년</option><option value="2026">2026년</option><option value="2025">2025년</option>
@@ -830,7 +835,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
     <div class="ph-l"><div class="pt">나의 연차현황</div><div class="psub">본인 연차 발생·사용·잔여 내역만 조회할 수 있는 읽기전용 화면입니다</div></div>
   </div>
   <div class="section" style="margin-bottom:14px">
-    <div class="shd"><span class="shd-t">연차현황</span></div>
+    <div class="shd"><span class="shd-t">연차현황</span><span style="font-size:11px;color:var(--tx3);font-weight:500">해당 발생연차를 클릭하면 상세연차를 보실 수 있습니다.</span></div>
     <div class="tw">
       <table style="width:100%;min-width:900px">
         <thead>
@@ -899,7 +904,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <div class="fg fg-lbl-big"><label>날짜 선택 *</label>
         <div style="display:flex;gap:4px;align-items:center">
           <input type="text" id="myExpNewDate" placeholder="2026-06-01" maxlength="10" style="width:110px" onblur="_normalizeFuzzyDate(this)">
-          <input type="date" style="width:28px;padding:6px 2px" onchange="document.getElementById('myExpNewDate').value=this.value" title="달력">
+          <input type="date" class="date-icon-btn" onchange="document.getElementById('myExpNewDate').value=this.value" title="달력">
         </div>
       </div>
       <div class="fg fg-lbl-big"><label>출근시간</label><input type="text" id="myExpNewIn" inputmode="numeric" maxlength="5" placeholder="13:00" oninput="_maskTimeInput(this)" onblur="_clampTimeInput(this)" disabled></div>
@@ -922,7 +927,12 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
   <div class="section" style="margin-bottom:14px">
     <div class="shd"><span class="shd-t">새 신청서 작성</span></div>
     <div class="sb" style="padding:14px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
-      <div class="fg"><label>날짜 *</label><input type="date" id="myOtDate"></div>
+      <div class="fg"><label>날짜 *</label>
+        <div style="display:flex;gap:4px;align-items:center">
+          <input type="text" id="myOtDate" placeholder="2026-06-01" maxlength="10" style="width:110px" onblur="_normalizeFuzzyDate(this)">
+          <input type="date" class="date-icon-btn" onchange="document.getElementById('myOtDate').value=this.value" title="달력">
+        </div>
+      </div>
       <div class="fg"><label>구분 *</label><select id="myOtType"><option value="연장">연장근무</option><option value="휴일">휴일근무</option></select></div>
       <div class="fg"><label>시작시간</label><input type="text" id="myOtStart" inputmode="numeric" maxlength="5" placeholder="13:00" oninput="_maskTimeInput(this)" onblur="_clampTimeInput(this)"></div>
       <div class="fg"><label>종료시간</label><input type="text" id="myOtEnd" inputmode="numeric" maxlength="5" placeholder="18:00" oninput="_maskTimeInput(this)" onblur="_clampTimeInput(this)"></div>
@@ -1331,13 +1341,7 @@ function applyUserAndInit(acc){
     const _savedMo=localStorage.getItem('gwangjae_last_mo');
     if(yrEl)yrEl.value=_savedYr||String(r0.yr);
     if(moEl)moEl.value=_savedMo||String(r0.mo);
-    // 근태소명 셀렉터도 동기화 (단, 별도로 저장된 마지막 선택값이 있으면 그것을 우선 복원)
-    const sYrEl=document.getElementById('somYear');
-    const sMoEl=document.getElementById('somMonth');
-    const _savedSomYr=localStorage.getItem('gwangjae_som_yr');
-    const _savedSomMo=localStorage.getItem('gwangjae_som_mo');
-    if(sYrEl)sYrEl.value=_savedSomYr||_savedYr||String(r0.yr);
-    if(sMoEl)sMoEl.value=_savedSomMo||_savedMo||String(r0.mo);
+    // ★ 근태소명관리(somYear/somMonth)는 이제 nav()에서 재진입 시마다 현재월로 초기화되므로 여기서 복원하지 않음
   }
   // 첫 번째 nav 활성화 (마지막 방문 페이지 복원)
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
@@ -1761,6 +1765,50 @@ async function submitMyOvertimeRequest(){
 // getLeaveUsageRecords, allocateLeaveUsage, getLeaveDetailForEmp 등)를 그대로 재사용한다.
 // 이 함수들은 전역 employees/contracts/_hrRowsCache/leaveUsage를 참조하므로, renderMyAtt()와
 // 동일한 방식으로 "본인 한 명" 데이터로 임시 교체했다가 끝나면 반드시 원복한다.
+let _myLeaveData=null; // 마지막으로 불러온 응답 캐시 — 1년미만연차 상세 펼치기/접기 시 재조회 없이 재사용
+let _myLsExpanded=false; // 1년미만연차 행 상세(월별 산정내역) 펼침 여부
+function _toggleMyLsDetail(){
+  _myLsExpanded=!_myLsExpanded;
+  _renderMyLeaveStatusBody();
+}
+// 1년미만연차 월별 산정내역 상세 박스 — hr12의 buildLsDetailHtml과 동일한 내용이지만,
+// 이 화면 표는 10개 열(사번~잔여연차)이라 colspan이 달라 별도로 둔다(공용 함수는 건드리지 않음).
+function buildMyLsDetailHtml(e,detail){
+  const conEnd=getLatestConEnd(e.사번)||'-';
+  const rowsHtml=(detail||[]).map(d=>{
+    const 결근text=d.결근일자&&d.결근일자.length?d.결근일자.join(', '):'-';
+    const isBoundary=d.발생시간===null&&(!d.결근일자||!d.결근일자.length);
+    const trStyle=isBoundary?' style="background:#FEF9C3"':'';
+    return`<tr${trStyle}>
+      <td style="padding:5px 8px;font-size:11px">${d.산정시작일}</td>
+      <td style="padding:5px 8px;font-size:11px">${d.산정종료일}</td>
+      <td style="padding:5px 8px;font-size:11px;${d.결근일자&&d.결근일자.length?'color:var(--red);font-weight:700':'color:var(--tx3)'}">${결근text}</td>
+      <td style="padding:5px 8px;font-size:11px;text-align:center${d.발생시간===null?';color:var(--tx3)':''}" title="${d.사유||''}">${d.발생시간===null?'미발생':d.발생시간+'시간'}</td>
+    </tr>`;
+  }).join('');
+  return`<tr><td colspan="10" style="padding:14px 18px;background:#F8FAFC">
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
+      <div style="border:1px solid var(--bd2);border-radius:8px;padding:14px;max-width:640px;flex:1.6">
+        <div style="font-weight:700;margin-bottom:6px">${e.이름} — 1년미만연차 월별 산정내역</div>
+        <div style="font-size:11px;color:var(--tx3);margin-bottom:10px">입사일 ${getJoinDate(e.사번)||'-'} · 계약종료일 ${conEnd} · 발생시간은 산정종료일 다음날 기준 (주소정근로시간÷40)×8로 환산</div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:#F1F5F9">
+            <th style="padding:5px 8px;font-size:11px;text-align:left">산정시작일</th>
+            <th style="padding:5px 8px;font-size:11px;text-align:left">산정종료일</th>
+            <th style="padding:5px 8px;font-size:11px;text-align:left">결근일수</th>
+            <th style="padding:5px 8px;font-size:11px;text-align:center">발생시간</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+        <div style="font-size:10px;color:var(--tx3);margin-top:8px;line-height:1.6">
+          ※ 노란색 행: 산정종료일 다음날까지 재직해야 발생하는데, 그 전에 재직기간이 끝나 발생하지 않은 달입니다.<br>
+          ※ 산정기간(산정시작일~산정종료일) 중 결근이 1일 이상 있으면 해당 달의 연차는 발생하지 않습니다(근로기준법 제60조).
+        </div>
+      </div>
+      ${buildLsUsageBoxHtml(e)}
+    </div>
+  </td></tr>`;
+}
 async function renderMyLeaveStatus(){
   const lsBody=document.getElementById('myLsBody'),luBody=document.getElementById('myLuBody');
   if(!lsBody||!luBody)return;
@@ -1775,6 +1823,15 @@ async function renderMyLeaveStatus(){
     lsBody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--tx3)">연차 데이터를 불러오지 못했습니다.</td></tr>';
     return;
   }
+  _myLeaveData=data;
+  _myLsExpanded=false; // 새로 불러올 때마다 펼침 상태 초기화
+  _renderMyLeaveStatusBody();
+}
+// _myLeaveData(마지막 조회 결과)를 이용해 화면만 다시 그린다 — 상세 펼치기/접기 시 재조회 없이 호출
+function _renderMyLeaveStatusBody(){
+  const data=_myLeaveData;
+  const lsBody=document.getElementById('myLsBody'),luBody=document.getElementById('myLuBody');
+  if(!lsBody||!luBody||!data)return;
   const emp=data.employee;
   if(!emp){
     lsBody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--tx3)">계약기간관리에 등록된 본인 정보를 찾을 수 없습니다.</td></tr>';
@@ -1798,18 +1855,24 @@ async function renderMyLeaveStatus(){
     }
     const{rows,usageRecords}=detail;
     const conEnd=getLatestConEnd(emp.사번),quitDate=getQuitDate(emp.사번);
-    lsBody.innerHTML=rows.map(r=>`<tr>
-      <td style="padding:6px 10px;text-align:center;font-size:11px;font-family:monospace;border-bottom:1px solid #EDF0F7">${emp.사번}</td>
-      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7"><strong>${emp.이름||''}</strong></td>
-      <td style="padding:6px 10px;text-align:center;font-size:11px;border-bottom:1px solid #EDF0F7">${conEnd||'-'}</td>
-      <td style="padding:6px 10px;text-align:center;font-size:11px;border-bottom:1px solid #EDF0F7;color:${quitDate?'var(--red)':'var(--tx3)'}">${quitDate||'-'}</td>
-      <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #EDF0F7"><span class="bdg ${r.구분==='1년미만연차'?'ba':'bg'}" style="font-size:10px">${r.구분}</span></td>
-      <td style="padding:6px 10px;text-align:center;font-size:11px;border-bottom:1px solid #EDF0F7">${r.cs}</td>
-      <td style="padding:6px 10px;text-align:center;font-size:11px;border-bottom:1px solid #EDF0F7">${r.ce}</td>
-      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.발생}</td>
-      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.사용}</td>
-      <td style="padding:6px 10px;text-align:center;font-size:12px;font-weight:700;border-bottom:1px solid #EDF0F7;${r.잔여<0?'color:var(--red)':''}">${r.잔여}</td>
-    </tr>`).join('')||'<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--tx3)">표시할 연차 데이터가 없습니다.</td></tr>';
+    const lsHtml=[];
+    rows.forEach(r=>{
+      const isU1=r.구분==='1년미만연차';
+      lsHtml.push(`<tr${isU1?` style="cursor:pointer" onclick="_toggleMyLsDetail()" title="클릭하면 월별 산정내역을 볼 수 있습니다"`:''}>
+        <td style="padding:6px 10px;text-align:center;font-size:11px;font-family:monospace;border-bottom:1px solid #EDF0F7">${emp.사번}</td>
+        <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7"><strong>${emp.이름||''}</strong></td>
+        <td style="padding:6px 10px;text-align:center;font-size:11px;border-bottom:1px solid #EDF0F7">${conEnd||'-'}</td>
+        <td style="padding:6px 10px;text-align:center;font-size:11px;border-bottom:1px solid #EDF0F7;color:${quitDate?'var(--red)':'var(--tx3)'}">${quitDate||'-'}</td>
+        <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #EDF0F7"><span class="bdg ${isU1?'ba':'bg'}" style="font-size:10px">${r.구분}${isU1?' ▾':''}</span></td>
+        <td style="padding:6px 10px;text-align:center;font-size:11px;border-bottom:1px solid #EDF0F7">${r.cs}</td>
+        <td style="padding:6px 10px;text-align:center;font-size:11px;border-bottom:1px solid #EDF0F7">${r.ce}</td>
+        <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.발생}</td>
+        <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.사용}</td>
+        <td style="padding:6px 10px;text-align:center;font-size:12px;font-weight:700;border-bottom:1px solid #EDF0F7;${r.잔여<0?'color:var(--red)':''}">${r.잔여}</td>
+      </tr>`);
+      if(isU1&&_myLsExpanded)lsHtml.push(buildMyLsDetailHtml(emp,r.detail));
+    });
+    lsBody.innerHTML=lsHtml.join('')||'<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--tx3)">표시할 연차 데이터가 없습니다.</td></tr>';
 
     const 급여종=getMergedEmp(emp).임금;
     luBody.innerHTML=usageRecords.map(u=>{
@@ -1840,7 +1903,7 @@ function buildApprReqHead(){
   if(!head)return;
   head.innerHTML=APPR_REQ_COLS.map((t,i)=>th(t,'apprReqT',i,'c')).join('');
 }
-// 구분 탭(전체/근태소명요청서/연장휴일근무요청서) 상태
+// 구분 탭(전체/근태소명요청서/연장/휴일근무요청서) 상태
 let _apprGubunTab='all';
 function _setApprGubunTab(val){
   _apprGubunTab=val;
@@ -1876,7 +1939,7 @@ function renderApprovalRequests(){
   (window._otReqCache||[]).forEach(r=>{
     if(!r.work_date||!r.work_date.startsWith(ymPrefix))return;
     rows.push({kind:'ot',id:r.id,eid:r.emp_id,name:r.emp_name,date:r.work_date,
-      gubun:'연장휴일근무요청서',reason:r.reason||'-',start:r.start_time||'-',end:r.end_time||'-',status:r.status});
+      gubun:'연장/휴일근무요청서',reason:r.reason||'-',start:r.start_time||'-',end:r.end_time||'-',status:r.status});
   });
   (_somyungData[ck]||[]).forEach(item=>{
     if(!(item.workerType||item.workerIn||item.workerOut||item.workerNote))return; // 직원 미작성 건 제외
@@ -10487,10 +10550,23 @@ function nav(pid,el){
     if(_myAttMEl)_myAttMEl.value=String(_now.getMonth()+1);
     renderMyAtt();
   }
-  if(pid==='my2'){renderMyExplanations();}
+  if(pid==='my2'){
+    // ★ 근태소명요청서는 항상 현재 연/월을 기본값으로 표시 (이전에 다른 월을 보고 있었어도 재진입 시 초기화)
+    const _now=new Date(),_myExpYEl=document.getElementById('myExpYear'),_myExpMEl=document.getElementById('myExpMonth');
+    if(_myExpYEl)_myExpYEl.value=String(_now.getFullYear());
+    if(_myExpMEl)_myExpMEl.value=String(_now.getMonth()+1);
+    renderMyExplanations();
+  }
   if(pid==='my3'){renderMyOvertimeRequests();}
   if(pid==='my4'){renderMyLeaveStatus();}
-  if(pid==='hr11'){buildDashExpHead();renderDashExpiring();dashSchedNav(0);}
+  if(pid==='hr11'){
+    buildDashExpHead();
+    // ★ 계약만료예정(dashExp)은 항상 현재 연/월을 기본값으로 표시 (재진입 시 초기화)
+    const _now=new Date(),_dashYEl=document.getElementById('dashExpYear'),_dashMEl=document.getElementById('dashExpMonth');
+    if(_dashYEl)_dashYEl.value=String(_now.getFullYear());
+    if(_dashMEl)_dashMEl.value=String(_now.getMonth()+1);
+    renderDashExpiring();dashSchedNav(0);
+  }
   if(pid==='hr1'){
     buildEmpHead();
     // ★ 인원현황은 항상 현재 년/월을 기본값으로 표시 (이전에 다른 월을 보고 있었어도 재진입 시 초기화)
@@ -10533,6 +10609,10 @@ function nav(pid,el){
     renderSal();
   }
   if(pid==='hr5'){
+    // ★ 근태소명관리는 항상 현재 연/월을 기본값으로 표시 (이전에 다른 월을 보고 있었어도 재진입 시 초기화)
+    const _now=new Date(),_somYEl=document.getElementById('somYear'),_somMEl=document.getElementById('somMonth');
+    if(_somYEl)_somYEl.value=String(_now.getFullYear());
+    if(_somMEl)_somMEl.value=String(_now.getMonth()+1);
     renderSomyung();
     if(typeof employees!=='undefined'&&employees.length)syncSomyungWorkflow(true).then(()=>renderSomyung()).catch(()=>{});
     const _st=localStorage.getItem('slk_token');
@@ -10540,19 +10620,21 @@ function nav(pid,el){
     if(_stEl&&_st)_stEl.value=_st;
   }
   if(pid==='hr6'){
-    // 귀속년월 초기값: 최초 진입 시 현재 월로 설정
-    const _cfgYrEl=document.getElementById('salCfgYear');
-    const _cfgMoEl=document.getElementById('salCfgMonth');
-    if(_cfgYrEl&&!_cfgYrEl.dataset.initialized){
-      const _nowD=new Date();
-      _cfgYrEl.value=String(_nowD.getFullYear());
-      if(_cfgMoEl)_cfgMoEl.value=String(_nowD.getMonth()+1);
-      _cfgYrEl.dataset.initialized='1';
-    }
+    // ★ 급여설정관리는 항상 현재 연/월을 기본값으로 표시 (재진입 시 초기화)
+    const _now=new Date(),_cfgYrEl=document.getElementById('salCfgYear'),_cfgMoEl=document.getElementById('salCfgMonth');
+    if(_cfgYrEl)_cfgYrEl.value=String(_now.getFullYear());
+    if(_cfgMoEl)_cfgMoEl.value=String(_now.getMonth()+1);
     buildSalCfgHead();renderSalCfg();
   }
   if(pid==='hr7'){renderAccPage();}
-  if(pid==='hr10'){buildSchedHead();renderSchedMgmt();}
+  if(pid==='hr10'){
+    buildSchedHead();
+    // ★ 월별 스케줄 등록은 항상 현재 연/월을 기본값으로 표시 (재진입 시 초기화)
+    const _now=new Date(),_schedYEl=document.getElementById('schedYear'),_schedMEl=document.getElementById('schedMonth');
+    if(_schedYEl)_schedYEl.value=String(_now.getFullYear());
+    if(_schedMEl)_schedMEl.value=String(_now.getMonth()+1);
+    renderSchedMgmt();
+  }
   if(pid==='hr12'){buildLsHead();renderLeaveStatus();}
   if(pid==='hr13'){buildLuHead();renderLeaveUsage();}
 }
@@ -10577,11 +10659,7 @@ function _schedEmpColor(idx){return SCHED_COLORS[idx%SCHED_COLORS.length];}
 function buildSchedHead(){
   const yrEl=document.getElementById('schedYear');
   if(yrEl&&!yrEl.dataset.built){
-    const now=new Date();
     yrEl.innerHTML=['2025','2026','2027'].map(y=>`<option value="${y}">${y}년</option>`).join('');
-    yrEl.value=String(now.getFullYear());
-    const moEl=document.getElementById('schedMonth');
-    if(moEl)moEl.value=String(now.getMonth()+1);
     yrEl.dataset.built='1';
   }
 }
@@ -10685,11 +10763,7 @@ async function reloadSchedMonth(){
 function buildDashExpHead(){
   const yrEl=document.getElementById('dashExpYear');
   if(yrEl&&!yrEl.dataset.built){
-    const now=new Date();
     yrEl.innerHTML=['2025','2026','2027'].map(y=>`<option value="${y}">${y}년</option>`).join('');
-    yrEl.value=String(now.getFullYear());
-    const moEl=document.getElementById('dashExpMonth');
-    if(moEl)moEl.value=String(now.getMonth()+1);
     yrEl.dataset.built='1';
   }
 }
