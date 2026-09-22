@@ -1,11 +1,13 @@
 // ============================================================
-// 근태소명 안내 DM의 "내 근태현황 보기 / 잔여연차 확인" 버튼 처리 (Google Apps Script)
+// 근태소명 안내 DM의 "잔여연차 확인 / 사번 확인" 버튼 처리 (Google Apps Script)
 // ============================================================
 // 근태소명관리에서 직원 개인에게 발송하는 슬랙 DM 하단에 버튼 2개가 붙습니다
 // (gwangjae_v222.html의 _somyungActionBlocks 참고).
 //   ① 잔여연차 확인 → 버튼 클릭(doPost) → 슬랙 DM으로 발생/사용/잔여(시간) 안내
-//   ② 내 근태현황 보기 → url 버튼 → "나의 근태현황" 읽기전용 웹페이지로 바로 이동
-//      (사번 + 휴대폰 뒷자리 4자리로 본인인증, 관리자 메뉴 없음, 수정 불가, 새로고침 시 항상 최신 반영)
+//   ② 사번 확인 → 버튼 클릭(doPost) → 슬랙 DM으로 사번 안내
+// ★ "내 근태현황 보기" url 버튼은 삭제되었습니다 — 안내문구의
+//   "내근태현황보기 : ... → [나의 근태현황]" 텍스트로 대체되었습니다(사내 메뉴 안내로 전환).
+//   아래 handleMyAttGet/handleMyAttApi(별도 GitHub Pages 웹페이지용 API)는 계속 동작하며 제거되지 않았습니다.
 //
 // ★ 이 프로젝트 안 다른 스크립트와 이름이 겹치지 않도록, 모든 내부 로직을
 //   SomyungBtn 이라는 이름 하나 아래에 몰아넣었습니다.
@@ -53,12 +55,6 @@ const SomyungBtn = (function(){
   const API_KEY = PropertiesService.getScriptProperties().getProperty('GAS_API_KEY');
   const DOW_KEYS = ['sun','mon','tue','wed','thu','fri','sat'];
   const DOW_LABEL = ['일','월','화','수','목','금','토'];
-
-  // ★ "내 근태현황 보기" 버튼이 여는 페이지 — GAS exec URL을 직접 열면 브라우저의 서드파티 쿠키
-  //   차단으로 인해 Google Apps Script의 콘텐츠 iframe이 로드되지 않아 빈 화면이 뜨는 문제가 있어,
-  //   별도로 배포한 정적 페이지(GitHub Pages)를 열도록 분리했습니다. 실제 데이터는 그 페이지가
-  //   handleMyAttApi(JSONP)를 호출해서 받아옵니다.
-  const MY_ATT_PAGE_URL = 'https://jungjukim123.github.io/gwangjae-my-attendance/';
 
   function _getSlackToken(){
     const token = PropertiesService.getScriptProperties().getProperty('SLACK_BOT_TOKEN');
@@ -250,17 +246,11 @@ const SomyungBtn = (function(){
     return json.ok;
   }
 
-  // 근태소명 DM과 동일한 "내 근태현황 보기 / 잔여연차 확인" 버튼
-  // ★ "내 근태현황 보기"는 이제 이메일이 아니라 본인인증(사번+휴대폰 뒷자리) 후 보는
-  //   읽기전용 웹페이지로 바로 열립니다(url 버튼 — 클릭해도 doPost를 거치지 않음).
-  function _myAttUrl(){
-    return MY_ATT_PAGE_URL;
-  }
+  // 근태소명 DM과 동일한 "잔여연차 확인 / 사번 확인" 버튼
   function _actionBlocks(eid, text){
     return [
       {type:'section', text:{type:'mrkdwn', text:text}},
       {type:'actions', elements:[
-        {type:'button', text:{type:'plain_text', text:'📊 내 근태현황 보기', emoji:true}, url:_myAttUrl()},
         {type:'button', text:{type:'plain_text', text:'🌴 잔여연차 확인', emoji:true}, action_id:'somyung_view_leave', value:eid},
         {type:'button', text:{type:'plain_text', text:'🔢 사번 확인', emoji:true}, action_id:'somyung_view_eid', value:eid}
       ]}
@@ -722,7 +712,7 @@ const SomyungBtn = (function(){
   }
 
   // ── "나의 근태현황" JSON API (JSONP) ──
-  // ★ 별도 정적 페이지(MY_ATT_PAGE_URL)가 이 엔드포인트를 <script> 태그로 호출해서 데이터만 받아갑니다.
+  // ★ 별도 정적 페이지(https://jungjukim123.github.io/gwangjae-my-attendance/)가 이 엔드포인트를 <script> 태그로 호출해서 데이터만 받아갑니다.
   //   handleMyAttGet과 로그인/조회 로직은 동일하고, HTML 대신 JSON을 콜백으로 감싸서 반환합니다.
   function _jsonp(cb, obj){
     return ContentService.createTextOutput(cb+'('+JSON.stringify(obj)+')').setMimeType(ContentService.MimeType.JAVASCRIPT);
