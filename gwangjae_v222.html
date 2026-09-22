@@ -27,7 +27,6 @@ body{font-family:var(--fn);font-size:13px;background:var(--bg);color:var(--tx);-
 
 /* ──── SIDEBAR ──── */
 .logo{padding:20px 16px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
-.logo-s{font-size:10px;color:rgba(255,255,255,.35);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;font-weight:600}
 .logo-t{font-size:15px;font-weight:800;color:#fff;letter-spacing:-.3px;display:flex;align-items:center;gap:6px}
 .logo-dot{width:7px;height:7px;background:#60A5FA;border-radius:50%;display:inline-block;flex-shrink:0}
 .role-box{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
@@ -321,8 +320,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
   <div class="login-box">
     <div class="login-logo">
       <div class="login-logo-icon">🏢</div>
-      <h1>부산관제센터 ERP</h1>
-      <p>Gwangjae HR System</p>
+      <h1>부산관제센터 Groupware</h1>
     </div>
     <!-- DB 연결 상태 표시 (숨김) -->
     <div id="loginDbStatus" style="display:none">
@@ -383,7 +381,6 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
 <!-- SIDEBAR -->
 <aside id="sb">
   <div class="logo">
-    <div class="logo-s">Gwangjae ERP</div>
     <div class="logo-t">부산관제센터 <span class="logo-dot"></span></div>
   </div>
   <div class="nsec hr-menu" style="display:none">메인</div>
@@ -407,6 +404,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
   <div class="ni hr-menu" style="display:none" onclick="nav('hr7',this)">계정관리</div>
   <div class="nsec emp-menu" style="display:none">MYPAGE</div>
   <div class="ni emp-menu" style="display:none" onclick="nav('my1',this)">나의 근태현황</div>
+  <div class="ni emp-menu" style="display:none" onclick="nav('my4',this)">나의 연차현황</div>
   <div class="ni emp-menu" style="display:none" onclick="nav('my2',this)">근태소명요청서</div>
   <div class="ni emp-menu" style="display:none" onclick="nav('my3',this)">연장/휴일근무요청서</div>
   <div class="nsec field-menu" style="display:none">승인관리</div>
@@ -823,6 +821,56 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
       <thead id="myAttHead"></thead>
       <tbody id="myAttBody"></tbody>
     </table>
+  </div>
+</div>
+
+<!-- MYPAGE ④ 나의 연차현황 -->
+<div class="page" id="page-my4">
+  <div class="ph">
+    <div class="ph-l"><div class="pt">나의 연차현황</div><div class="psub">본인 연차 발생·사용·잔여 내역만 조회할 수 있는 읽기전용 화면입니다</div></div>
+  </div>
+  <div class="section" style="margin-bottom:14px">
+    <div class="shd"><span class="shd-t">연차현황</span></div>
+    <div class="tw">
+      <table style="width:100%;min-width:900px">
+        <thead>
+          <tr style="background:#E8EDF6">
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">사번</th>
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">이름</th>
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">계약종료일</th>
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">퇴사일</th>
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">구분</th>
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">사용시작일</th>
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">사용종료일</th>
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">발생시간</th>
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">사용시간</th>
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;white-space:nowrap">잔여연차(시간)</th>
+          </tr>
+        </thead>
+        <tbody id="myLsBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="section">
+    <div class="shd"><span class="shd-t">연차사용내역</span></div>
+    <div class="tw">
+      <table style="width:100%;min-width:900px">
+        <thead>
+          <tr style="background:#E8EDF6">
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">사번</th>
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">이름</th>
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">급여종</th>
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">구분</th>
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">입사일</th>
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">사용일</th>
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">소정근로시간</th>
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;border-right:1px solid #D5DCE8;white-space:nowrap">사용시간</th>
+            <th style="padding:7px 10px;font-size:10px;font-weight:700;color:#3D4F6F;text-align:center;border-bottom:1px solid #CBD5E5;white-space:nowrap">출처</th>
+          </tr>
+        </thead>
+        <tbody id="myLuBody"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -1706,6 +1754,83 @@ async function submitMyOvertimeRequest(){
     document.getElementById('myOtEnd').value='';
     renderMyOvertimeRequests();
   }catch(e){_toast('제출에 실패했습니다.','error');}
+}
+
+// ── 나의 연차현황 ────────────────────────────────────────────
+// 계산 로직은 ⑫연차현황/⑬연차사용현황과 완전히 동일한 함수(buildLeaveAccrualRows,
+// getLeaveUsageRecords, allocateLeaveUsage, getLeaveDetailForEmp 등)를 그대로 재사용한다.
+// 이 함수들은 전역 employees/contracts/_hrRowsCache/leaveUsage를 참조하므로, renderMyAtt()와
+// 동일한 방식으로 "본인 한 명" 데이터로 임시 교체했다가 끝나면 반드시 원복한다.
+async function renderMyLeaveStatus(){
+  const lsBody=document.getElementById('myLsBody'),luBody=document.getElementById('myLuBody');
+  if(!lsBody||!luBody)return;
+  lsBody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--tx3)">불러오는 중...</td></tr>';
+  luBody.innerHTML='';
+  let data;
+  try{
+    const res=await fetch(`${API_BASE}/api/mypage/leave-status`,{headers:API_HDR,credentials:'include'});
+    if(!res.ok)throw new Error();
+    data=await res.json();
+  }catch(e){
+    lsBody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--tx3)">연차 데이터를 불러오지 못했습니다.</td></tr>';
+    return;
+  }
+  const emp=data.employee;
+  if(!emp){
+    lsBody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--tx3)">계약기간관리에 등록된 본인 정보를 찾을 수 없습니다.</td></tr>';
+    return;
+  }
+  const _prevEmployees=employees,_prevContracts=contracts,_prevHrRowsCache=_hrRowsCache,_prevLeaveUsage=leaveUsage;
+  employees=[emp];
+  contracts=data.contracts||[];
+  leaveUsage=data.leaveUsage||[];
+  _hrRowsCache={};
+  (data.hrSavedMonths||[]).forEach(m=>{
+    const ck=`${m.yr}_${String(m.mo).padStart(2,'0')}`;
+    _hrRowsCache[ck]=[{emp,days:m.days||[]}];
+  });
+  try{
+    const detail=getLeaveDetailForEmp(emp.사번);
+    if(!detail){
+      lsBody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--tx3)">입사일 정보가 없어 연차를 계산할 수 없습니다.</td></tr>';
+      luBody.innerHTML='';
+      return;
+    }
+    const{rows,usageRecords}=detail;
+    const conEnd=getLatestConEnd(emp.사번),quitDate=getQuitDate(emp.사번);
+    lsBody.innerHTML=rows.map(r=>`<tr>
+      <td style="padding:6px 10px;text-align:center;font-size:11px;font-family:monospace;border-bottom:1px solid #EDF0F7">${emp.사번}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7"><strong>${emp.이름||''}</strong></td>
+      <td style="padding:6px 10px;text-align:center;font-size:11px;border-bottom:1px solid #EDF0F7">${conEnd||'-'}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:11px;border-bottom:1px solid #EDF0F7;color:${quitDate?'var(--red)':'var(--tx3)'}">${quitDate||'-'}</td>
+      <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #EDF0F7"><span class="bdg ${r.구분==='1년미만연차'?'ba':'bg'}" style="font-size:10px">${r.구분}</span></td>
+      <td style="padding:6px 10px;text-align:center;font-size:11px;border-bottom:1px solid #EDF0F7">${r.cs}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:11px;border-bottom:1px solid #EDF0F7">${r.ce}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.발생}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${r.사용}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px;font-weight:700;border-bottom:1px solid #EDF0F7;${r.잔여<0?'color:var(--red)':''}">${r.잔여}</td>
+    </tr>`).join('')||'<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--tx3)">표시할 연차 데이터가 없습니다.</td></tr>';
+
+    const 급여종=getMergedEmp(emp).임금;
+    luBody.innerHTML=usageRecords.map(u=>{
+      const sojeong=getLeaveSojeong(emp.사번,u.사용일);
+      const 배율=getLeaveTypeFactor(u.구분);
+      const 사용시간=Math.round(sojeong*배율*100)/100;
+      return`<tr>
+        <td style="padding:6px 10px;text-align:center;font-size:11px;font-family:monospace;border-bottom:1px solid #EDF0F7">${emp.사번}</td>
+        <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7"><strong>${emp.이름||''}</strong></td>
+        <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #EDF0F7"><span class="bdg ${급여종==='월급직'?'bb':'bt'}" style="font-size:10px">${급여종}</span></td>
+        <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #EDF0F7"><span class="bdg ${LU_GUBUN_BADGE[u.구분]||'bs'}" style="font-size:10px">${u.구분}</span></td>
+        <td style="padding:6px 10px;text-align:center;font-size:11px;border-bottom:1px solid #EDF0F7">${getJoinDate(emp.사번)||'-'}</td>
+        <td style="padding:6px 10px;text-align:center;font-size:11px;border-bottom:1px solid #EDF0F7">${u.사용일}</td>
+        <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${sojeong||'-'}</td>
+        <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7">${사용시간||'-'}</td>
+        <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #EDF0F7">${u.source==='auto'?'<span style="font-size:10px;color:var(--tx3)">자동입력</span>':'<span style="font-size:10px;color:var(--blue)">수기입력</span>'}</td>
+      </tr>`;
+    }).join('')||'<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--tx3)">사용 이력이 없습니다.</td></tr>';
+  }finally{
+    employees=_prevEmployees;contracts=_prevContracts;_hrRowsCache=_prevHrRowsCache;leaveUsage=_prevLeaveUsage;
+  }
 }
 
 // ── 관리자: 승인요청서 관리 (hr14) — 근태소명요청서 + 연장/휴일근무요청서 통합 ──
@@ -10364,6 +10489,7 @@ function nav(pid,el){
   }
   if(pid==='my2'){renderMyExplanations();}
   if(pid==='my3'){renderMyOvertimeRequests();}
+  if(pid==='my4'){renderMyLeaveStatus();}
   if(pid==='hr11'){buildDashExpHead();renderDashExpiring();dashSchedNav(0);}
   if(pid==='hr1'){
     buildEmpHead();

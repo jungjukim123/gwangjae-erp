@@ -186,6 +186,29 @@ router.post('/explanations', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── 나의 연차현황 — hr_saved(전체 월 저장분)에서 본인 사번의 비고(연차/반차/반반차/결근/공가)와
+//   meta.leaveUsage(수기입력/엑셀업로드분)를 모아서 반환한다. 발생·잔여 계산은 클라이언트가
+//   기존 연차현황(hr12) 계산 함수(buildLeaveAccrualRows 등)를 그대로 재사용해서 처리한다.
+router.get('/leave-status', async (req, res, next) => {
+  try {
+    const empId = req.session.user.id;
+    const [emp, cons, hrSavedRows, leaveUsageRow] = await Promise.all([
+      getOwnEmployee(empId),
+      getOwnContracts(empId),
+      pool.query(`SELECT yr, mo, days_json FROM hr_saved WHERE "emp_id" = $1`, [empId]),
+      pool.query(`SELECT value FROM meta WHERE key = 'leaveUsage'`),
+    ]);
+    const leaveUsageAll = leaveUsageRow.rows[0] ? leaveUsageRow.rows[0].value : [];
+    const leaveUsageOwn = (Array.isArray(leaveUsageAll) ? leaveUsageAll : []).filter((u) => u.사번 === empId);
+    res.json({
+      employee: stripWage(emp),
+      contracts: cons.map(stripWage),
+      hrSavedMonths: hrSavedRows.rows.map((r) => ({ yr: r.yr, mo: r.mo, days: r.days_json })),
+      leaveUsage: leaveUsageOwn,
+    });
+  } catch (err) { next(err); }
+});
+
 // ── 연장/휴일근무요청서
 router.get('/overtime-requests', async (req, res, next) => {
   try {
