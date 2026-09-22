@@ -1787,25 +1787,22 @@ function buildMyLsDetailHtml(e,detail){
     </tr>`;
   }).join('');
   return`<tr><td colspan="10" style="padding:14px 18px;background:#F8FAFC">
-    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
-      <div style="border:1px solid var(--bd2);border-radius:8px;padding:14px;max-width:640px;flex:1.6">
-        <div style="font-weight:700;margin-bottom:6px">${e.이름} — 1년미만연차 월별 산정내역</div>
-        <div style="font-size:11px;color:var(--tx3);margin-bottom:10px">입사일 ${getJoinDate(e.사번)||'-'} · 계약종료일 ${conEnd} · 발생시간은 산정종료일 다음날 기준 (주소정근로시간÷40)×8로 환산</div>
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr style="background:#F1F5F9">
-            <th style="padding:5px 8px;font-size:11px;text-align:left">산정시작일</th>
-            <th style="padding:5px 8px;font-size:11px;text-align:left">산정종료일</th>
-            <th style="padding:5px 8px;font-size:11px;text-align:left">결근일수</th>
-            <th style="padding:5px 8px;font-size:11px;text-align:center">발생시간</th>
-          </tr></thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
-        <div style="font-size:10px;color:var(--tx3);margin-top:8px;line-height:1.6">
-          ※ 노란색 행: 산정종료일 다음날까지 재직해야 발생하는데, 그 전에 재직기간이 끝나 발생하지 않은 달입니다.<br>
-          ※ 산정기간(산정시작일~산정종료일) 중 결근이 1일 이상 있으면 해당 달의 연차는 발생하지 않습니다(근로기준법 제60조).
-        </div>
+    <div style="border:1px solid var(--bd2);border-radius:8px;padding:14px;max-width:640px">
+      <div style="font-weight:700;margin-bottom:6px">${e.이름} — 1년미만연차 월별 산정내역</div>
+      <div style="font-size:11px;color:var(--tx3);margin-bottom:10px">입사일 ${getJoinDate(e.사번)||'-'} · 계약종료일 ${conEnd} · 발생시간은 산정종료일 다음날 기준 (주소정근로시간÷40)×8로 환산</div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#F1F5F9">
+          <th style="padding:5px 8px;font-size:11px;text-align:left">산정시작일</th>
+          <th style="padding:5px 8px;font-size:11px;text-align:left">산정종료일</th>
+          <th style="padding:5px 8px;font-size:11px;text-align:left">결근일수</th>
+          <th style="padding:5px 8px;font-size:11px;text-align:center">발생시간</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+      <div style="font-size:10px;color:var(--tx3);margin-top:8px;line-height:1.6">
+        ※ 노란색 행: 산정종료일 다음날까지 재직해야 발생하는데, 그 전에 재직기간이 끝나 발생하지 않은 달입니다.<br>
+        ※ 산정기간(산정시작일~산정종료일) 중 결근이 1일 이상 있으면 해당 달의 연차는 발생하지 않습니다(근로기준법 제60조).
       </div>
-      ${buildLsUsageBoxHtml(e)}
     </div>
   </td></tr>`;
 }
