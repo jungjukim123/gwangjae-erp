@@ -9050,7 +9050,9 @@ async function sendContractToEsign(no){
       method:'POST',
       headers:{'Content-Type':'application/json','X-API-Key':BARO_SIGN_API_KEY},
       body:JSON.stringify({
-        signer:{name:c.이름, employee_id:c.사번, email:c.email||null, phone:c.phone||null},
+        // slack_id: 계약기간관리에 등록된 SlackID(U로 시작) — 있으면 바로사인이 이메일 대신
+        // 근태관리자 Slack 봇 DM으로 서명 요청을 보낸다(SendGrid 이메일 계정 크레딧 소진 대응).
+        signer:{name:c.이름, employee_id:c.사번, email:c.email||null, phone:c.phone||null, slack_id:c.slackId||null},
         data,
         created_by:'관제센터 ERP',
       }),
