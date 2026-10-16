@@ -8967,7 +8967,7 @@ function downloadConExcel(){
 // 사람이 그때그때 바로사인에 실제로 존재하는 템플릿 목록에서 직접 고른다. 예전처럼 여기 코드에
 // 템플릿 id를 하드코딩해두면, 바로사인에서 그 템플릿을 지우거나 새로 만들 때마다 이 파일을 고쳐서
 // 다시 배포해야 하는 문제가 있었다.
-const BARO_SIGN_API_URL = 'https://esign-app-muhu.onrender.com/api/documents/prepare';
+const BARO_SIGN_API_URL = 'http://10.10.70.110:4100/api/documents/prepare';
 const BARO_SIGN_API_KEY = '688c649673b617e2dc148c73acddef789fd91ef62d0c90f74d58c2abf8587481';
 
 // 계약기간관리 데이터만으로는 채울 수 없는 값(예: 근로장려수당처럼 입사자마다 다른 값)이 있을 수 있어,
@@ -9080,7 +9080,7 @@ function sendContractDoc(){
 // 발송 시점(postMessage)에는 "발송은 됐지만 아직 서명 전"이라, 근로자가 실제로 서명 완료했는지는
 // 별도로 물어봐야 알 수 있다. 계약기간관리 화면을 보고 있는 동안만 30초마다 조용히 확인한다
 // (근태소명연동 자동 동기화와 같은 패턴, page-hr5 대신 page-hr2 기준).
-const BARO_SIGN_STATUS_URL = 'https://esign-app-muhu.onrender.com/api/documents/status';
+const BARO_SIGN_STATUS_URL = 'http://10.10.70.110:4100/api/documents/status';
 async function pollDocStatuses(){
   const ids=[...new Set(contracts.filter(c=>c.문서ID && c.서명상태!=='완료').map(c=>c.문서ID))];
   if(!ids.length)return;
