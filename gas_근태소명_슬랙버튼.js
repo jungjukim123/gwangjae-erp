@@ -201,7 +201,8 @@ const SomyungBtn = (function(){
     usageRecords.forEach(u=>{
       const factor=getLeaveTypeFactor(u.구분);
       if(factor<=0) return;
-      let remain=Math.round(factor*getLeaveSojeong(empId, u.사용일, contracts, employees)*100)/100;
+      // 연차사용현황에서 사용시간을 직접 수정한 건(u.사용시간, 숫자)은 그 값을 사용
+      let remain=(typeof u.사용시간==='number') ? u.사용시간 : Math.round(factor*getLeaveSojeong(empId, u.사용일, contracts, employees)*100)/100;
       let lastEligible=null;
       for(let i=0;i<rows.length;i++){
         const r=rows[i];
@@ -294,7 +295,7 @@ const SomyungBtn = (function(){
       .filter(u=>getLeaveTypeFactor(u.구분)>0)
       .sort((a,b)=>a.사용일.localeCompare(b.사용일))
       .map(u=>{
-        const hrs=Math.round(getLeaveTypeFactor(u.구분)*getLeaveSojeong(eid, u.사용일, contracts, employees)*100)/100;
+        const hrs=(typeof u.사용시간==='number') ? u.사용시간 : Math.round(getLeaveTypeFactor(u.구분)*getLeaveSojeong(eid, u.사용일, contracts, employees)*100)/100;
         return '• '+u.사용일.replace(/-/g,'.')+'  '+hrs+'시간';
       }).join('\n') || '사용 내역 없음';
     const DIV='────────────────────────────';

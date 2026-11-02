@@ -205,7 +205,8 @@ const YeonchaWeekly = (function(){
     usageRecords.forEach(u=>{
       const factor = getLeaveTypeFactor(u.구분);
       if(factor<=0) return;
-      let remain = Math.round(factor * getLeaveSojeong(empId, u.사용일, contracts, employees) * 100) / 100;
+      // 연차사용현황에서 사용시간을 직접 수정한 건(u.사용시간, 숫자)은 그 값을 사용
+      let remain = (typeof u.사용시간 === 'number') ? u.사용시간 : Math.round(factor * getLeaveSojeong(empId, u.사용일, contracts, employees) * 100) / 100;
       let lastEligible = null;
       for(let i=0; i<rows.length; i++){
         const r = rows[i];

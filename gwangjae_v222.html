@@ -739,6 +739,7 @@ tr.con-selected td:first-child{box-shadow:inset 4px 0 0 var(--purple)}
   </div>
   <div style="font-size:11px;color:var(--tx3);margin:-6px 0 8px">※ "+ 사용 추가"로 행을 여러 개 만든 뒤, 사번 칸에 엑셀·노션에서 복사한 여러 줄을 붙여넣으면 그 줄 수만큼 행이 자동으로 채워집니다. 구분·사용일 칸도 각각 세로로 복사한 값을 붙여넣으면 해당 행부터 아래로 한 줄씩 채워집니다.</div>
   <datalist id="luEmpDatalist"></datalist>
+  <datalist id="luNameDatalist"></datalist>
   <datalist id="luGubunDatalist"><option>연차</option><option>반차</option><option>반반차</option><option>결근</option><option>공가</option></datalist>
   <div class="tw" id="luTW">
     <table id="luT" style="width:100%;min-width:1000px">
@@ -1874,8 +1875,7 @@ function _renderMyLeaveStatusBody(){
     const 급여종=getMergedEmp(emp).임금;
     luBody.innerHTML=usageRecords.map(u=>{
       const sojeong=getLeaveSojeong(emp.사번,u.사용일);
-      const 배율=getLeaveTypeFactor(u.구분);
-      const 사용시간=Math.round(sojeong*배율*100)/100;
+      const 사용시간=getLeaveUseHours(emp.사번,u);
       return`<tr>
         <td style="padding:6px 10px;text-align:center;font-size:11px;font-family:monospace;border-bottom:1px solid #EDF0F7">${emp.사번}</td>
         <td style="padding:6px 10px;text-align:center;font-size:12px;border-bottom:1px solid #EDF0F7"><strong>${emp.이름||''}</strong></td>
@@ -3765,6 +3765,11 @@ function getLeaveTypeFactor(gubun){
   if(gubun==='결근'||gubun==='공가')return 0;
   return 1; // 연차
 }
+// 사용시간 — 수기입력 시 직접 수정한 값(u.사용시간, 숫자)이 있으면 그 값을, 없으면 그날 소정근로시간×구분배율을 쓴다
+function getLeaveUseHours(empId,u){
+  if(typeof u.사용시간==='number'&&!isNaN(u.사용시간)&&getLeaveTypeFactor(u.구분)>0)return u.사용시간;
+  return Math.round(getLeaveTypeFactor(u.구분)*getLeaveSojeong(empId,u.사용일)*100)/100;
+}
 // 사번의 전체 연차/반차/결근 사용 이력(월별근태현황 자동연동 + 수동/업로드) 통합 조회, 사용일 오름차순
 // ★ 월별근태현황 비고가 '월차'인 경우도 연차사용현황에서는 '연차'로 인식해 반영(월차=연차의 다른 표기)
 function getLeaveUsageRecords(empId){
@@ -3797,7 +3802,7 @@ function allocateLeaveUsage(rows,usageRecords,empId){
   usageRecords.forEach(u=>{
     const factor=getLeaveTypeFactor(u.구분);
     if(factor<=0)return;
-    let remain=Math.round(factor*getLeaveSojeong(empId,u.사용일)*100)/100;
+    let remain=getLeaveUseHours(empId,u);
     let lastEligible=null;
     for(const r of rows){
       if(u.사용일<r.cs)continue;
@@ -10025,7 +10030,7 @@ function buildLsUsageBoxHtml(e){
   const recs=getLeaveUsageRecords(e.사번).filter(u=>getLeaveTypeFactor(u.구분)>0).sort((a,b)=>a.사용일<b.사용일?-1:(a.사용일>b.사용일?1:0));
   let total=0;
   const rowsHtml=recs.map(u=>{
-    const hrs=Math.round(getLeaveTypeFactor(u.구분)*getLeaveSojeong(e.사번,u.사용일)*100)/100;
+    const hrs=getLeaveUseHours(e.사번,u);
     total+=hrs;
     return`<tr>
       <td style="padding:5px 8px;font-size:11px">${u.사용일}</td>
@@ -10188,7 +10193,7 @@ function buildLeaveSummaryText(emp,detail){
     .filter(u=>getLeaveTypeFactor(u.구분)>0)
     .sort((a,b)=>a.사용일.localeCompare(b.사용일))
     .map(u=>{
-      const hrs=Math.round(getLeaveTypeFactor(u.구분)*getLeaveSojeong(emp.사번,u.사용일)*100)/100;
+      const hrs=getLeaveUseHours(emp.사번,u);
       return '• '+u.사용일.replace(/-/g,'.')+'  '+hrs+'시간';
     }).join('\n')||'사용 내역 없음';
   const DIV='────────────────────────────';
@@ -10281,25 +10286,57 @@ function buildLuPendingRowHtml(p,idx){
   const 급여종=(emp&&p.사용일)?getConWageType(p.사번,p.사용일):'';
   const join=emp?(getJoinDate(p.사번)||''):'';
   const sojeong=(emp&&p.사용일)?getLeaveSojeong(p.사번,p.사용일):null;
-  const 사용시간=(typeof sojeong==='number')?Math.round(sojeong*getLeaveTypeFactor(p.구분)*100)/100:null;
-  const nameCell=p.사번?(emp?`<strong>${emp.이름}</strong>`:'<span style="color:var(--red);font-size:11px">미매칭</span>'):'<span style="color:var(--tx3);font-size:10px">-</span>';
+  const 사용시간자동=(typeof sojeong==='number')?Math.round(sojeong*getLeaveTypeFactor(p.구분)*100)/100:null;
+  const 시간수정가능=사용시간자동!==null&&getLeaveTypeFactor(p.구분)>0;
+  const 사용시간=시간수정가능&&typeof p.사용시간==='number'?p.사용시간:사용시간자동;
+  // 이름 칸: 이름을 입력하면 사번이 자동으로 채워짐(사번을 먼저 입력하면 이름이 자동 표시) — 매칭 실패 시 빨간 테두리
+  const nameVal=emp?emp.이름:(p.이름||'');
+  const nameCell=`<input class="con-inp" value="${nameVal}" list="luNameDatalist" placeholder="이름 입력" style="width:80px${(!emp&&(p.이름||p.사번))?';border-color:var(--red)':''}" onchange="updateLuPendField(${idx},'이름',this.value)">`;
   return`<tr class="lu-pending-row" style="background:#EFF6FF">
     <td><input class="con-inp" value="${p.사번||''}" list="luEmpDatalist" placeholder="사번 입력/붙여넣기" style="width:95px;font-family:monospace" onchange="updateLuPendField(${idx},'사번',this.value)" onpaste="luPendPaste(${idx},event)"></td>
     <td>${nameCell}</td>
     <td>${급여종?`<span class="bdg ${급여종==='월급직'?'bb':'bt'}" style="font-size:10px">${급여종}</span>`:'<span style="color:var(--tx3);font-size:10px">-</span>'}</td>
-    <td><input class="con-inp" list="luGubunDatalist" value="${p.구분||''}" style="width:70px" onchange="updateLuPendField(${idx},'구분',this.value)" onpaste="luPendColumnPaste(${idx},'구분',event)"></td>
+    <td onpaste="luPendColumnPaste(${idx},'구분',event)"><select class="con-inp" style="width:78px" onchange="updateLuPendField(${idx},'구분',this.value)">${LU_GUBUN_LIST.map(g=>`<option value="${g}"${g===p.구분?' selected':''}>${g}</option>`).join('')}</select></td>
     <td style="font-size:11px">${join||'-'}</td>
     <td><input class="con-inp" type="date" value="${p.사용일||''}" onchange="updateLuPendField(${idx},'사용일',this.value)" onpaste="luPendColumnPaste(${idx},'사용일',event)"></td>
     <td class="c">${typeof sojeong==='number'?sojeong:'-'}</td>
-    <td class="c">${사용시간!==null?사용시간:'-'}</td>
+    <td class="c">${시간수정가능?`<input class="con-inp" type="number" min="0" step="0.5" value="${사용시간}" title="구분에 따라 자동 계산된 값입니다. 직접 수정하면 그 시간만큼 사용으로 처리됩니다." style="width:64px;text-align:center" onchange="updateLuPendField(${idx},'사용시간',this.value)">`:(사용시간!==null?사용시간:'-')}</td>
     <td class="c"><span style="font-size:10px;color:var(--blue)">수기입력</span></td>
     <td><div style="display:flex;gap:3px"><button class="btn sm p" onclick="saveLuPendRow(${idx})">✓ 저장</button><button class="btn sm" onclick="removeLuPendRow(${idx})">✕</button></div></td>
   </tr>`;
 }
 function updateLuPendField(idx,field,val){
-  if(!_luPendingRows[idx])return;
-  _luPendingRows[idx][field]=field==='사용일'?luPendParseDate(val):val.trim();
+  const p=_luPendingRows[idx];
+  if(!p)return;
+  if(field==='이름'){
+    // 이름 → 사번 자동 입력(계약기간관리에 등록된 직원 기준). 동명이인이면 재직중인 직원을 우선 선택
+    const nm=val.trim();
+    if(!nm){p.이름='';p.사번='';}
+    else{
+      const cands=employees.filter(e=>e.이름===nm&&contracts.some(c=>c.사번===e.사번));
+      if(cands.length){
+        const pick=cands.find(e=>!e.퇴사)||cands[0];
+        p.사번=pick.사번;p.이름=pick.이름;
+        if(cands.length>1)alert(`동명이인 ${cands.length}명이 있어 ${pick.사번}(으)로 입력했습니다. 다른 직원이면 사번 칸에서 직접 수정해주세요.`);
+      }else{p.이름=nm;p.사번='';}
+    }
+  }else if(field==='사용시간'){
+    const t=String(val).trim();
+    if(t===''){delete p.사용시간;}
+    else if(isNaN(Number(t))||Number(t)<=0){alert('사용시간은 0보다 큰 숫자로 입력해주세요.');}
+    else p.사용시간=Math.round(Number(t)*100)/100;
+  }else{
+    p[field]=field==='사용일'?luPendParseDate(val):val.trim();
+    if(field==='구분')delete p.사용시간; // 구분을 바꾸면 사용시간은 다시 자동 계산
+    if(field==='사번')p.이름='';
+  }
   renderLeaveUsage();
+}
+// 직접 수정한 사용시간(자동 계산값과 다를 때만) — 없으면 undefined
+function luPendCustomHours(p){
+  if(typeof p.사용시간!=='number'||getLeaveTypeFactor(p.구분)<=0)return undefined;
+  const auto=luPendMatchEmp(p.사번)&&p.사용일?Math.round(getLeaveSojeong(p.사번,p.사용일)*getLeaveTypeFactor(p.구분)*100)/100:null;
+  return p.사용시간===auto?undefined:p.사용시간;
 }
 function removeLuPendRow(idx){
   _luPendingRows.splice(idx,1);
@@ -10365,7 +10402,7 @@ function syncAllLeaveUsageToAtt(){
   if(!leaveUsage.length){alert('반영할 수기입력 연차사용 이력이 없습니다.');return;}
   let ok=0;const failReasons=[];
   leaveUsage.forEach(u=>{
-    const r=syncLeaveUsageToAtt(u.사번,u.사용일,u.구분);
+    const r=typeof u.사용시간==='number'?LU_CUSTOM_SYNC_RESULT:syncLeaveUsageToAtt(u.사번,u.사용일,u.구분);
     if(r.ok)ok++;
     else if(r.applicable)failReasons.push(`${u.사번} ${u.사용일}(${u.구분}) - ${r.reason}`);
   });
@@ -10380,15 +10417,20 @@ function validateLuPendRow(p){
   if(!p.사용일||!/^\d{4}-\d{2}-\d{2}$/.test(p.사용일))return'사용일 형식 오류(YYYY-MM-DD)';
   if(!LU_GUBUN_LIST.includes(p.구분))return'구분 오류';
   if(getLeaveUsageRecords(p.사번).some(u=>u.사용일===p.사용일&&u.구분===p.구분))return'이미 등록된 이력';
+  const ch=luPendCustomHours(p);
+  if(ch!==undefined&&ch>getLeaveSojeong(p.사번,p.사용일))return`사용시간(${ch})이 그날 소정근로시간(${getLeaveSojeong(p.사번,p.사용일)})보다 큽니다`;
   return null;
 }
+// 사용시간을 직접 수정한 건은 급여(비고 연차/반차 = 소정 기준 유급 처리)와 어긋날 수 있어 비고에 자동 반영하지 않는다
+const LU_CUSTOM_SYNC_RESULT={ok:false,applicable:true,reason:'사용시간을 직접 수정한 건이라 급여 오반영 방지를 위해 비고 자동반영 안 함'};
 function saveLuPendRow(idx){
   const p=_luPendingRows[idx];if(!p)return;
   const err=validateLuPendRow(p);
   if(err){alert('저장할 수 없습니다: '+err);return;}
   const no=leaveUsage.reduce((a,b)=>Math.max(a,b.no||0),0)+1;
-  leaveUsage.push({no,사번:p.사번,구분:p.구분,사용일:p.사용일,updated:new Date().toISOString()});
-  const sync=syncLeaveUsageToAtt(p.사번,p.사용일,p.구분);
+  const ch=luPendCustomHours(p);
+  leaveUsage.push({no,사번:p.사번,구분:p.구분,사용일:p.사용일,...(ch!==undefined?{사용시간:ch}:{}),updated:new Date().toISOString()});
+  const sync=ch!==undefined?LU_CUSTOM_SYNC_RESULT:syncLeaveUsageToAtt(p.사번,p.사용일,p.구분);
   _luPendingRows.splice(idx,1);
   renderLeaveUsage();saveAll();
   if(sync.applicable&&!sync.ok)alert(`✓ 연차사용현황에 저장했지만, 월별근태현황 비고에는 반영되지 않았습니다.\n사유: ${sync.reason}\n\n필요 시 ③ 근태관리 탭에서 해당 날짜 비고를 직접 입력해주세요.`);
@@ -10401,9 +10443,10 @@ function saveAllLuPendRows(){
     const err=validateLuPendRow(p);
     if(err){remain.push(p);fails.push(`${p.사번||'(빈값)'} ${p.사용일||''} - ${err}`);return;}
     maxNo++;
-    leaveUsage.push({no:maxNo,사번:p.사번,구분:p.구분,사용일:p.사용일,updated:new Date().toISOString()});
+    const ch=luPendCustomHours(p);
+    leaveUsage.push({no:maxNo,사번:p.사번,구분:p.구분,사용일:p.사용일,...(ch!==undefined?{사용시간:ch}:{}),updated:new Date().toISOString()});
     added++;
-    const sync=syncLeaveUsageToAtt(p.사번,p.사용일,p.구분);
+    const sync=ch!==undefined?LU_CUSTOM_SYNC_RESULT:syncLeaveUsageToAtt(p.사번,p.사용일,p.구분);
     if(sync.applicable&&!sync.ok)syncFails.push(`${p.사번} ${p.사용일}(${p.구분}) - ${sync.reason}`);
   });
   _luPendingRows=remain;
@@ -10426,6 +10469,8 @@ function renderLeaveUsage(){
   const yr=(document.getElementById('luYear')||{}).value||'all';
   const dl=document.getElementById('luEmpDatalist');
   if(dl)dl.innerHTML=employees.filter(e=>contracts.some(c=>c.사번===e.사번)).map(e=>`<option value="${e.사번}">${e.이름}</option>`).join('');
+  const dln=document.getElementById('luNameDatalist');
+  if(dln)dln.innerHTML=employees.filter(e=>contracts.some(c=>c.사번===e.사번)).map(e=>`<option value="${e.이름}">${e.사번}</option>`).join('');
   const targets=employees.filter(e=>contracts.some(c=>c.사번===e.사번)&&(!q||e.이름.includes(q)||e.사번.includes(q)));
   const rows=[];
   targets.forEach(e=>{
@@ -10442,8 +10487,7 @@ function renderLeaveUsage(){
   });
   const existingHtml=rows.map(({emp,u})=>{
     const sojeong=getLeaveSojeong(emp.사번,u.사용일);
-    const 배율=getLeaveTypeFactor(u.구분);
-    const 사용시간=Math.round(sojeong*배율*100)/100;
+    const 사용시간=getLeaveUseHours(emp.사번,u);
     const 급여종=getConWageType(emp.사번,u.사용일);
     const isAuto=u.source==='auto';
     return`<tr>
@@ -10454,7 +10498,7 @@ function renderLeaveUsage(){
       <td style="font-size:11px">${getJoinDate(emp.사번)||'-'}</td>
       <td style="font-size:11px">${u.사용일}</td>
       <td class="c">${sojeong||'-'}</td>
-      <td class="c">${사용시간||'-'}</td>
+      <td class="c">${(!isAuto&&getLeaveTypeFactor(u.구분)>0)?`<input class="con-inp" type="number" min="0" step="0.5" value="${사용시간}" title="직접 수정하면 그 시간만큼 사용으로 처리됩니다." style="width:64px;text-align:center" onchange="updateLuUsedHours(${u.no},this.value)">`:(사용시간||'-')}</td>
       <td class="c">${isAuto?'<span style="font-size:10px;color:var(--tx3)">자동입력</span>':'<span style="font-size:10px;color:var(--blue)">수기입력</span>'}</td>
       <td class="c">${isAuto?'-':`<button class="btn sm d" onclick="deleteLeaveUsageRow(${u.no})">삭제</button>`}</td>
     </tr>`;
@@ -10462,6 +10506,21 @@ function renderLeaveUsage(){
   const pendingHtml=_luPendingRows.map((p,idx)=>buildLuPendingRowHtml(p,idx)).join('');
   document.getElementById('luBody').innerHTML=pendingHtml+existingHtml||`<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--tx3)">사용 이력이 없습니다</td></tr>`;
   applyFilter('luT');
+}
+// 저장된 수기입력 이력의 사용시간 수정 — 자동 계산값과 같으면 수정값을 지워 다시 자동 계산 상태로 되돌린다
+function updateLuUsedHours(no,val){
+  const u=leaveUsage.find(x=>x.no===no);if(!u)return;
+  const t=String(val).trim();
+  const auto=Math.round(getLeaveSojeong(u.사번,u.사용일)*getLeaveTypeFactor(u.구분)*100)/100;
+  if(t===''||Number(t)===auto){delete u.사용시간;}
+  else if(isNaN(Number(t))||Number(t)<=0){alert('사용시간은 0보다 큰 숫자로 입력해주세요.');renderLeaveUsage();return;}
+  else if(Number(t)>getLeaveSojeong(u.사번,u.사용일)){alert(`사용시간이 그날 소정근로시간(${getLeaveSojeong(u.사번,u.사용일)})보다 클 수 없습니다.`);renderLeaveUsage();return;}
+  else{
+    u.사용시간=Math.round(Number(t)*100)/100;
+    alert('사용시간을 수정했습니다.\n이미 월별근태현황 비고에 반영된 날짜의 비고(연차/반차)는 자동으로 바뀌지 않으니, 급여에 영향이 있으면 ③ 근태관리에서 확인해주세요.');
+  }
+  u.updated=new Date().toISOString();
+  renderLeaveUsage();saveAll();
 }
 function deleteLeaveUsageRow(no){
   const u=leaveUsage.find(x=>x.no===no);if(!u)return;
@@ -10529,8 +10588,7 @@ function downloadLeaveUsageExcel(){
   const hdr=['사번','이름','급여종','구분','입사일','사용일','소정근로시간','사용시간','출처'];
   const wsData=[hdr,...rows.map(({emp,u})=>{
     const sojeong=getLeaveSojeong(emp.사번,u.사용일);
-    const 배율=getLeaveTypeFactor(u.구분);
-    return[emp.사번,emp.이름,getConWageType(emp.사번,u.사용일),u.구분,getJoinDate(emp.사번)||'',u.사용일,sojeong,Math.round(sojeong*배율*100)/100,u.source==='auto'?'자동입력':'수기입력'];
+    return[emp.사번,emp.이름,getConWageType(emp.사번,u.사용일),u.구분,getJoinDate(emp.사번)||'',u.사용일,sojeong,getLeaveUseHours(emp.사번,u),u.source==='auto'?'자동입력':'수기입력'];
   })];
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.aoa_to_sheet(wsData);
