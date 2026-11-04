@@ -2445,6 +2445,7 @@ const SB_URL  = 'https://dcvitbydqidndwbqqprm.supabase.co';
 const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjdml0YnlkcWlkbmR3YnFxcHJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDE1ODMsImV4cCI6MjA5Nzc3NzU4M30.xHDxj8-0jTTOrWTErOMPQB4EvyKhuOsgkPAjAB2txmc';
 const SB_HDR  = { 'Content-Type':'application/json', 'apikey': SB_KEY, 'Authorization':'Bearer ' + SB_KEY, 'Prefer':'resolution=merge-duplicates' };
 const STORE_KEY = 'gwangjae_erp_v6';
+const ATT_UNSAVED_KEY = 'gwangjae_att_unsaved'; // 서버 저장 확인 전 근태 고정 기록 복구본(saveAll/_applyData 참고)
 let _saveTimer = null;
 let _dbOk = false;
 let _realtimeChannel = null;
@@ -2776,6 +2777,7 @@ function _applyData(data) {
   // att_data — Supabase: emp_id 컬럼 (empId 폴백 포함)
   const _ATT_EMPID_RE = /^[A-Z][0-9]+$/;
   const _ATT_DATE_RE  = /^\d{4}-\d{2}-\d{2}$/;
+  const _ATT_BUILD_RE_LOAD = /^[A-Z][0-9]+_\d{4}-\d{2}-\d{2}$/;
   if (data.att_data) {
     attData = {};
     Object.entries(data.att_data).forEach(([k, v]) => {
@@ -2803,6 +2805,24 @@ function _applyData(data) {
       };
     });
   }
+
+  // ★ 서버에 저장되지 못한 근태 고정 기록(saveAll이 남긴 복구본)을 서버 값 위에 병합 — 새로고침으로 사라지지 않게 함.
+  //   서버 값이 더 최근(updated)이면 서버 값을 우선하고, 병합이 있었으면 곧바로 재저장을 시도한다.
+  try {
+    const _rawUnsaved = localStorage.getItem(ATT_UNSAVED_KEY);
+    if (_rawUnsaved) {
+      let _merged = 0;
+      Object.entries(JSON.parse(_rawUnsaved) || {}).forEach(([k, r]) => {
+        if (!r || !_ATT_BUILD_RE_LOAD.test(k)) return;
+        const s = attData[k];
+        if (!s || String(r.updated || '') >= String(s.updated || '')) {
+          attData[k] = { in: r.in || '', out: r.out || '', source: r.source || '', locked: !!r.locked, updated: r.updated || '' };
+          _merged++;
+        }
+      });
+      if (_merged) setTimeout(scheduleSave, 0);
+    }
+  } catch(e) {}
 
   // slack_data — Supabase: emp_id 컬럼
   if (data.slack_data && Object.keys(data.slack_data).length > 0) {
@@ -3031,6 +3051,14 @@ async function saveAll() {
         updated: v.updated || _now
       });
     });
+    // ★ 서버 저장이 끝나기 전에 새로고침/종료되거나 저장이 실패해도 값이 사라지지 않도록, 업로드 전에
+    //   고정(locked) 기록을 브라우저에 미저장 복구본으로 남긴다(서버 저장 성공이 확인되면 아래에서 삭제,
+    //   남아 있으면 _applyData가 다음 로드 때 서버 값 위에 병합한 뒤 재저장 시도).
+    try {
+      const _unsaved = {};
+      attRows.forEach(r => { if (r.locked) _unsaved[r.key] = r; });
+      localStorage.setItem(ATT_UNSAVED_KEY, JSON.stringify(_unsaved));
+    } catch(e) {}
 
     // ④ slack_data upsert
     const slackRows = [];
@@ -3130,11 +3158,14 @@ async function saveAll() {
         : Promise.resolve(true),
     ]);
 
+    if (r3) { try { localStorage.removeItem(ATT_UNSAVED_KEY); } catch(e) {} } // 근태 서버 저장 확인 → 복구본 삭제
     const ok = r1 && r2 && r3 && r4 && r5 && r6 && r7;
     _dbOk = ok;
     if (ok) _lastSaveTs = Date.now(); // 자기 저장 이벤트 무시용 타임스탬프 갱신
     const t = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
     _setDbStatus(ok ? 'ok' : 'error', ok ? `저장 완료 ${t}` : '로컬에만 저장됨');
+    // ★ 서버 저장이 실패하면 새로고침 시 방금 입력한 값이 사라지므로, 작은 상태 표시 외에 토스트로도 알림
+    if (!ok) _toast('❌ 서버 저장에 실패했습니다. 새로고침하면 방금 입력한 값이 사라질 수 있습니다.', 'error');
     return ok;
   } catch(e) { console.warn('saveAll 오류:', e); return false; }
   finally { _saveInFlightCount--; }
@@ -3445,7 +3476,13 @@ function clearSaved() {
   const yrMoKey = yr + '_' + moStr;           // e.g. "2026_06"
   const yrMoPrefix = yr + '-' + moStr + '-';  // e.g. "2026-06-" (att_data date 필터용)
 
-  if (!confirm(`근태 데이터를 초기화하시겠습니까?\n\n📅 대상: ${yr}년 ${moStr}월\n\n✅ 유지: 인원현황, 계약기간관리, Slack 원본 데이터, 타 월 근태\n🗑 삭제: 수기고정, 저장된 근태, 급여기타/소급 (${yr}년 ${moStr}월)\n\n계약 데이터와 Slack 원본은 절대 삭제되지 않습니다.`)) return;
+  // ★ 확정된 월은 초기화 불가 — 다른 수정 기능(수기입력/되돌리기 등)과 동일하게 막음
+  if (isMonthConfirmed()) { alert('확정된 월은 초기화할 수 없습니다.'); return; }
+
+  // ★ 이 월의 전 직원 기준시간/수기 고정 기록이 한 번에 삭제되므로, 건수를 보여주고 문구를 직접 입력해야 진행
+  const _lockedCnt = Object.keys(attData).filter(k => attData[k].locked && k.indexOf('_' + yrMoPrefix) > -1).length;
+  if (!confirm(`근태 데이터를 초기화하시겠습니까?\n\n📅 대상: ${yr}년 ${moStr}월 (전 직원)\n⚠️ 기준시간 반영/수기입력으로 고정된 기록 ${_lockedCnt}건이 모두 삭제됩니다.\n\n✅ 유지: 인원현황, 계약기간관리, Slack 원본 데이터, 타 월 근태\n🗑 삭제: 수기고정, 저장된 근태, 급여기타/소급 (${yr}년 ${moStr}월)\n\n계약 데이터와 Slack 원본은 절대 삭제되지 않습니다.`)) return;
+  if (prompt(`되돌릴 수 없습니다. 진행하려면 "초기화"를 입력하세요.`, '') !== '초기화') { alert('입력이 일치하지 않아 초기화를 취소했습니다.'); return; }
 
   // ── 메모리 데이터에서 해당 년월만 삭제 ──
   // attData: 키 형식 "사번_YYYY-MM-DD"
@@ -3453,6 +3490,7 @@ function clearSaved() {
     const m = k.match(/^[A-Z][0-9]+_(\d{4}-\d{2})-\d{2}$/);
     if (m && m[1] === yr + '-' + moStr) delete attData[k];
   });
+  try { localStorage.removeItem(ATT_UNSAVED_KEY); } catch(e) {} // 초기화한 기록이 미저장 복구본으로 되살아나지 않게 함
   // _hrRowsCache: 키 형식 "YYYY_MM"
   delete _hrRowsCache[yrMoKey];
   hrAttRows = [];
@@ -8589,6 +8627,9 @@ function revertAtt(eid,ds){if(isMonthConfirmed()){alert("확정된 월은 수정
     } else if(action==='revert'){
       // 고정(locked) 기록을 완전히 삭제해 연동 원본(slackData)이 다시 보이게 복원 (revertAtt와 동일 원리)
       const _delKeys=[];
+      // ★ 확인 없이 선택 범위의 고정 기록이 전부 삭제되던 문제 — 삭제될 건수를 보여주고 확인
+      const _revCnt=new Set(_cells.filter(({eid,ds})=>attData[`${eid}_${ds}`]).map(({eid,ds})=>`${eid}_${ds}`)).size;
+      if(_revCnt&&!confirm(`선택한 셀의 고정 기록(기준시간/수기입력) ${_revCnt}건을 삭제하고 연동 원본으로 되돌립니다.\n계속하시겠습니까?`)){closeDragMenu();return;}
       _cells.forEach(({eid,ds})=>{
         const k=`${eid}_${ds}`;
         if(attData[k]){delete attData[k];_delKeys.push(k);}

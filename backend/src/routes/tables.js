@@ -71,18 +71,6 @@ router.post('/:table', requireHrOrApiKey, async (req, res, next) => {
     if (!rows.length) return res.json({ ok: true, count: 0 });
 
     const cols = schema.columns;
-    const values = [];
-    const rowPlaceholders = rows.map((row) => {
-      const ph = cols.map((c) => {
-        let v = row[c];
-        if (v === undefined) v = null;
-        if (schema.json.includes(c)) v = normalizeJsonInput(v);
-        values.push(v);
-        return `$${values.length}`;
-      });
-      return `(${ph.join(',')})`;
-    });
-
     const colList = cols.map((c) => `"${c}"`).join(',');
     const updateSet = cols
       .filter((c) => c !== schema.pk)
@@ -90,12 +78,40 @@ router.post('/:table', requireHrOrApiKey, async (req, res, next) => {
       .concat('"updated_at"=now()')
       .join(', ');
 
-    const sql = `
+    // ★ PostgreSQL은 쿼리 1개에 바인드 파라미터를 65535개까지만 받는다. 행 전체를 한 번의 INSERT로
+    //   보내면(att_data는 행당 8개 → 약 8191행) 근태 데이터가 누적돼 한도를 넘는 순간 저장이 통째로
+    //   실패하고, 화면엔 값이 남아 있다가 새로고침하면 서버 값으로 되돌아가 사라진다.
+    //   그래서 한도 안에서 행을 나눠 하나의 트랜잭션으로 저장한다(일부만 반영되는 상태 방지).
+    const chunkSize = Math.max(1, Math.floor(60000 / cols.length));
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (let i = 0; i < rows.length; i += chunkSize) {
+        const values = [];
+        const rowPlaceholders = rows.slice(i, i + chunkSize).map((row) => {
+          const ph = cols.map((c) => {
+            let v = row[c];
+            if (v === undefined) v = null;
+            if (schema.json.includes(c)) v = normalizeJsonInput(v);
+            values.push(v);
+            return `$${values.length}`;
+          });
+          return `(${ph.join(',')})`;
+        });
+        const sql = `
       INSERT INTO "${table}" (${colList})
       VALUES ${rowPlaceholders.join(',')}
       ON CONFLICT ("${schema.pk}") DO UPDATE SET ${updateSet}
     `;
-    await pool.query(sql, values);
+        await client.query(sql, values);
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
     realtimeBus.emit('change', table);
     res.json({ ok: true, count: rows.length });
   } catch (err) { next(err); }
